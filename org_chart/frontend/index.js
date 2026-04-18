@@ -345,12 +345,46 @@ function usePanZoom(viewportRef) {
         isDragging.current = false;
     }, []);
 
+    // Anchor a zoom change at a screen point inside the viewport, so the
+    // content under that point stays fixed (viewport center by default).
+    // Transform is: screen = pan + origin + scale * (p - origin),
+    // where origin = (wrapperW/2, 0) because transformOrigin is "top center".
+    // To keep a screen-space anchor (ax, ay) stationary across a zoom change:
+    //   pan_new = pan + (1 - ratio) * (ax - origin - pan)
+    const applyZoomAt = useCallback((compute, anchorX, anchorY) => {
+        setZoom(prevZoom => {
+            const nextZoom = Math.min(2, Math.max(0.2, compute(prevZoom)));
+            if (nextZoom === prevZoom) return prevZoom;
+            const ratio = nextZoom / prevZoom;
+            const el = viewportRef.current;
+            if (el) {
+                const rect = el.getBoundingClientRect();
+                const ax = anchorX != null ? anchorX - rect.left : rect.width / 2;
+                const ay = anchorY != null ? anchorY - rect.top : rect.height / 2;
+                // wrapper's transformOrigin sits at (wrapperW/2, 0) in local coords;
+                // the wrapper's left edge is at viewport x = pan.x, so origin in
+                // viewport coords is (pan.x + wrapperW/2, pan.y + 0).
+                const wrapper = el.querySelector('.transform-wrapper');
+                const wrapperW = wrapper ? wrapper.offsetWidth : rect.width;
+                setPan(prev => {
+                    const ox = prev.x + wrapperW / 2;
+                    const oy = prev.y;
+                    return {
+                        x: prev.x + (1 - ratio) * (ax - ox),
+                        y: prev.y + (1 - ratio) * (ay - oy),
+                    };
+                });
+            }
+            return nextZoom;
+        });
+    }, [viewportRef]);
+
     const onWheel = useCallback(e => {
         if (!viewportRef.current) return;
         e.preventDefault();
         const delta = e.deltaY > 0 ? -0.05 : 0.05;
-        setZoom(z => Math.min(2, Math.max(0.2, z + delta)));
-    }, [viewportRef]);
+        applyZoomAt(z => z + delta, e.clientX, e.clientY);
+    }, [viewportRef, applyZoomAt]);
 
     useEffect(() => {
         const el = viewportRef.current;
@@ -364,8 +398,8 @@ function usePanZoom(viewportRef) {
         setZoom(1);
     }, []);
 
-    const zoomIn = useCallback(() => setZoom(z => Math.min(2, z + 0.15)), []);
-    const zoomOut = useCallback(() => setZoom(z => Math.max(0.2, z - 0.15)), []);
+    const zoomIn = useCallback(() => applyZoomAt(z => z + 0.15), [applyZoomAt]);
+    const zoomOut = useCallback(() => applyZoomAt(z => z - 0.15), [applyZoomAt]);
 
     return {pan, zoom, onMouseDown, onMouseMove, onMouseUp, resetView, zoomIn, zoomOut};
 }
