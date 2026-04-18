@@ -4,7 +4,7 @@ import {
     useRecords,
     expandRecord,
 } from '@airtable/blocks/interface/ui';
-import {useState, useRef, useEffect, useCallback, useMemo} from 'react';
+import {useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo} from 'react';
 import './style.css';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -393,15 +393,24 @@ function usePanZoom(viewportRef) {
         return () => el.removeEventListener('wheel', onWheel);
     }, [viewportRef, onWheel]);
 
-    const resetView = useCallback(() => {
-        setPan({x: 0, y: 0});
+    // Center the wrapper inside the viewport at zoom=1. With
+    // transform-origin "top center", pan.x = (viewportW - wrapperW) / 2
+    // puts the wrapper's own center at the viewport's horizontal center,
+    // regardless of how wide the tree currently is.
+    const centerView = useCallback(() => {
+        const vp = viewportRef.current;
+        if (!vp) return;
+        const wrapper = vp.querySelector('.transform-wrapper');
+        const vw = vp.offsetWidth;
+        const ww = wrapper ? wrapper.offsetWidth : vw;
+        setPan({x: (vw - ww) / 2, y: 0});
         setZoom(1);
-    }, []);
+    }, [viewportRef]);
 
     const zoomIn = useCallback(() => applyZoomAt(z => z + 0.15), [applyZoomAt]);
     const zoomOut = useCallback(() => applyZoomAt(z => z - 0.15), [applyZoomAt]);
 
-    return {pan, zoom, onMouseDown, onMouseMove, onMouseUp, resetView, zoomIn, zoomOut};
+    return {pan, zoom, onMouseDown, onMouseMove, onMouseUp, resetView: centerView, zoomIn, zoomOut, centerView};
 }
 
 // ─── Org Card ───────────────────────────────────────────────────────────────
@@ -628,8 +637,16 @@ function OrgChartWithData({table}) {
     const viewportRef = useRef(null);
     const wrapperRef = useRef(null);
 
-    const {pan, zoom, onMouseDown, onMouseMove, onMouseUp, resetView, zoomIn, zoomOut} =
+    const {pan, zoom, onMouseDown, onMouseMove, onMouseUp, resetView, zoomIn, zoomOut, centerView} =
         usePanZoom(viewportRef);
+
+    // Re-center + reset zoom whenever the depth selector changes (the tree
+    // collapses/expands dramatically, so the old pan/zoom would leave the
+    // smaller tree off-screen). Also fires on initial mount, which centers
+    // wide trees that would otherwise load left-aligned.
+    useLayoutEffect(() => {
+        centerView();
+    }, [defaultExpanded, centerView]);
 
     const parentField = table.fields.find(f => f.type === 'multipleRecordLinks');
     const parentFieldId = parentField ? parentField.id : null;
