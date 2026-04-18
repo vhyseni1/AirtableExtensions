@@ -4,7 +4,7 @@ import {
     useRecords,
     expandRecord,
 } from '@airtable/blocks/interface/ui';
-import {useState, useRef, useEffect, useCallback} from 'react';
+import {useState, useRef, useEffect, useCallback, useMemo} from 'react';
 import './style.css';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -544,6 +544,41 @@ function ConflictBanner({conflicts}) {
     );
 }
 
+// ─── About Modal ────────────────────────────────────────────────────────────
+
+function AboutModal({onClose}) {
+    useEffect(() => {
+        const onKey = e => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [onClose]);
+
+    return (
+        <div className="about-overlay" onClick={onClose}>
+            <div className="about-modal" onClick={e => e.stopPropagation()}>
+                <button className="about-close" onClick={onClose} title="Close">×</button>
+                <h2 className="about-title">About this Org Chart</h2>
+                <p className="about-body">
+                    This org chart has been built as a gesture from PwC to Roche — a
+                    token of appreciation for the trust and the relationship that has
+                    delivered, time and time again, unprecedented value.
+                </p>
+                <p className="about-body">
+                    Thank you for your trust and collaboration. We have done some
+                    amazing things together.
+                </p>
+                <p className="about-body about-contact">
+                    This org chart has been developed by <strong>Valon Hyseni (PwC)</strong>.
+                    Should you have any questions on this feature, please reach out.
+                </p>
+                <div className="about-signoff">— PwC</div>
+            </div>
+        </div>
+    );
+}
+
 // ─── Main Chart ─────────────────────────────────────────────────────────────
 
 function OrgChartWithData({table}) {
@@ -555,6 +590,7 @@ function OrgChartWithData({table}) {
     const [dropError, setDropError] = useState(null);
     const [autoExpandIds, setAutoExpandIds] = useState(() => new Set());
     const [showHistogram, setShowHistogram] = useState(true);
+    const [showAbout, setShowAbout] = useState(false);
     const viewportRef = useRef(null);
     const wrapperRef = useRef(null);
 
@@ -562,7 +598,12 @@ function OrgChartWithData({table}) {
         usePanZoom(viewportRef);
 
     const parentField = table.fields.find(f => f.type === 'multipleRecordLinks');
-    const {roots, conflicts, nodeMap} = buildTree(records, parentField);
+    const parentFieldId = parentField ? parentField.id : null;
+    const {roots, conflicts, nodeMap} = useMemo(
+        () => buildTree(records, parentField),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [records, parentFieldId],
+    );
 
     const handleDragStart = useCallback(nodeId => {
         const node = nodeMap[nodeId];
@@ -612,19 +653,25 @@ function OrgChartWithData({table}) {
         });
     }, []);
 
+    const redrawRafRef = useRef(0);
     const redrawLines = useCallback(() => {
-        setLineVersion(v => v + 1);
+        if (redrawRafRef.current) return;
+        redrawRafRef.current = requestAnimationFrame(() => {
+            redrawRafRef.current = 0;
+            setLineVersion(v => v + 1);
+        });
+    }, []);
+
+    useEffect(() => () => {
+        if (redrawRafRef.current) cancelAnimationFrame(redrawRafRef.current);
     }, []);
 
     useEffect(() => {
-        const timer = setTimeout(redrawLines, 100);
-        return () => clearTimeout(timer);
+        redrawLines();
     }, [records, defaultExpanded, redrawLines]);
 
-    // Redraw lines when pan/zoom changes
-    useEffect(() => {
-        redrawLines();
-    }, [pan, zoom, redrawLines]);
+    // Note: no redraw on pan/zoom — SVG + histogram live inside transform-wrapper
+    // and scale with it for free, so recomputing paths would be pure waste.
 
     const zoomPct = Math.round(zoom * 100);
 
@@ -675,8 +722,23 @@ function OrgChartWithData({table}) {
                             <span className="toggle-switch-knob" />
                         </button>
                     </label>
+                    <div className="zoom-controls">
+                        <button className="zoom-btn" onClick={zoomIn} title="Zoom in">+</button>
+                        <span className="zoom-level">{zoomPct}%</span>
+                        <button className="zoom-btn" onClick={zoomOut} title="Zoom out">−</button>
+                        <button className="zoom-btn zoom-btn-reset" onClick={resetView} title="Reset view">Reset</button>
+                    </div>
+                    <button
+                        className="about-btn"
+                        onClick={() => setShowAbout(true)}
+                        title="About this org chart"
+                    >
+                        About
+                    </button>
                 </div>
             </div>
+
+            {showAbout && <AboutModal onClose={() => setShowAbout(false)} />}
 
             {/* Conflict banner */}
             <ConflictBanner conflicts={conflicts} />
@@ -734,14 +796,6 @@ function OrgChartWithData({table}) {
                         </ul>
                     </div>
                 </div>
-            </div>
-
-            {/* Zoom controls */}
-            <div className="zoom-controls">
-                <button className="zoom-btn" onClick={zoomIn} title="Zoom in">+</button>
-                <span className="zoom-level">{zoomPct}%</span>
-                <button className="zoom-btn" onClick={zoomOut} title="Zoom out">−</button>
-                <button className="zoom-btn zoom-btn-reset" onClick={resetView} title="Reset view">Reset</button>
             </div>
         </div>
     );

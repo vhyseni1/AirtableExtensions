@@ -121,6 +121,110 @@
     flex-shrink: 0;
 }
 
+/* ─── About button + modal ───────────────────────────────────────────────── */
+
+.about-btn {
+    margin-left: 12px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    border: 1px solid #e2e8f0;
+    border-radius: 5px;
+    background: white;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.about-btn:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    color: #1e293b;
+}
+
+.about-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: aboutFadeIn 0.15s ease-out;
+}
+
+.about-modal {
+    position: relative;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    max-width: 480px;
+    width: calc(100% - 32px);
+    padding: 28px 32px 24px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+    animation: aboutSlideIn 0.18s ease-out;
+}
+
+.about-close {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    font-size: 22px;
+    line-height: 1;
+    color: #94a3b8;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.about-close:hover {
+    background: #f1f5f9;
+    color: #1e293b;
+}
+
+.about-title {
+    margin: 0 0 14px;
+    font-size: 18px;
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.about-body {
+    margin: 0 0 12px;
+    font-size: 13px;
+    line-height: 1.55;
+    color: #334155;
+}
+
+.about-contact {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid #e2e8f0;
+    color: #475569;
+}
+
+.about-signoff {
+    margin-top: 16px;
+    font-size: 12px;
+    color: #64748b;
+    font-style: italic;
+    text-align: right;
+}
+
+@keyframes aboutFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes aboutSlideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
 /* ─── Viewport (pan & zoom area) ──────────────────────────────────────────── */
 
 .viewport {
@@ -421,31 +525,25 @@
 /* ─── Zoom controls ───────────────────────────────────────────────────────── */
 
 .zoom-controls {
-    position: fixed;
-    bottom: 16px;
-    right: 16px;
     display: flex;
     align-items: center;
-    gap: 4px;
-    background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    padding: 4px 6px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    z-index: 20;
+    gap: 3px;
+    margin-left: 8px;
+    padding-left: 8px;
+    border-left: 1px solid #e2e8f0;
 }
 
 .zoom-btn {
-    width: 30px;
-    height: 30px;
+    width: 22px;
+    height: 22px;
     display: flex;
     align-items: center;
     justify-content: center;
     border: 1px solid #e2e8f0;
-    border-radius: 6px;
+    border-radius: 5px;
     background: white;
     color: #475569;
-    font-size: 16px;
+    font-size: 13px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.15s;
@@ -459,15 +557,15 @@
 
 .zoom-btn-reset {
     width: auto;
-    padding: 0 10px;
-    font-size: 11px;
+    padding: 0 8px;
+    font-size: 10px;
     font-weight: 500;
 }
 
 .zoom-level {
-    font-size: 11px;
+    font-size: 10px;
     color: #64748b;
-    min-width: 38px;
+    min-width: 32px;
     text-align: center;
     font-weight: 500;
 }
