@@ -561,17 +561,17 @@ function AboutModal({onClose}) {
                 <button className="about-close" onClick={onClose} title="Close">×</button>
                 <h2 className="about-title">About this Org Chart</h2>
                 <p className="about-body">
-                    This org chart has been built as a gesture from PwC to Roche — a
-                    token of appreciation for the trust and the relationship that has
-                    delivered, time and time again, unprecedented value.
+                    This org chart was built by PwC as a token of appreciation for
+                    the trust and partnership Roche has placed in us — and for the
+                    results we've delivered together.
                 </p>
                 <p className="about-body">
-                    Thank you for your trust and collaboration. We have done some
-                    amazing things together.
+                    We hope this tool continues to serve your organisation well.
                 </p>
-                <p className="about-body about-contact">
-                    This org chart has been developed by <strong>Valon Hyseni (PwC)</strong>.
-                    Should you have any questions on this feature, please reach out.
+                <p className="about-contact">
+                    Developed by the PwC team. Primary contact:{' '}
+                    <strong>Valon Hyseni (PwC P&amp;O)</strong>. For questions,
+                    please reach out.
                 </p>
                 <div className="about-signoff">— PwC</div>
             </div>
