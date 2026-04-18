@@ -471,3 +471,127 @@
     text-align: center;
     font-weight: 500;
 }
+
+/* ─── Histogram toggle switch ─────────────────────────────────────────── */
+
+.histogram-toggle-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 8px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.histogram-toggle-label {
+    margin: 0;
+}
+
+.toggle-switch {
+    position: relative;
+    width: 34px;
+    height: 18px;
+    border-radius: 999px;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition: background 160ms ease;
+    background: #cbd5e1;
+    flex-shrink: 0;
+}
+
+.toggle-switch.on {
+    background: #3b82f6;
+}
+
+.toggle-switch-knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: transform 160ms ease;
+}
+
+.toggle-switch.on .toggle-switch-knob {
+    transform: translateX(16px);
+}
+
+/* ─── Drag & Drop ─────────────────────────────────────────────────────── */
+
+.org-card {
+    cursor: grab;
+}
+
+.org-card.dragging {
+    opacity: 0.4;
+    cursor: grabbing;
+}
+
+.org-card.drop-target {
+    transition: outline 120ms ease, transform 120ms ease;
+}
+
+.org-card.drop-target:hover {
+    outline: 2px dashed #3b82f6;
+    outline-offset: 3px;
+    transform: scale(1.02);
+}
+
+.org-card.drop-forbidden {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+.drop-error {
+    position: absolute;
+    top: 56px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    cursor: pointer;
+    max-width: 520px;
+    font-size: 13px;
+    color: #991b1b;
+}
+
+.drop-error-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #ef4444;
+    color: white;
+    font-weight: 700;
+    font-size: 13px;
+    flex-shrink: 0;
+}
+
+.drop-error-msg {
+    flex: 1;
+}
+
+.drop-error-close {
+    color: #991b1b;
+    font-size: 18px;
+    line-height: 1;
+    font-weight: 500;
+    opacity: 0.6;
+}
+
+.drop-error:hover .drop-error-close {
+    opacity: 1;
+}

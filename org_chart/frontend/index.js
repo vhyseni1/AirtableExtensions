@@ -151,7 +151,13 @@ function buildTree(records, parentField) {
         }
     });
 
-    return {roots, conflicts};
+    return {roots, conflicts, nodeMap: map};
+}
+
+function collectSubtreeIds(node, set = new Set()) {
+    set.add(node.id);
+    node.children.forEach(c => collectSubtreeIds(c, set));
+    return set;
 }
 
 // ─── SO Status → border color ───────────────────────────────────────────────
@@ -236,10 +242,14 @@ function ConnectorLines({wrapperRef, version}) {
 
 // ─── Depth Histogram (background bars per level) ────────────────────────────
 
-function DepthHistogram({wrapperRef, version}) {
+function DepthHistogram({wrapperRef, version, visible}) {
     const [bars, setBars] = useState([]);
 
     useEffect(() => {
+        if (!visible) {
+            setBars([]);
+            return;
+        }
         if (!wrapperRef.current) return;
 
         const wrapper = wrapperRef.current;
@@ -273,8 +283,7 @@ function DepthHistogram({wrapperRef, version}) {
         }));
 
         const maxSum = Math.max(...levels.map(l => l.sum), 1);
-        // Max bar width as a percentage of the wrapper width
-        const maxBarWidth = wrapper.offsetWidth * 0.35;
+        const maxBarWidth = wrapper.offsetWidth * 0.3;
 
         setBars(levels.map(l => ({
             depth: l.depth,
@@ -283,9 +292,9 @@ function DepthHistogram({wrapperRef, version}) {
             height: l.bottom - l.top + 16,
             width: maxBarWidth * (l.sum / maxSum),
         })));
-    }, [wrapperRef, version]);
+    }, [wrapperRef, version, visible]);
 
-    if (bars.length === 0) return null;
+    if (!visible || bars.length === 0) return null;
 
     return (
         <div className="depth-histogram">
@@ -363,22 +372,59 @@ function usePanZoom(viewportRef) {
 
 // ─── Org Card ───────────────────────────────────────────────────────────────
 
-function OrgCard({node, depth}) {
+function OrgCard({node, depth, dragState, onDragStart, onDragEnd, onDrop}) {
     const borderColor = statusBorderColor(node.status);
     const bgColor = scopingBgColor(node.scoping);
 
+    const isDragging = dragState.draggingId === node.id;
+    const dragActive = dragState.draggingId !== null;
+    const isForbidden = dragActive && dragState.forbiddenIds.has(node.id);
+    const isValidTarget = dragActive && !isForbidden;
+
+    const classNames = ['org-card'];
+    if (isDragging) classNames.push('dragging');
+    if (isValidTarget) classNames.push('drop-target');
+    if (isForbidden) classNames.push('drop-forbidden');
+
     return (
         <div
-            className="org-card"
+            className={classNames.join(' ')}
             data-node-id={node.id}
             data-depth={depth}
             data-headcount={node.headcount}
+            draggable="true"
             style={{
                 borderColor: borderColor,
                 borderWidth: '2px',
                 background: bgColor,
             }}
+            onDragStart={e => {
+                e.stopPropagation();
+                e.dataTransfer.setData('text/plain', node.id);
+                e.dataTransfer.effectAllowed = 'move';
+                onDragStart(node.id);
+            }}
+            onDragEnd={e => {
+                e.stopPropagation();
+                onDragEnd();
+            }}
+            onDragOver={e => {
+                if (!dragActive || isForbidden) return;
+                e.preventDefault();
+                e.stopPropagation();
+                e.dataTransfer.dropEffect = 'move';
+            }}
+            onDrop={e => {
+                e.preventDefault();
+                e.stopPropagation();
+                const childId = e.dataTransfer.getData('text/plain');
+                if (childId && childId !== node.id && !isForbidden) {
+                    onDrop(node.id, childId);
+                }
+                onDragEnd();
+            }}
             onClick={e => {
+                if (dragActive) return;
                 e.stopPropagation();
                 expandRecord(node.record);
             }}
@@ -401,9 +447,17 @@ function OrgCard({node, depth}) {
 
 // ─── Org Node (recursive, collapsible) ──────────────────────────────────────
 
-function OrgNode({node, defaultExpanded, depth, onToggle}) {
+function OrgNode({node, defaultExpanded, depth, onToggle, dragState, onDragStart, onDragEnd, onDrop, autoExpandIds, onAutoExpanded}) {
     const [expanded, setExpanded] = useState(depth < defaultExpanded);
     const hasChildren = node.children.length > 0;
+
+    useEffect(() => {
+        if (autoExpandIds && autoExpandIds.has(node.id)) {
+            setExpanded(true);
+            onAutoExpanded(node.id);
+            setTimeout(() => onToggle(), 0);
+        }
+    }, [autoExpandIds, node.id, onAutoExpanded, onToggle]);
 
     const handleToggle = useCallback(() => {
         setExpanded(prev => !prev);
@@ -412,7 +466,14 @@ function OrgNode({node, defaultExpanded, depth, onToggle}) {
 
     return (
         <li>
-            <OrgCard node={node} depth={depth} />
+            <OrgCard
+                node={node}
+                depth={depth}
+                dragState={dragState}
+                onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
+                onDrop={onDrop}
+            />
             {hasChildren && (
                 <button
                     className="toggle-btn"
@@ -434,6 +495,12 @@ function OrgNode({node, defaultExpanded, depth, onToggle}) {
                             defaultExpanded={defaultExpanded}
                             depth={depth + 1}
                             onToggle={onToggle}
+                            dragState={dragState}
+                            onDragStart={onDragStart}
+                            onDragEnd={onDragEnd}
+                            onDrop={onDrop}
+                            autoExpandIds={autoExpandIds}
+                            onAutoExpanded={onAutoExpanded}
                         />
                     ))}
                 </ul>
@@ -483,6 +550,11 @@ function OrgChartWithData({table}) {
     const records = useRecords(table);
     const [defaultExpanded, setDefaultExpanded] = useState(2);
     const [lineVersion, setLineVersion] = useState(0);
+    const [draggingId, setDraggingId] = useState(null);
+    const [forbiddenIds, setForbiddenIds] = useState(() => new Set());
+    const [dropError, setDropError] = useState(null);
+    const [autoExpandIds, setAutoExpandIds] = useState(() => new Set());
+    const [showHistogram, setShowHistogram] = useState(true);
     const viewportRef = useRef(null);
     const wrapperRef = useRef(null);
 
@@ -490,7 +562,55 @@ function OrgChartWithData({table}) {
         usePanZoom(viewportRef);
 
     const parentField = table.fields.find(f => f.type === 'multipleRecordLinks');
-    const {roots, conflicts} = buildTree(records, parentField);
+    const {roots, conflicts, nodeMap} = buildTree(records, parentField);
+
+    const handleDragStart = useCallback(nodeId => {
+        const node = nodeMap[nodeId];
+        if (!node) return;
+        setDraggingId(nodeId);
+        setForbiddenIds(collectSubtreeIds(node));
+        setDropError(null);
+    }, [nodeMap]);
+
+    const handleDragEnd = useCallback(() => {
+        setDraggingId(null);
+        setForbiddenIds(new Set());
+    }, []);
+
+    const handleDrop = useCallback(async (newParentId, childId) => {
+        if (!parentField) {
+            setDropError('No parent link field found on this table.');
+            return;
+        }
+        const childNode = nodeMap[childId];
+        if (!childNode || !childNode.record) return;
+        const updateFields = {[parentField.id]: [{id: newParentId}]};
+        try {
+            await table.updateRecordAsync(childNode.record, updateFields);
+            setAutoExpandIds(prev => {
+                const next = new Set(prev);
+                next.add(newParentId);
+                return next;
+            });
+        } catch (err) {
+            const check = table.checkPermissionsForUpdateRecord(childNode.record, updateFields);
+            const reason = check && !check.hasPermission && check.reasonDisplayString
+                ? check.reasonDisplayString
+                : (err && err.message ? err.message : String(err));
+            setDropError(`Update failed: ${reason}`);
+        }
+    }, [parentField, nodeMap, table]);
+
+    const dragState = {draggingId, forbiddenIds};
+
+    const handleAutoExpanded = useCallback(id => {
+        setAutoExpandIds(prev => {
+            if (!prev.has(id)) return prev;
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+        });
+    }, []);
 
     const redrawLines = useCallback(() => {
         setLineVersion(v => v + 1);
@@ -543,11 +663,32 @@ function OrgChartWithData({table}) {
                             {d === 99 ? 'All' : d}
                         </button>
                     ))}
+                    <label className="histogram-toggle-wrap" title={showHistogram ? 'Hide histogram' : 'Show histogram'}>
+                        <span className="toolbar-label histogram-toggle-label">Histogram</span>
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={showHistogram}
+                            className={`toggle-switch ${showHistogram ? 'on' : 'off'}`}
+                            onClick={() => setShowHistogram(v => !v)}
+                        >
+                            <span className="toggle-switch-knob" />
+                        </button>
+                    </label>
                 </div>
             </div>
 
             {/* Conflict banner */}
             <ConflictBanner conflicts={conflicts} />
+
+            {/* Drop error toast */}
+            {dropError && (
+                <div className="drop-error" onClick={() => setDropError(null)}>
+                    <span className="drop-error-icon">!</span>
+                    <span className="drop-error-msg">{dropError}</span>
+                    <span className="drop-error-close">×</span>
+                </div>
+            )}
 
             {/* Pannable / zoomable viewport */}
             <div
@@ -567,7 +708,7 @@ function OrgChartWithData({table}) {
                     }}
                 >
                     {/* Background histogram bars per depth level */}
-                    <DepthHistogram wrapperRef={wrapperRef} version={lineVersion} />
+                    <DepthHistogram wrapperRef={wrapperRef} version={lineVersion} visible={showHistogram} />
 
                     {/* SVG connector lines (inside transform so they scale with tree) */}
                     <ConnectorLines wrapperRef={wrapperRef} version={lineVersion} />
@@ -582,6 +723,12 @@ function OrgChartWithData({table}) {
                                     defaultExpanded={defaultExpanded}
                                     depth={0}
                                     onToggle={redrawLines}
+                                    dragState={dragState}
+                                    onDragStart={handleDragStart}
+                                    onDragEnd={handleDragEnd}
+                                    onDrop={handleDrop}
+                                    autoExpandIds={autoExpandIds}
+                                    onAutoExpanded={handleAutoExpanded}
                                 />
                             ))}
                         </ul>
