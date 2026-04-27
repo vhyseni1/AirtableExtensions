@@ -62,38 +62,57 @@ function normalizeTags(raw: string): Tag[] {
     return out;
 }
 
-function rowIdOf(rec: AirtableRecord): number | null {
-    const v = rec.getCellValue(FIELDS.rowId);
+function safeStr(rec: AirtableRecord, field: string, present: ReadonlySet<string>): string {
+    if (!present.has(field)) return '';
+    try {
+        const s = rec.getCellValueAsString(field);
+        return s == null ? '' : s;
+    } catch {
+        return '';
+    }
+}
+
+function safeRaw(rec: AirtableRecord, field: string, present: ReadonlySet<string>): unknown {
+    if (!present.has(field)) return null;
+    try {
+        return rec.getCellValue(field);
+    } catch {
+        return null;
+    }
+}
+
+function rowIdOf(rec: AirtableRecord, present: ReadonlySet<string>): number | null {
+    const v = safeRaw(rec, FIELDS.rowId, present);
     if (typeof v === 'number') return v;
-    const s = rec.getCellValueAsString(FIELDS.rowId);
+    const s = safeStr(rec, FIELDS.rowId, present);
     const n = Number(s);
     return Number.isFinite(n) ? n : null;
 }
 
-function buildImpact(rec: AirtableRecord): Impact {
+function buildImpact(rec: AirtableRecord, present: ReadonlySet<string>): Impact {
     return {
         id: rec.id,
-        rowId: rowIdOf(rec),
-        validationStatus: normalizeOne(rec.getCellValueAsString(FIELDS.validationStatus), VALIDATION_SET),
-        sourceRun: rec.getCellValueAsString(FIELDS.sourceRun).trim(),
-        category: normalizeOne(rec.getCellValueAsString(FIELDS.category), CATEGORY_SET),
-        lens: normalizeOne(rec.getCellValueAsString(FIELDS.impactLens), LENS_SET),
-        affiliateCountry: rec.getCellValueAsString(FIELDS.affiliateCountry).trim() || null,
-        persona: normalizeOne(rec.getCellValueAsString(FIELDS.persona), PERSONA_SET),
-        component: rec.getCellValueAsString(FIELDS.component).trim(),
-        description: rec.getCellValueAsString(FIELDS.description),
-        severity: normalizeOne(rec.getCellValueAsString(FIELDS.severity), SEVERITY_SET),
-        tags: normalizeTags(rec.getCellValueAsString(FIELDS.tags)),
-        confidence: normalizeOne(rec.getCellValueAsString(FIELDS.confidence), CONFIDENCE_SET),
-        sourceQuote: rec.getCellValueAsString(FIELDS.sourceQuote),
-        sourceDoc: rec.getCellValueAsString(FIELDS.sourceDoc),
-        actionRequired: rec.getCellValueAsString(FIELDS.actionRequired),
-        responsible: rec.getCellValueAsString(FIELDS.responsible).trim() || null,
-        actionOwner: rec.getCellValueAsString(FIELDS.actionOwner),
-        timeline: rec.getCellValueAsString(FIELDS.timeline),
-        dependencies: rec.getCellValueAsString(FIELDS.dependencies),
-        notes: rec.getCellValueAsString(FIELDS.notes),
-        reviewerNotes: rec.getCellValueAsString(FIELDS.reviewerNotes),
+        rowId: rowIdOf(rec, present),
+        validationStatus: normalizeOne(safeStr(rec, FIELDS.validationStatus, present), VALIDATION_SET),
+        sourceRun: safeStr(rec, FIELDS.sourceRun, present).trim(),
+        category: normalizeOne(safeStr(rec, FIELDS.category, present), CATEGORY_SET),
+        lens: normalizeOne(safeStr(rec, FIELDS.impactLens, present), LENS_SET),
+        affiliateCountry: safeStr(rec, FIELDS.affiliateCountry, present).trim() || null,
+        persona: normalizeOne(safeStr(rec, FIELDS.persona, present), PERSONA_SET),
+        component: safeStr(rec, FIELDS.component, present).trim(),
+        description: safeStr(rec, FIELDS.description, present),
+        severity: normalizeOne(safeStr(rec, FIELDS.severity, present), SEVERITY_SET),
+        tags: normalizeTags(safeStr(rec, FIELDS.tags, present)),
+        confidence: normalizeOne(safeStr(rec, FIELDS.confidence, present), CONFIDENCE_SET),
+        sourceQuote: safeStr(rec, FIELDS.sourceQuote, present),
+        sourceDoc: safeStr(rec, FIELDS.sourceDoc, present),
+        actionRequired: safeStr(rec, FIELDS.actionRequired, present),
+        responsible: safeStr(rec, FIELDS.responsible, present).trim() || null,
+        actionOwner: safeStr(rec, FIELDS.actionOwner, present),
+        timeline: safeStr(rec, FIELDS.timeline, present),
+        dependencies: safeStr(rec, FIELDS.dependencies, present),
+        notes: safeStr(rec, FIELDS.notes, present),
+        reviewerNotes: safeStr(rec, FIELDS.reviewerNotes, present),
     };
 }
 
@@ -108,17 +127,20 @@ export function useImpacts(): UseImpactsResult {
     const base = useBase() as unknown as {getTableByNameIfExists(name: string): AirtableTable | null};
     const table = base.getTableByNameIfExists(TABLE_NAME);
 
-    const fieldNames = useMemo(() => {
-        if (!table) return [] as string[];
-        const present = new Set(table.fields.map(f => f.name));
-        return REQUIRED_FIELD_LIST.filter(name => present.has(name));
+    const presentFieldNames = useMemo(() => {
+        if (!table) return new Set<string>();
+        return new Set(table.fields.map(f => f.name));
     }, [table]);
 
-    const missingFields = useMemo(() => {
-        if (!table) return [...REQUIRED_FIELD_LIST];
-        const present = new Set(table.fields.map(f => f.name));
-        return REQUIRED_FIELD_LIST.filter(n => !present.has(n));
-    }, [table]);
+    const fieldNames = useMemo(
+        () => REQUIRED_FIELD_LIST.filter(name => presentFieldNames.has(name)),
+        [presentFieldNames],
+    );
+
+    const missingFields = useMemo(
+        () => (table ? REQUIRED_FIELD_LIST.filter(n => !presentFieldNames.has(n)) : [...REQUIRED_FIELD_LIST]),
+        [table, presentFieldNames],
+    );
 
     const records = useRecords(
         table as unknown as Parameters<typeof useRecords>[0],
@@ -127,8 +149,8 @@ export function useImpacts(): UseImpactsResult {
 
     const impacts = useMemo<Impact[]>(() => {
         if (!table || !records) return [];
-        return records.map(buildImpact);
-    }, [table, records]);
+        return records.map(rec => buildImpact(rec, presentFieldNames));
+    }, [table, records, presentFieldNames]);
 
     return {
         table,
