@@ -26,5 +26,5 @@ declare module '@airtable/blocks/interface/ui' {
         getCellValueAsString(name: string): string;
     }> | null;
     export function expandRecord(record: unknown): void;
-    export function initializeBlock(render: () => ReactNode): void;
+    export function initializeBlock(config: {interface: () => ReactNode}): void;
 }

@@ -4,4 +4,4 @@ import {injectGlobalStyles} from './styles/globals';
 
 injectGlobalStyles();
 
-initializeBlock(() => <Dashboard />);
+initializeBlock({interface: () => <Dashboard />});
