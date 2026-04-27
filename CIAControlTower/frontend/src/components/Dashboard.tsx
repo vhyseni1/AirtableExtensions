@@ -13,6 +13,9 @@ import {NarrativeMode} from './NarrativeMode';
 import {DrillSheet} from './primitives/DrillSheet';
 import {EmptyState} from './primitives/EmptyState';
 import {SourceTrace} from './SourceTrace';
+import {Tabs, type TabKey} from './Tabs';
+import {HeatmapsView} from './views/HeatmapsView';
+import {WaterfallsView} from './views/WaterfallsView';
 
 interface ActiveDrill {
     title: string;
@@ -28,6 +31,7 @@ export function Dashboard() {
     const [activeDrill, setActiveDrill] = useState<ActiveDrill | null>(null);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [narrative, setNarrative] = useState(false);
+    const [tab, setTab] = useState<TabKey>('overview');
 
     const filtered = useFilteredImpacts(impacts, filter);
     const aggregations = useAggregations(filtered, impacts);
@@ -132,13 +136,14 @@ export function Dashboard() {
                     runs={aggregations.runs}
                     freshness={freshness}
                 />
+                <Tabs active={tab} onChange={setTab} />
             </div>
 
             {filtered.length === 0 ? (
                 <div style={{padding: tokens.space.xxl, background: tokens.colors.bgPanel, border: `1px solid ${tokens.colors.rule}`, borderRadius: tokens.radius.md}}>
                     <EmptyState line="No reviewed impacts match the current filter. Try widening the lens." />
                 </div>
-            ) : (
+            ) : tab === 'overview' ? (
                 <>
                     <HeatMap aggregations={aggregations} filtered={filtered} onDrill={handleDrillFromMatrix} />
                     <DiagnosticGrid
@@ -157,6 +162,15 @@ export function Dashboard() {
                         onOpen={openRecord}
                     />
                 </>
+            ) : tab === 'heatmaps' ? (
+                <HeatmapsView filtered={filtered} onDrill={handleDrillFromMatrix} />
+            ) : (
+                <WaterfallsView
+                    filtered={filtered}
+                    allImpacts={impacts}
+                    runs={aggregations.runs}
+                    onDrill={handleDrillFromMatrix}
+                />
             )}
 
             {activeDrill ? (
@@ -196,44 +210,48 @@ function Masthead({
         <header
             style={{
                 display: 'flex',
-                alignItems: 'flex-end',
+                alignItems: 'center',
                 justifyContent: 'space-between',
                 gap: tokens.space.lg,
                 paddingBottom: tokens.space.sm,
                 borderBottom: `1px solid ${tokens.colors.rule}`,
             }}
         >
-            <div>
-                <span
-                    className="cia-eyebrow"
-                    style={{letterSpacing: '0.18em', color: tokens.colors.accent}}
-                >
-                    ELEVATE-CIA · Intelligence Dashboard
-                </span>
+            <div style={{display: 'flex', alignItems: 'baseline', gap: tokens.space.md, flexWrap: 'wrap', minWidth: 0}}>
                 <h1
                     style={{
-                        margin: '4px 0 0 0',
+                        margin: 0,
                         fontFamily: tokens.fonts.serif,
-                        fontSize: 28,
+                        fontSize: 'clamp(16px, 1.8vw, 22px)',
                         fontWeight: 600,
-                        letterSpacing: '-0.015em',
+                        letterSpacing: '-0.01em',
                         color: tokens.colors.text,
+                        lineHeight: 1.15,
+                        whiteSpace: 'nowrap',
                     }}
                 >
                     Change Impact · Control Tower
                 </h1>
                 <span
+                    className="cia-eyebrow"
+                    style={{letterSpacing: '0.16em', color: tokens.colors.accent, fontSize: 9}}
+                >
+                    ELEVATE-CIA
+                </span>
+                <span
                     style={{
-                        marginTop: 4,
-                        fontSize: 12,
+                        fontSize: 11,
                         color: tokens.colors.textMuted,
-                        display: 'block',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        minWidth: 0,
                     }}
                 >
-                    Where the heat is. What's breaking. Who's under pressure. Where alignment fails.
+                    Where the heat is · what's breaking · who's under pressure · where alignment fails
                 </span>
             </div>
-            <div style={{display: 'flex', gap: tokens.space.sm}}>
+            <div style={{display: 'flex', gap: tokens.space.sm, flexShrink: 0}}>
                 <ActionButton onClick={onNarrative} disabled={runCount === 0}>
                     Narrative ▶
                 </ActionButton>

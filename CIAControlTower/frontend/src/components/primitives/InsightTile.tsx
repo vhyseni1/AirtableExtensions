@@ -37,8 +37,8 @@ export function InsightTile({eyebrow, value, suffix, delta, deltaInverse, accent
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'flex-start',
-                gap: tokens.space.sm,
-                padding: `${tokens.space.lg} ${tokens.space.lg}`,
+                gap: 4,
+                padding: `${tokens.space.sm} ${tokens.space.md}`,
                 background: tokens.colors.bgPanel,
                 borderRadius: tokens.radius.md,
                 border: `1px solid ${active ? accentColor : tokens.colors.rule}`,
@@ -46,7 +46,7 @@ export function InsightTile({eyebrow, value, suffix, delta, deltaInverse, accent
                 textAlign: 'left',
                 cursor: interactive ? 'pointer' : 'default',
                 transition: 'transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease',
-                minHeight: 96,
+                minHeight: 72,
                 width: '100%',
             }}
             onMouseEnter={e => {
@@ -74,7 +74,7 @@ export function InsightTile({eyebrow, value, suffix, delta, deltaInverse, accent
                     className="cia-num"
                     style={{
                         fontFamily: tokens.fonts.serif,
-                        fontSize: 34,
+                        fontSize: 'clamp(20px, 2vw, 28px)',
                         lineHeight: 1,
                         fontWeight: 600,
                         color: tokens.colors.text,
