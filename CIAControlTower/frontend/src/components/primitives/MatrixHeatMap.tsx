@@ -3,7 +3,7 @@ import {sevColor, tokens} from '../../styles/tokens';
 import {SEVERITY_WEIGHT, type Impact, type Severity} from '../../utils/schema';
 import {EmptyState} from './EmptyState';
 
-export type Orientation = 'rotate' | 'flat';
+export type Orientation = 'rotate' | 'flat' | 'wrap';
 
 interface Cell {
     count: number;
@@ -101,8 +101,8 @@ export function MatrixHeatMap({
     colOrder,
     rowLabel,
     colLabel,
-    colOrientation = 'rotate',
-    minColWidth = 56,
+    colOrientation = 'wrap',
+    minColWidth = 84,
     onDrill,
 }: MatrixHeatMapProps) {
     const {rows, cols, cells, rowTotals, colTotals, maxCount} = useMemo(
@@ -157,6 +157,33 @@ export function MatrixHeatMap({
 }
 
 function ColHeader({label, total, orientation}: {label: string; total: number; orientation: Orientation}) {
+    if (orientation === 'wrap') {
+        return (
+            <div
+                style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'flex-end',
+                    fontSize: 10,
+                    color: tokens.colors.textMuted,
+                    fontWeight: 600,
+                    letterSpacing: '0.04em',
+                    padding: '4px 6px',
+                    textAlign: 'center',
+                    lineHeight: 1.2,
+                    wordBreak: 'break-word',
+                    overflowWrap: 'anywhere',
+                    minHeight: 28,
+                }}
+                title={`${label} · ${total}`}
+            >
+                <div style={{textTransform: 'uppercase'}}>{label}</div>
+                <div className="cia-num" style={{color: tokens.colors.textFaint, fontSize: 9, marginTop: 2}}>
+                    {total}
+                </div>
+            </div>
+        );
+    }
     if (orientation === 'flat') {
         return (
             <div

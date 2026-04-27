@@ -104,7 +104,7 @@ interface MatrixProps {
 function Matrix({matrix, max, onDrill}: MatrixProps) {
     const personas = matrix.personas;
     const components = matrix.components;
-    const colSize = `minmax(56px, 1fr)`;
+    const colSize = `minmax(84px, 1fr)`;
 
     return (
         <div style={{overflowX: 'auto'}} className="cia-scroll">
@@ -113,7 +113,7 @@ function Matrix({matrix, max, onDrill}: MatrixProps) {
                     display: 'grid',
                     gridTemplateColumns: `120px repeat(${components.length}, ${colSize})`,
                     gap: 4,
-                    minWidth: 120 + components.length * 64,
+                    minWidth: 120 + components.length * 84,
                 }}
             >
                 <div />
@@ -141,27 +141,29 @@ function ColHeader({label, total}: {label: string; total: number}) {
     return (
         <div
             style={{
-                writingMode: 'vertical-rl',
-                transform: 'rotate(180deg)',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'flex-end',
+                alignItems: 'center',
                 fontSize: 10,
                 color: tokens.colors.textMuted,
                 fontWeight: 600,
-                letterSpacing: '0.06em',
-                padding: '6px 0',
-                textAlign: 'left',
-                whiteSpace: 'nowrap',
-                display: 'flex',
-                alignItems: 'flex-end',
-                justifyContent: 'flex-end',
-                minHeight: 88,
-                gap: 6,
+                letterSpacing: '0.04em',
+                padding: '4px 6px',
+                textAlign: 'center',
+                lineHeight: 1.2,
+                wordBreak: 'break-word',
+                overflowWrap: 'anywhere',
+                textTransform: 'uppercase',
+                minHeight: 28,
+                gap: 2,
             }}
             title={`${label} · ${total}`}
         >
-            <span className="cia-num" style={{color: tokens.colors.textFaint}}>
+            <span>{label}</span>
+            <span className="cia-num" style={{color: tokens.colors.textFaint, fontSize: 9}}>
                 {total}
             </span>
-            <span style={{textTransform: 'uppercase'}}>{label}</span>
         </div>
     );
 }
