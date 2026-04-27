@@ -19,28 +19,28 @@ export function WaterfallsView({filtered, allImpacts, runs, onDrill}: Props) {
         const high = filtered.filter(r => r.severity === 'High');
         return [
             {
-                label: 'All reviewed impacts',
+                label: 'All reviewed',
                 value: total,
                 kind: 'start',
                 records: filtered,
                 drillTitle: 'All reviewed impacts',
             },
             {
-                label: 'Remove Low severity',
+                label: 'Drop Low',
                 value: low.length,
                 kind: 'negative',
                 records: low,
                 drillTitle: 'Low-severity impacts',
             },
             {
-                label: 'Remove Medium severity',
+                label: 'Drop Medium',
                 value: medium.length,
                 kind: 'negative',
                 records: medium,
                 drillTitle: 'Medium-severity impacts',
             },
             {
-                label: 'High severity remaining',
+                label: 'High remaining',
                 value: high.length,
                 kind: 'end',
                 records: high,
@@ -52,42 +52,64 @@ export function WaterfallsView({filtered, allImpacts, runs, onDrill}: Props) {
     const validationSteps = useMemo<WaterfallStep[]>(() => {
         const all = allImpacts;
         const pending = all.filter(r => r.validationStatus === 'Pending');
-        const reviewed = all.filter(r => r.validationStatus === 'Reviewed');
         const discarded = all.filter(r => r.validationStatus === 'Discarded');
+        const reviewed = all.filter(r => r.validationStatus === 'Reviewed');
         return [
             {label: 'All extracted', value: all.length, kind: 'start', records: all, drillTitle: 'All extracted impacts'},
-            {label: 'Pending review', value: pending.length, kind: 'subtotal', records: pending, drillTitle: 'Pending review'},
-            {label: 'Reviewed', value: reviewed.length, kind: 'subtotal', records: reviewed, drillTitle: 'Reviewed impacts'},
-            {label: 'Discarded', value: discarded.length, kind: 'subtotal', records: discarded, drillTitle: 'Discarded impacts'},
+            {
+                label: 'Drop Pending',
+                value: pending.length,
+                kind: 'negative',
+                records: pending,
+                drillTitle: 'Pending review',
+            },
+            {
+                label: 'Drop Discarded',
+                value: discarded.length,
+                kind: 'negative',
+                records: discarded,
+                drillTitle: 'Discarded impacts',
+            },
+            {label: 'Reviewed', value: reviewed.length, kind: 'end', records: reviewed, drillTitle: 'Reviewed impacts'},
         ];
     }, [allImpacts]);
 
     const resolutionSteps = useMemo<WaterfallStep[]>(() => {
         const gaps = filtered.filter(r => r.tags.includes('Gap'));
-        const withOwner = gaps.filter(r => r.actionOwner.trim() || r.responsible);
-        const withTimeline = withOwner.filter(r => r.timeline.trim());
-        const withReviewerNote = withTimeline.filter(r => r.reviewerNotes.trim());
+        const noOwner = gaps.filter(r => !(r.actionOwner.trim() || r.responsible));
+        const remainingAfterOwner = gaps.filter(r => r.actionOwner.trim() || r.responsible);
+        const noTimeline = remainingAfterOwner.filter(r => !r.timeline.trim());
+        const remainingAfterTimeline = remainingAfterOwner.filter(r => r.timeline.trim());
+        const noReviewerNote = remainingAfterTimeline.filter(r => !r.reviewerNotes.trim());
+        const auditClean = remainingAfterTimeline.filter(r => r.reviewerNotes.trim());
         return [
-            {label: 'All gaps in scope', value: gaps.length, kind: 'start', records: gaps, drillTitle: 'All gaps'},
+            {label: 'All gaps', value: gaps.length, kind: 'start', records: gaps, drillTitle: 'All gaps'},
             {
-                label: 'With owner / responsible',
-                value: withOwner.length,
-                kind: 'subtotal',
-                records: withOwner,
-                drillTitle: 'Gaps with owner',
+                label: 'No owner',
+                value: noOwner.length,
+                kind: 'negative',
+                records: noOwner,
+                drillTitle: 'Gaps without owner',
             },
             {
-                label: 'With timeline',
-                value: withTimeline.length,
-                kind: 'subtotal',
-                records: withTimeline,
-                drillTitle: 'Gaps with timeline',
+                label: 'No timeline',
+                value: noTimeline.length,
+                kind: 'negative',
+                records: noTimeline,
+                drillTitle: 'Gaps without timeline',
             },
             {
-                label: 'With reviewer note',
-                value: withReviewerNote.length,
+                label: 'No reviewer note',
+                value: noReviewerNote.length,
+                kind: 'negative',
+                records: noReviewerNote,
+                drillTitle: 'Gaps without reviewer note',
+            },
+            {
+                label: 'Audit-clean',
+                value: auditClean.length,
                 kind: 'end',
-                records: withReviewerNote,
+                records: auditClean,
                 drillTitle: 'Audit-clean gaps',
             },
         ];
@@ -103,32 +125,33 @@ export function WaterfallsView({filtered, allImpacts, runs, onDrill}: Props) {
         const curReviewed = allImpacts.filter(
             r => r.sourceRun === current && r.validationStatus === 'Reviewed',
         );
-        const newAdds = curReviewed.filter(r => !prevReviewed.some(p => p.component === r.component && p.persona === r.persona));
-        const dropped = prevReviewed.filter(p => !curReviewed.some(c => c.component === p.component && c.persona === p.persona));
+        const sameKey = (a: Impact, b: Impact) => a.component === b.component && a.persona === b.persona;
+        const newAdds = curReviewed.filter(c => !prevReviewed.some(p => sameKey(p, c)));
+        const dropped = prevReviewed.filter(p => !curReviewed.some(c => sameKey(c, p)));
         return [
             {
-                label: `Prior run (${previous})`,
+                label: `Prior · ${previous}`,
                 value: prevReviewed.length,
                 kind: 'start',
                 records: prevReviewed,
                 drillTitle: `${previous} reviewed impacts`,
             },
             {
-                label: 'New since last run',
+                label: 'New',
                 value: newAdds.length,
                 kind: 'positive',
                 records: newAdds,
                 drillTitle: 'New impacts since prior run',
             },
             {
-                label: 'Resolved / removed',
+                label: 'Resolved',
                 value: dropped.length,
                 kind: 'negative',
                 records: dropped,
                 drillTitle: 'Impacts no longer present',
             },
             {
-                label: `Current run (${current})`,
+                label: `Current · ${current}`,
                 value: curReviewed.length,
                 kind: 'end',
                 records: curReviewed,
@@ -141,28 +164,28 @@ export function WaterfallsView({filtered, allImpacts, runs, onDrill}: Props) {
         <div
             style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(440px, 1fr))',
                 gap: tokens.space.md,
             }}
         >
             <Panel
                 eyebrow="Waterfall · 01"
                 title="Severity funnel"
-                subtitle="From total → high severity, step-by-step"
+                subtitle="From total → high severity, dropping each band"
             >
                 <WaterfallChart steps={severitySteps} onDrill={onDrill} />
             </Panel>
             <Panel
                 eyebrow="Waterfall · 02"
                 title="Validation pipeline"
-                subtitle="QA funnel: extracted → pending → reviewed → discarded"
+                subtitle="Extracted → −Pending → −Discarded → Reviewed"
             >
                 <WaterfallChart steps={validationSteps} onDrill={onDrill} />
             </Panel>
             <Panel
                 eyebrow="Waterfall · 03"
                 title="Resolution maturity"
-                subtitle="Gaps with owner, timeline, and reviewer notes"
+                subtitle="All gaps → drops at each maturity stage → audit-clean"
             >
                 <WaterfallChart
                     steps={resolutionSteps}
@@ -174,7 +197,7 @@ export function WaterfallsView({filtered, allImpacts, runs, onDrill}: Props) {
                 <Panel
                     eyebrow="Waterfall · 04"
                     title="Run-over-run delta"
-                    subtitle="Movement of reviewed impacts between the two latest runs"
+                    subtitle="Prior run → +new → −resolved → current run"
                 >
                     <WaterfallChart steps={runDeltaSteps} onDrill={onDrill} />
                 </Panel>
