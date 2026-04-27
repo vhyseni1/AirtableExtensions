@@ -14,12 +14,6 @@ import {DrillSheet} from './primitives/DrillSheet';
 import {EmptyState} from './primitives/EmptyState';
 import {SourceTrace} from './SourceTrace';
 
-interface AirtableTableLike {
-    id: string;
-    name: string;
-    getRecordByIdIfExists?(id: string): unknown;
-}
-
 interface ActiveDrill {
     title: string;
     eyebrow?: string;
@@ -29,7 +23,7 @@ interface ActiveDrill {
 }
 
 export function Dashboard() {
-    const {table, impacts, missingFields, isReady} = useImpacts();
+    const {table, impacts, recordsById, fieldsByName, missingFields, isReady} = useImpacts();
     const [filter, setFilter] = useState<FilterState>(DEFAULT_FILTER);
     const [activeDrill, setActiveDrill] = useState<ActiveDrill | null>(null);
     const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -46,14 +40,12 @@ export function Dashboard() {
 
     const openRecord = useCallback(
         (id: string) => {
-            if (!table) return;
-            const tbl = table as unknown as AirtableTableLike;
-            const rec = tbl.getRecordByIdIfExists?.(id);
+            const rec = recordsById.get(id);
             if (rec) {
-                expandRecord(rec as Parameters<typeof expandRecord>[0]);
+                expandRecord(rec as unknown as Parameters<typeof expandRecord>[0]);
             }
         },
-        [table],
+        [recordsById],
     );
 
     const handleDrillFromTile = useCallback((spec: DrillSpec) => {
@@ -151,12 +143,19 @@ export function Dashboard() {
                     <HeatMap aggregations={aggregations} filtered={filtered} onDrill={handleDrillFromMatrix} />
                     <DiagnosticGrid
                         aggregations={aggregations}
+                        recordsById={recordsById}
+                        fieldsByName={fieldsByName}
                         onDrill={handleDrillFromMatrix}
                         onOpen={openRecord}
                         onSelect={handleSelect}
                         selectedId={selectedId}
                     />
-                    <SourceTrace impact={selectedImpact} onOpen={openRecord} />
+                    <SourceTrace
+                        impact={selectedImpact}
+                        record={selectedImpact ? recordsById.get(selectedImpact.id) ?? null : null}
+                        fieldsByName={fieldsByName}
+                        onOpen={openRecord}
+                    />
                 </>
             )}
 
@@ -165,6 +164,8 @@ export function Dashboard() {
                     title={activeDrill.title}
                     eyebrow={activeDrill.eyebrow}
                     records={activeDrill.records}
+                    recordsById={recordsById}
+                    fieldsByName={fieldsByName}
                     onClose={() => setActiveDrill(null)}
                     onOpenRecord={id => {
                         handleSelect(id);

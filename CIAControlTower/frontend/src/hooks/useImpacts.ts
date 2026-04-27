@@ -37,10 +37,16 @@ interface AirtableRecord {
     getCellValueAsString(name: string): string;
 }
 
+interface AirtableField {
+    id: string;
+    name: string;
+    type: string;
+}
+
 interface AirtableTable {
     name: string;
     id: string;
-    fields: ReadonlyArray<{id: string; name: string}>;
+    fields: ReadonlyArray<AirtableField>;
 }
 
 function normalizeOne<T extends string>(raw: string, allow: ReadonlyArray<T>): T | null {
@@ -119,6 +125,8 @@ function buildImpact(rec: AirtableRecord, present: ReadonlySet<string>): Impact 
 export interface UseImpactsResult {
     table: AirtableTable | null;
     impacts: Impact[];
+    recordsById: ReadonlyMap<string, AirtableRecord>;
+    fieldsByName: ReadonlyMap<string, AirtableField>;
     missingFields: string[];
     isReady: boolean;
 }
@@ -132,10 +140,12 @@ export function useImpacts(): UseImpactsResult {
         return new Set(table.fields.map(f => f.name));
     }, [table]);
 
-    const fieldNames = useMemo(
-        () => REQUIRED_FIELD_LIST.filter(name => presentFieldNames.has(name)),
-        [presentFieldNames],
-    );
+    const fieldsByName = useMemo(() => {
+        const m = new Map<string, AirtableField>();
+        if (!table) return m;
+        for (const f of table.fields) m.set(f.name, f);
+        return m;
+    }, [table]);
 
     const missingFields = useMemo(
         () => (table ? REQUIRED_FIELD_LIST.filter(n => !presentFieldNames.has(n)) : [...REQUIRED_FIELD_LIST]),
@@ -144,7 +154,6 @@ export function useImpacts(): UseImpactsResult {
 
     const records = useRecords(
         table as unknown as Parameters<typeof useRecords>[0],
-        fieldNames.length ? {fields: fieldNames} : undefined,
     ) as unknown as AirtableRecord[] | null;
 
     const impacts = useMemo<Impact[]>(() => {
@@ -152,9 +161,18 @@ export function useImpacts(): UseImpactsResult {
         return records.map(rec => buildImpact(rec, presentFieldNames));
     }, [table, records, presentFieldNames]);
 
+    const recordsById = useMemo(() => {
+        const m = new Map<string, AirtableRecord>();
+        if (!records) return m;
+        for (const r of records) m.set(r.id, r);
+        return m;
+    }, [records]);
+
     return {
         table,
         impacts,
+        recordsById,
+        fieldsByName,
         missingFields,
         isReady: !!table && !!records,
     };

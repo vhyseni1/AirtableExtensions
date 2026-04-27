@@ -2,22 +2,45 @@ import {useEffect, useMemo, useRef, useState} from 'react';
 import {tokens} from '../../styles/tokens';
 import {type Impact} from '../../utils/schema';
 import {EmptyState} from './EmptyState';
-import {RecordRow} from './RecordRow';
+import {NativeRecordRow} from './NativeRecordRow';
+
+interface AirtableRecord {
+    id: string;
+    getCellValue(name: string): unknown;
+    getCellValueAsString(name: string): string;
+}
+interface AirtableField {
+    id: string;
+    name: string;
+    type: string;
+}
 
 interface Props {
     title: string;
     eyebrow?: string;
     records: Impact[];
+    recordsById: ReadonlyMap<string, AirtableRecord>;
+    fieldsByName: ReadonlyMap<string, AirtableField>;
     onClose: () => void;
     onOpenRecord: (id: string) => void;
     onSelect?: (id: string) => void;
     emptyLine?: string;
 }
 
-const ROW_HEIGHT = 78;
+const ROW_HEIGHT = 220;
 const VIRTUAL_THRESHOLD = 50;
 
-export function DrillSheet({title, eyebrow, records, onClose, onOpenRecord, onSelect, emptyLine}: Props) {
+export function DrillSheet({
+    title,
+    eyebrow,
+    records,
+    recordsById,
+    fieldsByName,
+    onClose,
+    onOpenRecord,
+    onSelect,
+    emptyLine,
+}: Props) {
     const scrollRef = useRef<HTMLDivElement | null>(null);
     const [scrollTop, setScrollTop] = useState(0);
     const [viewportHeight, setViewportHeight] = useState(0);
@@ -42,7 +65,7 @@ export function DrillSheet({title, eyebrow, records, onClose, onOpenRecord, onSe
     const virtualize = records.length > VIRTUAL_THRESHOLD;
     const {visible, padTop, padBottom} = useMemo(() => {
         if (!virtualize) return {visible: records, padTop: 0, padBottom: 0};
-        const overscan = 6;
+        const overscan = 4;
         const start = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - overscan);
         const end = Math.min(records.length, start + Math.ceil(viewportHeight / ROW_HEIGHT) + overscan * 2);
         return {
@@ -59,7 +82,7 @@ export function DrillSheet({title, eyebrow, records, onClose, onOpenRecord, onSe
                 style={{
                     position: 'absolute',
                     inset: 0,
-                    background: 'rgba(26,24,20,0.18)',
+                    background: 'rgba(2,35,102,0.18)',
                     zIndex: 40,
                 }}
             />
@@ -69,10 +92,10 @@ export function DrillSheet({title, eyebrow, records, onClose, onOpenRecord, onSe
                     top: 0,
                     bottom: 0,
                     right: 0,
-                    width: 'min(520px, 90vw)',
-                    background: tokens.colors.bgPanel,
+                    width: 'min(560px, 92vw)',
+                    background: tokens.colors.bg,
                     borderLeft: `1px solid ${tokens.colors.rule}`,
-                    boxShadow: '-12px 0 30px rgba(26,24,20,0.08)',
+                    boxShadow: '-12px 0 30px rgba(2,35,102,0.10)',
                     display: 'flex',
                     flexDirection: 'column',
                     zIndex: 50,
@@ -86,6 +109,7 @@ export function DrillSheet({title, eyebrow, records, onClose, onOpenRecord, onSe
                         alignItems: 'flex-start',
                         justifyContent: 'space-between',
                         gap: tokens.space.md,
+                        background: tokens.colors.bgPanel,
                     }}
                 >
                     <div>
@@ -97,6 +121,7 @@ export function DrillSheet({title, eyebrow, records, onClose, onOpenRecord, onSe
                                 fontSize: 20,
                                 fontWeight: 600,
                                 letterSpacing: '-0.01em',
+                                color: tokens.colors.text,
                             }}
                         >
                             {title}
@@ -125,6 +150,7 @@ export function DrillSheet({title, eyebrow, records, onClose, onOpenRecord, onSe
                             color: tokens.colors.textMuted,
                             fontSize: 14,
                             lineHeight: 1,
+                            background: tokens.colors.bgPanel,
                         }}
                     >
                         ×
@@ -138,6 +164,7 @@ export function DrillSheet({title, eyebrow, records, onClose, onOpenRecord, onSe
                         flex: 1,
                         overflowY: 'auto',
                         padding: tokens.space.lg,
+                        background: tokens.colors.bg,
                     }}
                 >
                     {records.length === 0 ? (
@@ -146,9 +173,11 @@ export function DrillSheet({title, eyebrow, records, onClose, onOpenRecord, onSe
                         <div style={{display: 'flex', flexDirection: 'column', gap: tokens.space.sm}}>
                             {virtualize ? <div style={{height: padTop}} /> : null}
                             {visible.map(r => (
-                                <RecordRow
+                                <NativeRecordRow
                                     key={r.id}
                                     impact={r}
+                                    record={recordsById.get(r.id) ?? null}
+                                    fieldsByName={fieldsByName}
                                     onOpen={onOpenRecord}
                                     onSelect={onSelect}
                                 />
@@ -167,9 +196,10 @@ export function DrillSheet({title, eyebrow, records, onClose, onOpenRecord, onSe
                         textTransform: 'uppercase',
                         display: 'flex',
                         justifyContent: 'space-between',
+                        background: tokens.colors.bgPanel,
                     }}
                 >
-                    <span>Click row to open record</span>
+                    <span>Click row to open native record</span>
                     <span>Esc to close</span>
                 </footer>
             </aside>

@@ -4,8 +4,21 @@ import {EmptyState} from '../primitives/EmptyState';
 import {Panel} from '../primitives/Panel';
 import {SeverityBadge} from '../primitives/SeverityBadge';
 
+interface AirtableRecord {
+    id: string;
+    getCellValue(name: string): unknown;
+    getCellValueAsString(name: string): string;
+}
+interface AirtableField {
+    id: string;
+    name: string;
+    type: string;
+}
+
 interface Props {
     friction: Impact[];
+    recordsById?: ReadonlyMap<string, AirtableRecord>;
+    fieldsByName?: ReadonlyMap<string, AirtableField>;
     onOpen: (id: string) => void;
     onSelect: (id: string) => void;
     selectedId?: string | null;
