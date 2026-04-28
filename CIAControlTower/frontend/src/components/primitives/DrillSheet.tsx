@@ -54,6 +54,14 @@ export function DrillSheet({
     }, [onClose]);
 
     useEffect(() => {
+        const previous = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = previous;
+        };
+    }, []);
+
+    useEffect(() => {
         const node = scrollRef.current;
         if (!node) return;
         setViewportHeight(node.clientHeight);
@@ -80,15 +88,17 @@ export function DrillSheet({
             <div
                 onClick={onClose}
                 style={{
-                    position: 'absolute',
+                    position: 'fixed',
                     inset: 0,
                     background: 'rgba(2,35,102,0.18)',
                     zIndex: 40,
                 }}
             />
             <aside
+                onWheel={e => e.stopPropagation()}
+                onTouchMove={e => e.stopPropagation()}
                 style={{
-                    position: 'absolute',
+                    position: 'fixed',
                     top: 0,
                     bottom: 0,
                     right: 0,
@@ -99,6 +109,7 @@ export function DrillSheet({
                     display: 'flex',
                     flexDirection: 'column',
                     zIndex: 50,
+                    overscrollBehavior: 'contain',
                 }}
             >
                 <header
@@ -163,6 +174,7 @@ export function DrillSheet({
                     style={{
                         flex: 1,
                         overflowY: 'auto',
+                        overscrollBehavior: 'contain',
                         padding: tokens.space.lg,
                         background: tokens.colors.bg,
                     }}

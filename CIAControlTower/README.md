@@ -43,7 +43,7 @@ Single source table named **`Impacts`** with these fields, names exact:
 | `Impact_Lens` | Single select | `Global`, `MWM`, `Affiliate` |
 | `Affiliate_Country` | Single select | `DE`, `UK`, `FR`, `ES`, `IT`, `CA`, `BR`, `Other` |
 | `Persona` | Single select | `PJP`, `HCD`, `HSP`, `GSCL`, `CSR`, `Admin` |
-| `Component` | Single line text | canonical, e.g. `Vault 3.0`, `PowerBI Dashboard` |
+| `Component` | Single line text | canonical, e.g. `Vault 3.0`, `Global Procurement Queue` |
 | `Description` | Long text | format `AS-IS: ... --> TO-BE: ...` |
 | `Severity` | Single select | `High`, `Medium`, `Low` |
 | `Tags` | Multi-select | `Heatmap`, `Pressure`, `Gap`, `Friction` |
