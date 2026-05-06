@@ -81,7 +81,9 @@ export function FrictionPanel({friction, onOpen, onSelect, selectedId}: Props) {
                     }}
                 >
                     {friction.map(f => {
-                        const parties = extractParties(f.sourceQuote || f.description);
+                        const parties = extractParties(
+                            f.sourceQuote || f.descriptionToBe || f.descriptionAsIs,
+                        );
                         const selected = selectedId === f.id;
                         return (
                             <button
@@ -152,9 +154,9 @@ export function FrictionPanel({friction, onOpen, onSelect, selectedId}: Props) {
                                             fontWeight: 600,
                                         }}
                                     >
-                                        {f.component || 'Unspecified'} · {f.persona ?? '—'}
+                                        {f.changeComponent || 'Unspecified'} · {f.role || f.persona || '—'}
                                     </span>
-                                    <SeverityBadge severity={f.severity} />
+                                    <SeverityBadge severity={f.changeImpact} />
                                 </div>
                             </button>
                         );

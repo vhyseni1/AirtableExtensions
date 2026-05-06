@@ -14,9 +14,9 @@ interface Props {
 export function WaterfallsView({filtered, allImpacts, runs, onDrill}: Props) {
     const severitySteps = useMemo<WaterfallStep[]>(() => {
         const total = filtered.length;
-        const low = filtered.filter(r => r.severity === 'Low');
-        const medium = filtered.filter(r => r.severity === 'Medium');
-        const high = filtered.filter(r => r.severity === 'High');
+        const low = filtered.filter(r => r.changeImpact === 'Low');
+        const medium = filtered.filter(r => r.changeImpact === 'Medium');
+        const high = filtered.filter(r => r.changeImpact === 'High');
         return [
             {
                 label: 'All reviewed',
@@ -125,7 +125,8 @@ export function WaterfallsView({filtered, allImpacts, runs, onDrill}: Props) {
         const curReviewed = allImpacts.filter(
             r => r.sourceRun === current && r.validationStatus === 'Reviewed',
         );
-        const sameKey = (a: Impact, b: Impact) => a.component === b.component && a.persona === b.persona;
+        const sameKey = (a: Impact, b: Impact) =>
+            a.changeComponent === b.changeComponent && a.role === b.role;
         const newAdds = curReviewed.filter(c => !prevReviewed.some(p => sameKey(p, c)));
         const dropped = prevReviewed.filter(p => !curReviewed.some(c => sameKey(c, p)));
         return [

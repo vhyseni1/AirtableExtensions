@@ -1,35 +1,31 @@
 import {useBase, useRecords} from '@airtable/blocks/interface/ui';
 import {useMemo} from 'react';
 import {
+    BUSINESS_ARCHETYPES,
+    CHANGE_CATEGORIES,
+    CHANGE_IMPACTS,
+    AFFILIATES,
+    CONFIDENCES,
+    ECL_STREAMS,
     FIELDS,
+    PERSONAS,
     REQUIRED_FIELD_LIST,
+    RESPONSIBLES,
     TABLE_NAME,
-    type Category,
+    TAGS,
+    VALIDATION_STATUSES,
+    type Affiliate,
+    type BusinessArchetype,
+    type ChangeCategory,
+    type ChangeImpact,
     type Confidence,
+    type EclStream,
     type Impact,
-    type Lens,
     type Persona,
-    type Severity,
+    type Responsible,
     type Tag,
     type ValidationStatus,
 } from '../utils/schema';
-
-const TAG_SET: ReadonlyArray<Tag> = ['Heatmap', 'Pressure', 'Gap', 'Friction'];
-const SEVERITY_SET: ReadonlyArray<Severity> = ['High', 'Medium', 'Low'];
-const CONFIDENCE_SET: ReadonlyArray<Confidence> = ['High', 'Medium', 'Low'];
-const LENS_SET: ReadonlyArray<Lens> = ['Global', 'MWM', 'Affiliate'];
-const VALIDATION_SET: ReadonlyArray<ValidationStatus> = ['Pending', 'Reviewed', 'Discarded'];
-const PERSONA_SET: ReadonlyArray<Persona> = ['PJP', 'HCD', 'HSP', 'GSCL', 'CSR', 'Admin'];
-const CATEGORY_SET: ReadonlyArray<Category> = [
-    'Process & Workflow',
-    'Technology & Integration',
-    'Data Ownership & Integrity',
-    'Analytics & Measurements',
-    'Role & Responsibility',
-    'Skill & Capability',
-    'Mindset & Cultural Sentiment',
-    'Engagement & Communication',
-];
 
 interface AirtableRecord {
     id: string;
@@ -55,15 +51,11 @@ function normalizeOne<T extends string>(raw: string, allow: ReadonlyArray<T>): T
     return (allow as ReadonlyArray<string>).includes(v) ? (v as T) : null;
 }
 
-function normalizeTags(raw: string): Tag[] {
+function normalizeMany<T extends string>(raw: string, allow: ReadonlyArray<T>): T[] {
     if (!raw) return [];
-    const parts = raw
-        .split(',')
-        .map(s => s.trim())
-        .filter(Boolean);
-    const out: Tag[] = [];
-    for (const p of parts) {
-        if ((TAG_SET as ReadonlyArray<string>).includes(p)) out.push(p as Tag);
+    const out: T[] = [];
+    for (const part of raw.split(',').map(s => s.trim()).filter(Boolean)) {
+        if ((allow as ReadonlyArray<string>).includes(part)) out.push(part as T);
     }
     return out;
 }
@@ -87,10 +79,10 @@ function safeRaw(rec: AirtableRecord, field: string, present: ReadonlySet<string
     }
 }
 
-function rowIdOf(rec: AirtableRecord, present: ReadonlySet<string>): number | null {
-    const v = safeRaw(rec, FIELDS.rowId, present);
+function recordNumberOf(rec: AirtableRecord, present: ReadonlySet<string>): number | null {
+    const v = safeRaw(rec, FIELDS.id, present);
     if (typeof v === 'number') return v;
-    const s = safeStr(rec, FIELDS.rowId, present);
+    const s = safeStr(rec, FIELDS.id, present);
     const n = Number(s);
     return Number.isFinite(n) ? n : null;
 }
@@ -98,22 +90,25 @@ function rowIdOf(rec: AirtableRecord, present: ReadonlySet<string>): number | nu
 function buildImpact(rec: AirtableRecord, present: ReadonlySet<string>): Impact {
     return {
         id: rec.id,
-        rowId: rowIdOf(rec, present),
-        validationStatus: normalizeOne(safeStr(rec, FIELDS.validationStatus, present), VALIDATION_SET),
+        recordNumber: recordNumberOf(rec, present),
+        validationStatus: normalizeOne<ValidationStatus>(safeStr(rec, FIELDS.validationStatus, present), VALIDATION_STATUSES),
         sourceRun: safeStr(rec, FIELDS.sourceRun, present).trim(),
-        category: normalizeOne(safeStr(rec, FIELDS.category, present), CATEGORY_SET),
-        lens: normalizeOne(safeStr(rec, FIELDS.impactLens, present), LENS_SET),
-        affiliateCountry: safeStr(rec, FIELDS.affiliateCountry, present).trim() || null,
-        persona: normalizeOne(safeStr(rec, FIELDS.persona, present), PERSONA_SET),
-        component: safeStr(rec, FIELDS.component, present).trim(),
-        description: safeStr(rec, FIELDS.description, present),
-        severity: normalizeOne(safeStr(rec, FIELDS.severity, present), SEVERITY_SET),
-        tags: normalizeTags(safeStr(rec, FIELDS.tags, present)),
-        confidence: normalizeOne(safeStr(rec, FIELDS.confidence, present), CONFIDENCE_SET),
+        businessArchetypes: normalizeMany<BusinessArchetype>(safeStr(rec, FIELDS.businessArchetypes, present), BUSINESS_ARCHETYPES),
+        affiliate: normalizeOne<Affiliate>(safeStr(rec, FIELDS.affiliate, present), AFFILIATES),
+        role: safeStr(rec, FIELDS.role, present).trim(),
+        persona: normalizeOne<Persona>(safeStr(rec, FIELDS.persona, present), PERSONAS),
+        changeCategory: normalizeOne<ChangeCategory>(safeStr(rec, FIELDS.changeCategory, present), CHANGE_CATEGORIES),
+        changeComponent: safeStr(rec, FIELDS.changeComponent, present).trim(),
+        descriptionAsIs: safeStr(rec, FIELDS.descriptionAsIs, present),
+        descriptionToBe: safeStr(rec, FIELDS.descriptionToBe, present),
+        changeImpact: normalizeOne<ChangeImpact>(safeStr(rec, FIELDS.changeImpact, present), CHANGE_IMPACTS),
+        confidence: normalizeOne<Confidence>(safeStr(rec, FIELDS.confidence, present), CONFIDENCES),
+        tags: normalizeMany<Tag>(safeStr(rec, FIELDS.tags, present), TAGS),
         sourceQuote: safeStr(rec, FIELDS.sourceQuote, present),
         sourceDoc: safeStr(rec, FIELDS.sourceDoc, present),
         actionRequired: safeStr(rec, FIELDS.actionRequired, present),
-        responsible: safeStr(rec, FIELDS.responsible, present).trim() || null,
+        responsible: normalizeOne<Responsible>(safeStr(rec, FIELDS.responsible, present), RESPONSIBLES),
+        eclStream: normalizeOne<EclStream>(safeStr(rec, FIELDS.eclStream, present), ECL_STREAMS),
         actionOwner: safeStr(rec, FIELDS.actionOwner, present),
         timeline: safeStr(rec, FIELDS.timeline, present),
         dependencies: safeStr(rec, FIELDS.dependencies, present),

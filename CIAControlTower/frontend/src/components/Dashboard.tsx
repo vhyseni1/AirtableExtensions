@@ -69,7 +69,7 @@ export function Dashboard() {
             const found = impacts.find(r => r.id === selectedId);
             if (found) return found;
         }
-        return filtered.find(r => r.severity === 'High') ?? filtered[0] ?? null;
+        return filtered.find(r => r.changeImpact === 'High') ?? filtered[0] ?? null;
     }, [selectedId, impacts, filtered]);
 
     const freshness = useMemo(() => {

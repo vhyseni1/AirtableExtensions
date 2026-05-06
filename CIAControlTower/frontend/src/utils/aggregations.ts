@@ -1,10 +1,10 @@
 import {
+    type ChangeImpact,
     type Impact,
     type Persona,
-    type Severity,
     type Tag,
+    CHANGE_IMPACT_WEIGHT,
     PERSONAS,
-    SEVERITY_WEIGHT,
 } from './schema';
 
 export interface CellAgg {
@@ -36,7 +36,7 @@ export function buildMatrix(records: Impact[]): MatrixAgg {
     const componentSet = new Set<string>();
 
     for (const r of records) {
-        const c = r.component?.trim() || '(unspecified)';
+        const c = r.changeComponent?.trim() || '(unspecified)';
         const p = r.persona;
         if (!p) continue;
         componentSet.add(c);
@@ -53,8 +53,8 @@ export function buildMatrix(records: Impact[]): MatrixAgg {
         }
         cell.records.push(r);
         cell.count += 1;
-        if (r.severity) {
-            cell.sevSum += SEVERITY_WEIGHT[r.severity];
+        if (r.changeImpact) {
+            cell.sevSum += CHANGE_IMPACT_WEIGHT[r.changeImpact];
             cell.sevCount += 1;
         }
         componentTotals.set(c, (componentTotals.get(c) ?? 0) + 1);
@@ -116,7 +116,7 @@ export interface ComponentRollup {
 export function topComponentsBySeverity(records: Impact[], limit = 5): ComponentRollup[] {
     const map = new Map<string, ComponentRollup>();
     for (const r of records) {
-        const c = r.component?.trim() || '(unspecified)';
+        const c = r.changeComponent?.trim() || '(unspecified)';
         let row = map.get(c);
         if (!row) {
             row = {component: c, total: 0, high: 0, medium: 0, low: 0, records: []};
@@ -124,9 +124,9 @@ export function topComponentsBySeverity(records: Impact[], limit = 5): Component
         }
         row.total += 1;
         row.records.push(r);
-        if (r.severity === 'High') row.high += 1;
-        else if (r.severity === 'Medium') row.medium += 1;
-        else if (r.severity === 'Low') row.low += 1;
+        if (r.changeImpact === 'High') row.high += 1;
+        else if (r.changeImpact === 'Medium') row.medium += 1;
+        else if (r.changeImpact === 'Low') row.low += 1;
     }
     return [...map.values()]
         .sort((a, b) => b.total - a.total || b.high - a.high)
@@ -154,45 +154,45 @@ export function pressureByPersona(records: Impact[]): PersonaRollup[] {
         row.count += 1;
     }
     for (const row of map.values()) {
-        const sevs = row.records.map(r => (r.severity ? SEVERITY_WEIGHT[r.severity] : 0)).filter(n => n > 0);
+        const sevs = row.records.map(r => (r.changeImpact ? CHANGE_IMPACT_WEIGHT[r.changeImpact] : 0)).filter(n => n > 0);
         row.avgSev = sevs.length ? sevs.reduce((a, b) => a + b, 0) / sevs.length : 0;
     }
     return [...map.values()].sort((a, b) => b.count - a.count);
 }
 
 export function gapsList(records: Impact[]): Impact[] {
-    const sevRank = (s: Severity | null): number => (s ? SEVERITY_WEIGHT[s] : 0);
+    const sevRank = (s: ChangeImpact | null): number => (s ? CHANGE_IMPACT_WEIGHT[s] : 0);
     const confRank = (c: string | null): number => (c === 'High' ? 3 : c === 'Medium' ? 2 : c === 'Low' ? 1 : 0);
     return records
         .filter(r => r.tags.includes('Gap'))
-        .sort((a, b) => sevRank(b.severity) - sevRank(a.severity) || confRank(b.confidence) - confRank(a.confidence));
+        .sort((a, b) => sevRank(b.changeImpact) - sevRank(a.changeImpact) || confRank(b.confidence) - confRank(a.confidence));
 }
 
 export function frictionList(records: Impact[]): Impact[] {
     return records
         .filter(r => r.tags.includes('Friction'))
-        .sort((a, b) => (b.severity === 'High' ? 1 : 0) - (a.severity === 'High' ? 1 : 0));
+        .sort((a, b) => (b.changeImpact === 'High' ? 1 : 0) - (a.changeImpact === 'High' ? 1 : 0));
 }
 
-export interface LensSlice {
+export interface AffiliateSlice {
     label: string;
     total: number;
     byCategory: Map<string, number>;
 }
 
-export function lensSlices(records: Impact[]): LensSlice[] {
-    const map = new Map<string, LensSlice>();
+export function affiliateSlices(records: Impact[]): AffiliateSlice[] {
+    const map = new Map<string, AffiliateSlice>();
     for (const r of records) {
-        if (!r.lens) continue;
-        const key = r.lens === 'Affiliate' && r.affiliateCountry ? `Affiliate · ${r.affiliateCountry}` : r.lens;
+        if (!r.affiliate) continue;
+        const key = r.affiliate;
         let row = map.get(key);
         if (!row) {
             row = {label: key, total: 0, byCategory: new Map()};
             map.set(key, row);
         }
         row.total += 1;
-        if (r.category) {
-            row.byCategory.set(r.category, (row.byCategory.get(r.category) ?? 0) + 1);
+        if (r.changeCategory) {
+            row.byCategory.set(r.changeCategory, (row.byCategory.get(r.changeCategory) ?? 0) + 1);
         }
     }
     return [...map.values()].sort((a, b) => b.total - a.total);
@@ -210,7 +210,7 @@ export interface HeadlineMetrics {
 
 export function headlineMetrics(records: Impact[]): HeadlineMetrics {
     const reviewed = records.filter(r => r.validationStatus === 'Reviewed');
-    const highSeverity = reviewed.filter(r => r.severity === 'High').length;
+    const highSeverity = reviewed.filter(r => r.changeImpact === 'High').length;
     const gapsOpen = reviewed.filter(r => r.tags.includes('Gap') && !r.reviewerNotes.trim()).length;
     const pressureFlags = reviewed.filter(r => r.tags.includes('Pressure')).length;
     const frictionPoints = reviewed.filter(r => r.tags.includes('Friction')).length;

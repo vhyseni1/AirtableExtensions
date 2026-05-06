@@ -1,11 +1,20 @@
 import {tokens} from '../styles/tokens';
 import {
     DEFAULT_FILTER,
+    type AffiliateFilter,
     type FilterState,
-    type LensFilter,
-    type SeverityFilter,
+    type ImpactFilter,
 } from '../hooks/useFilteredImpacts';
-import {LENSES, PERSONAS, SEVERITIES, TAGS, type Persona, type Tag} from '../utils/schema';
+import {
+    AFFILIATES,
+    BUSINESS_ARCHETYPES,
+    CHANGE_IMPACTS,
+    PERSONAS,
+    TAGS,
+    type BusinessArchetype,
+    type Persona,
+    type Tag,
+} from '../utils/schema';
 import {TagChip} from './primitives/TagChip';
 
 interface Props {
@@ -16,7 +25,7 @@ interface Props {
 }
 
 const segmentBtn = (active: boolean): React.CSSProperties => ({
-    padding: '5px 10px',
+    padding: '4px 9px',
     background: active ? tokens.colors.accent : 'transparent',
     color: active ? '#fff' : tokens.colors.textMuted,
     border: `1px solid ${active ? tokens.colors.accent : tokens.colors.rule}`,
@@ -50,13 +59,20 @@ export function FilterBar({filter, onChange, runs, freshness}: Props) {
         const next = filter.tags.includes(t) ? filter.tags.filter(x => x !== t) : [...filter.tags, t];
         onChange({...filter, tags: next});
     };
+    const toggleArchetype = (a: BusinessArchetype) => {
+        const next = filter.archetypes.includes(a)
+            ? filter.archetypes.filter(x => x !== a)
+            : [...filter.archetypes, a];
+        onChange({...filter, archetypes: next});
+    };
 
     const isDefault =
         filter.sourceRun === DEFAULT_FILTER.sourceRun &&
-        filter.lens === DEFAULT_FILTER.lens &&
+        filter.affiliate === DEFAULT_FILTER.affiliate &&
+        filter.archetypes.length === 0 &&
         filter.personas.length === 0 &&
         filter.tags.length === 0 &&
-        filter.severity === DEFAULT_FILTER.severity;
+        filter.changeImpact === DEFAULT_FILTER.changeImpact;
 
     return (
         <div
@@ -65,7 +81,7 @@ export function FilterBar({filter, onChange, runs, freshness}: Props) {
                 flexWrap: 'wrap',
                 alignItems: 'center',
                 gap: tokens.space.lg,
-                padding: `${tokens.space.md} ${tokens.space.lg}`,
+                padding: `${tokens.space.sm} ${tokens.space.md}`,
                 background: tokens.colors.bgPanel,
                 border: `1px solid ${tokens.colors.rule}`,
                 borderRadius: tokens.radius.md,
@@ -76,7 +92,7 @@ export function FilterBar({filter, onChange, runs, freshness}: Props) {
                     value={filter.sourceRun}
                     onChange={e => onChange({...filter, sourceRun: e.target.value as FilterState['sourceRun']})}
                     style={{
-                        padding: '5px 8px',
+                        padding: '4px 8px',
                         border: `1px solid ${tokens.colors.rule}`,
                         borderRadius: tokens.radius.sm,
                         fontSize: 12,
@@ -95,20 +111,51 @@ export function FilterBar({filter, onChange, runs, freshness}: Props) {
                 </select>
             </Group>
 
-            <Group label="Lens">
-                <Segmented<LensFilter>
-                    options={['All', ...LENSES]}
-                    value={filter.lens}
-                    onChange={v => onChange({...filter, lens: v})}
+            <Group label="Affiliate">
+                <select
+                    value={filter.affiliate}
+                    onChange={e => onChange({...filter, affiliate: e.target.value as AffiliateFilter})}
+                    style={{
+                        padding: '4px 8px',
+                        border: `1px solid ${tokens.colors.rule}`,
+                        borderRadius: tokens.radius.sm,
+                        fontSize: 12,
+                        background: tokens.colors.bg,
+                        fontFamily: tokens.fonts.mono,
+                        color: tokens.colors.text,
+                        minWidth: 100,
+                    }}
+                >
+                    <option value="All">All</option>
+                    {AFFILIATES.map(a => (
+                        <option key={a} value={a}>
+                            {a}
+                        </option>
+                    ))}
+                </select>
+            </Group>
+
+            <Group label="Impact">
+                <Segmented<ImpactFilter>
+                    options={['All', ...CHANGE_IMPACTS]}
+                    value={filter.changeImpact}
+                    onChange={v => onChange({...filter, changeImpact: v})}
                 />
             </Group>
 
-            <Group label="Severity">
-                <Segmented<SeverityFilter>
-                    options={['All', ...SEVERITIES]}
-                    value={filter.severity}
-                    onChange={v => onChange({...filter, severity: v})}
-                />
+            <Group label="Archetype">
+                <div style={{display: 'flex', gap: 4, flexWrap: 'wrap'}}>
+                    {BUSINESS_ARCHETYPES.map(a => (
+                        <button
+                            key={a}
+                            type="button"
+                            onClick={() => toggleArchetype(a)}
+                            style={chipBtn(filter.archetypes.includes(a))}
+                        >
+                            {a}
+                        </button>
+                    ))}
+                </div>
             </Group>
 
             <Group label="Persona">

@@ -1,33 +1,43 @@
 import {useMemo} from 'react';
-import {type Impact, type Persona, type Severity, type Tag} from '../utils/schema';
+import {
+    type Affiliate,
+    type BusinessArchetype,
+    type ChangeImpact,
+    type Impact,
+    type Persona,
+    type Tag,
+} from '../utils/schema';
 
-export type LensFilter = 'All' | 'Global' | 'MWM' | 'Affiliate';
-export type SeverityFilter = 'All' | Severity;
+export type AffiliateFilter = 'All' | Affiliate;
+export type ImpactFilter = 'All' | ChangeImpact;
 
 export interface FilterState {
     sourceRun: string | 'All';
-    lens: LensFilter;
+    affiliate: AffiliateFilter;
+    archetypes: BusinessArchetype[];
     personas: Persona[];
     tags: Tag[];
-    severity: SeverityFilter;
+    changeImpact: ImpactFilter;
 }
 
 export const DEFAULT_FILTER: FilterState = {
     sourceRun: 'All',
-    lens: 'All',
+    affiliate: 'All',
+    archetypes: [],
     personas: [],
     tags: [],
-    severity: 'All',
+    changeImpact: 'All',
 };
 
 export function applyFilters(records: Impact[], f: FilterState): Impact[] {
     return records.filter(r => {
         if (r.validationStatus !== 'Reviewed') return false;
         if (f.sourceRun !== 'All' && r.sourceRun !== f.sourceRun) return false;
-        if (f.lens !== 'All' && r.lens !== f.lens) return false;
-        if (f.severity !== 'All' && r.severity !== f.severity) return false;
+        if (f.affiliate !== 'All' && r.affiliate !== f.affiliate) return false;
+        if (f.changeImpact !== 'All' && r.changeImpact !== f.changeImpact) return false;
         if (f.personas.length && (!r.persona || !f.personas.includes(r.persona))) return false;
         if (f.tags.length && !f.tags.every(t => r.tags.includes(t))) return false;
+        if (f.archetypes.length && !r.businessArchetypes.some(a => f.archetypes.includes(a))) return false;
         return true;
     });
 }

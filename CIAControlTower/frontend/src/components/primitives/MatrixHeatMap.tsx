@@ -1,6 +1,6 @@
 import {useMemo} from 'react';
 import {sevColor, tokens} from '../../styles/tokens';
-import {SEVERITY_WEIGHT, type Impact, type Severity} from '../../utils/schema';
+import {CHANGE_IMPACT_WEIGHT, type ChangeImpact, type Impact} from '../../utils/schema';
 import {EmptyState} from './EmptyState';
 
 export type Orientation = 'rotate' | 'flat' | 'wrap';
@@ -69,8 +69,8 @@ function build(
         }
         cell.count += 1;
         cell.records.push(r);
-        if (r.severity) {
-            cell.avgSev = (cell.avgSev * (cell.count - 1) + SEVERITY_WEIGHT[r.severity as Severity]) / cell.count;
+        if (r.changeImpact) {
+            cell.avgSev = (cell.avgSev * (cell.count - 1) + CHANGE_IMPACT_WEIGHT[r.changeImpact as ChangeImpact]) / cell.count;
         }
         rowTotals.set(rk, (rowTotals.get(rk) ?? 0) + 1);
         colTotals.set(ck, (colTotals.get(ck) ?? 0) + 1);

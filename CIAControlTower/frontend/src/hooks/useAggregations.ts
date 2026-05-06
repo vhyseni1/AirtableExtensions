@@ -1,17 +1,17 @@
 import {useMemo} from 'react';
 import {
+    affiliateSlices,
     buildMatrix,
     deltaBetweenRuns,
     frictionList,
     gapsList,
     headlineMetrics,
-    lensSlices,
     listRuns,
     pressureByPersona,
     topComponentsBySeverity,
+    type AffiliateSlice,
     type ComponentRollup,
     type HeadlineMetrics,
-    type LensSlice,
     type MatrixAgg,
     type PersonaRollup,
 } from '../utils/aggregations';
@@ -24,7 +24,7 @@ export interface DashboardAggregations {
     gaps: Impact[];
     pressure: PersonaRollup[];
     friction: Impact[];
-    lenses: LensSlice[];
+    affiliateSlices: AffiliateSlice[];
     runs: string[];
     delta: ReturnType<typeof deltaBetweenRuns> | null;
 }
@@ -49,7 +49,7 @@ export function useAggregations(filtered: Impact[], all: Impact[]): DashboardAgg
             gaps: gapsList(filtered),
             pressure: pressureByPersona(filtered),
             friction: frictionList(filtered),
-            lenses: lensSlices(filtered),
+            affiliateSlices: affiliateSlices(filtered),
             runs,
             delta,
         };

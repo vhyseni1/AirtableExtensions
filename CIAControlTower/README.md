@@ -30,35 +30,40 @@ npx block release # ship to the base
 
 ---
 
-## Required Airtable schema
+## Required Airtable schema (Framework v3.1)
 
 Single source table named **`Impacts`** with these fields, names exact:
 
 | Field | Type | Allowed values |
 |---|---|---|
-| `Row_ID` | Number | auto |
+| `ID` | Number | auto |
 | `Validation_Status` | Single select | `Pending`, `Reviewed`, `Discarded` |
 | `Source_Run` | Single line text | batch tag, e.g. `Steerco_2026-04-22` |
-| `Category` | Single select | `Process & Workflow`, `Technology & Integration`, `Data Ownership & Integrity`, `Analytics & Measurements`, `Role & Responsibility`, `Skill & Capability`, `Mindset & Cultural Sentiment`, `Engagement & Communication` |
-| `Impact_Lens` | Single select | `Global`, `MWM`, `Affiliate` |
-| `Affiliate_Country` | Single select | `DE`, `UK`, `FR`, `ES`, `IT`, `CA`, `BR`, `Other` |
-| `Persona` | Single select | `PJP`, `HCD`, `HSP`, `GSCL`, `CSR`, `Admin` |
-| `Component` | Single line text | canonical, e.g. `Vault 3.0`, `Global Procurement Queue` |
-| `Description` | Long text | format `AS-IS: ... --> TO-BE: ...` |
-| `Severity` | Single select | `High`, `Medium`, `Low` |
-| `Tags` | Multi-select | `Heatmap`, `Pressure`, `Gap`, `Friction` |
+| `Business_Archetypes` | Multi-select | `i8 First Mover`, `i7 First Mover`, `i8`, `i7`, `Global Function` |
+| `Affiliate` | Single select | `Global`, `DE`, `UK`, `FR`, `ES`, `IT`, `CA`, `BR` |
+| `Role` | Single line text or linked record | canonical Role from the Roles table |
+| `Persona` | Single select (auto-derived from Role) | `PJP`, `HCD`, `HSP`, `GSCL`, `CSR`, `Admin` |
+| `Change_Category` | Single select | `Process & Workflow`, `Technology & Integration`, `Data Ownership & Integrity`, `Analytics & Measurements`, `Roles & Responsibilities`, `Skill & Capability`, `Mindset & Cultural Sentiment`, `Engagement & Communication` |
+| `Change_Component` | Single line text | canonical system / process / artifact, e.g. `Vault 3.0`, `Global Procurement Queue` |
+| `Description_As-Is` | Long text | current state, ≤25 words |
+| `Description_To-Be` | Long text | future state — blank if source did not articulate it |
+| `Change_Impact` | Single select | `High`, `Medium`, `Low` |
 | `Confidence` | Single select | `High`, `Medium`, `Low` |
-| `Source_Quote` | Long text | verbatim from transcript |
-| `Source_Doc` | Single line text | filename + speaker reference |
-| `Action_Required` | Long text | recommended mitigation |
+| `Tags` | Multi-select | `Heatmap`, `Pressure`, `Gap`, `Friction` |
+| `Source_Quote` | Long text | verbatim, ≤30 words |
+| `Source_Doc` | Single line text | filename + speaker / timestamp reference |
+| `Action_Required` | Long text | recommended mitigation (required if `Change_Impact` ≠ `Low`) |
 | `Responsible` | Single select | `ECL Workstream`, `ELEVATE Program`, `Beyond ELEVATE` |
-| `Action_Owner` | Single line text | free-form name |
-| `Timeline` | Single line text | free-form |
-| `Dependencies` | Long text | free-form |
-| `Notes` | Long text | free-form |
-| `Reviewer_Notes` | Long text | manual reviewer notes |
+| `ECL_Stream` | Single select | `Comms`, `Change`, `Training`, `Other` (only when `Responsible` = `ECL Workstream`) |
+| `Action_Owner` | Single line text | named human who explicitly accepted the action |
+| `Timeline` | Single line text | explicit dates / milestones |
+| `Dependencies` | Long text | explicit dependencies |
+| `Notes` | Long text | open questions or canonical-Role wording flags |
+| `Reviewer_Notes` | Long text | human reviewer notes — used by the dashboard's "audit-clean" gate |
 
 If any of these fields are missing the extension renders a schema-mismatch error listing the gaps. Field names are matched exactly; do not rename.
+
+> **Persona is auto-derived in Airtable from Role.** The LLM upstream does not output a Persona column; the Airtable formula or lookup populates it. The dashboard reads Persona for matrix axes but treats it as advisory — the canonical row identifier is `Role`.
 
 ---
 
@@ -74,10 +79,17 @@ Six insight tiles. Each shows a large serif number, a micro-eyebrow, and a delta
 - Click any tile → right-side `DrillSheet` opens with the filtered rows. Click any row → `expandRecord()` opens the editable Airtable record. Three clicks total.
 
 ### Filter bar
-Run selector (defaults to most recent run), Lens segmented control, Severity segmented control, Persona chips, Tag chips, freshness indicator (extracted date from `Source_Run`), and Reset.
+Run selector (defaults to most recent run), Affiliate selector, Change_Impact segmented control, Business_Archetype chips, Persona chips, Tag chips, freshness indicator (extracted date from `Source_Run`), and Reset.
 
-### Zone 2 — Heat map
-Component × Persona matrix. Cell shading ∝ count, color ∝ average severity. Click a cell → drill sheet. Below the matrix, a horizontal stacked bar per Lens (Global / MWM / Affiliate · DE / UK / FR …) segmented by Category pillar.
+### Zone 2 — Heat map (Overview tab)
+Change_Component × Persona matrix. Cell shading ∝ count, color ∝ average Change_Impact. Click a cell → drill sheet. Below the matrix, a horizontal stacked bar per Affiliate (Global / DE / UK / FR / ES / IT / CA / BR) segmented by Change_Category.
+
+### Heat maps tab
+Four matrices, each top-to-bottom, full panel width:
+- Change_Component × Persona
+- Persona × Change_Category
+- Affiliate × Change_Component
+- Business_Archetype × Change_Component (multi-select archetypes are exploded one row per archetype, deduplicated when drilling into the record list)
 
 ### Zone 3 — Diagnostic panels (2×2)
 - **Panel A — Where the heat is:** top 5 components, bars banded by severity.

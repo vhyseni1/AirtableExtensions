@@ -1,8 +1,8 @@
 import {sevColor, tokens} from '../../styles/tokens';
-import {type Severity} from '../../utils/schema';
+import {type ChangeImpact} from '../../utils/schema';
 
 interface Props {
-    severity: Severity | null;
+    severity: ChangeImpact | null;
     size?: 'sm' | 'md';
 }
 

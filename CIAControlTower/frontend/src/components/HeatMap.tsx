@@ -1,7 +1,7 @@
 import {useMemo} from 'react';
 import {sevColor, tokens} from '../styles/tokens';
 import {type DashboardAggregations} from '../hooks/useAggregations';
-import {type Impact, type Persona, CATEGORIES} from '../utils/schema';
+import {type Impact, type Persona, CHANGE_CATEGORIES} from '../utils/schema';
 import {EmptyState} from './primitives/EmptyState';
 import {Panel} from './primitives/Panel';
 
@@ -26,22 +26,22 @@ function withAlpha(hex: string, alpha: number): string {
 }
 
 const CATEGORY_PALETTE: Record<string, string> = {
-    'Process & Workflow': '#0A3D62',
-    'Technology & Integration': '#1F5A85',
-    'Data Ownership & Integrity': '#5C3A8A',
-    'Analytics & Measurements': '#3B7A5A',
-    'Role & Responsibility': '#B23A3A',
-    'Skill & Capability': '#C7882C',
-    'Mindset & Cultural Sentiment': '#A8324A',
-    'Engagement & Communication': '#D4592C',
+    'Process & Workflow': '#022366',
+    'Technology & Integration': '#0B41CD',
+    'Data Ownership & Integrity': '#1482FA',
+    'Analytics & Measurements': '#00B458',
+    'Roles & Responsibilities': '#FF1F26',
+    'Skill & Capability': '#FFD60C',
+    'Mindset & Cultural Sentiment': '#BC36F0',
+    'Engagement & Communication': '#FF7D29',
 };
 
 export function HeatMap({aggregations, filtered, onDrill}: Props) {
-    const {matrix, lenses} = aggregations;
+    const {matrix, affiliateSlices: slices} = aggregations;
 
-    const lensTotalsMax = useMemo(
-        () => lenses.reduce((m, l) => Math.max(m, l.total), 0),
-        [lenses],
+    const slicesMax = useMemo(
+        () => slices.reduce((m, l) => Math.max(m, l.total), 0),
+        [slices],
     );
 
     const max = matrix.maxCellCount || 1;
@@ -50,7 +50,7 @@ export function HeatMap({aggregations, filtered, onDrill}: Props) {
         <Panel
             eyebrow="Zone 02"
             title="Where the impact concentrates"
-            subtitle="Component × Persona — cell shading by count, color by average severity"
+            subtitle="Change_Component × Persona — cell shading by count, color by avg Change_Impact"
         >
             {matrix.components.length === 0 ? (
                 <EmptyState line="No components in scope. Adjust filters to see the matrix." />
@@ -58,13 +58,13 @@ export function HeatMap({aggregations, filtered, onDrill}: Props) {
                 <div style={{display: 'flex', flexDirection: 'column', gap: tokens.space.xl}}>
                     <Matrix matrix={matrix} max={max} onDrill={onDrill} />
                     <div>
-                        <SectionHeading title="By Lens" subtitle="Categorical pillar mix per Global / MWM / Affiliate" />
-                        {lenses.length === 0 ? (
-                            <EmptyState line="No lens tagging in scope." />
+                        <SectionHeading title="By Affiliate" subtitle="Change_Category mix per affiliate" />
+                        {slices.length === 0 ? (
+                            <EmptyState line="No affiliate tagging in scope." />
                         ) : (
-                            <LensStack
-                                lenses={lenses}
-                                totalsMax={lensTotalsMax}
+                            <AffiliateStack
+                                slices={slices}
+                                totalsMax={slicesMax}
                                 filtered={filtered}
                                 onDrill={onDrill}
                             />
@@ -260,7 +260,7 @@ function Legend() {
                 alignItems: 'center',
             }}
         >
-            <span>Severity</span>
+            <span>Change_Impact</span>
             {(['Low', 'Medium', 'High'] as const).map(s => (
                 <span key={s} style={{display: 'flex', alignItems: 'center', gap: 4}}>
                     <span
@@ -275,32 +275,30 @@ function Legend() {
                     {s}
                 </span>
             ))}
-            <span style={{marginLeft: 'auto'}}>Cell shade ∝ count · color ∝ avg severity</span>
+            <span style={{marginLeft: 'auto'}}>Cell shade ∝ count · color ∝ avg Change_Impact</span>
         </div>
     );
 }
 
-function LensStack({
-    lenses,
+function AffiliateStack({
+    slices,
     totalsMax,
     filtered,
     onDrill,
 }: {
-    lenses: DashboardAggregations['lenses'];
+    slices: DashboardAggregations['affiliateSlices'];
     totalsMax: number;
     filtered: Impact[];
     onDrill: (records: Impact[], title: string) => void;
 }) {
-    const lensKeyOf = (r: Impact): string =>
-        r.lens === 'Affiliate' && r.affiliateCountry ? `Affiliate · ${r.affiliateCountry}` : r.lens ?? '';
     return (
         <div style={{display: 'flex', flexDirection: 'column', gap: tokens.space.sm}}>
-            {lenses.map(lens => {
-                const widthPct = totalsMax ? (lens.total / totalsMax) * 100 : 0;
+            {slices.map(slice => {
+                const widthPct = totalsMax ? (slice.total / totalsMax) * 100 : 0;
                 return (
                     <div
-                        key={lens.label}
-                        style={{display: 'grid', gridTemplateColumns: '160px 1fr 60px', gap: tokens.space.md, alignItems: 'center'}}
+                        key={slice.label}
+                        style={{display: 'grid', gridTemplateColumns: '120px 1fr 60px', gap: tokens.space.md, alignItems: 'center'}}
                     >
                         <span
                             style={{
@@ -311,7 +309,7 @@ function LensStack({
                                 textTransform: 'uppercase',
                             }}
                         >
-                            {lens.label}
+                            {slice.label}
                         </span>
                         <div
                             style={{
@@ -325,10 +323,10 @@ function LensStack({
                                 display: 'flex',
                             }}
                         >
-                            {CATEGORIES.map(cat => {
-                                const segCount = lens.byCategory.get(cat) ?? 0;
+                            {CHANGE_CATEGORIES.map(cat => {
+                                const segCount = slice.byCategory.get(cat) ?? 0;
                                 if (segCount === 0) return null;
-                                const segPct = (segCount / lens.total) * 100;
+                                const segPct = (segCount / slice.total) * 100;
                                 const color = CATEGORY_PALETTE[cat] ?? tokens.colors.accent;
                                 return (
                                     <button
@@ -338,9 +336,9 @@ function LensStack({
                                         onClick={() =>
                                             onDrill(
                                                 filtered.filter(
-                                                    r => lensKeyOf(r) === lens.label && r.category === cat,
+                                                    r => r.affiliate === slice.label && r.changeCategory === cat,
                                                 ),
-                                                `${lens.label} · ${cat}`,
+                                                `${slice.label} · ${cat}`,
                                             )
                                         }
                                         style={{
@@ -362,7 +360,7 @@ function LensStack({
                                 textAlign: 'right',
                             }}
                         >
-                            {lens.total}
+                            {slice.total}
                         </span>
                     </div>
                 );
@@ -379,7 +377,7 @@ function LensStack({
                     textTransform: 'uppercase',
                 }}
             >
-                {CATEGORIES.map(c => (
+                {CHANGE_CATEGORIES.map(c => (
                     <span key={c} style={{display: 'flex', alignItems: 'center', gap: 4}}>
                         <span
                             style={{

@@ -43,10 +43,10 @@ export function buildDrillSpec(
         case 'high':
             return {
                 key,
-                title: 'High-severity impacts',
+                title: 'High-impact records',
                 eyebrow: 'Drill-down',
-                records: filtered.filter(r => r.severity === 'High'),
-                emptyLine: 'No high-severity impacts. Notable.',
+                records: filtered.filter(r => r.changeImpact === 'High'),
+                emptyLine: 'No high-impact records. Notable.',
             };
         case 'gaps':
             return {
@@ -116,7 +116,7 @@ export function HeadlineBar({filtered, aggregations, activeDrill, onDrill}: Prop
             }}
         >
             {tile('total', 'Total impacts', m.totalImpacts, undefined, d?.total ?? null, tokens.colors.accent)}
-            {tile('high', 'High severity', m.highSeverity, undefined, d?.high ?? null, tokens.colors.sevHigh)}
+            {tile('high', 'High change_impact', m.highSeverity, undefined, d?.high ?? null, tokens.colors.sevHigh)}
             {tile('gaps', 'Gaps open', m.gapsOpen, undefined, d?.gaps ?? null, tokens.colors.tagGap)}
             {tile(
                 'pressure',

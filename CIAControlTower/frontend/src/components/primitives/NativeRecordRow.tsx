@@ -23,9 +23,11 @@ interface Props {
 }
 
 const VISIBLE_FIELDS: Array<keyof typeof FIELDS> = [
-    'persona',
-    'component',
-    'severity',
+    'role',
+    'businessArchetypes',
+    'affiliate',
+    'changeComponent',
+    'changeImpact',
     'tags',
     'confidence',
 ];
@@ -78,7 +80,7 @@ export function NativeRecordRow({impact, record, fieldsByName, onOpen, onSelect,
                     }}
                     className="cia-num"
                 >
-                    #{impact.rowId ?? '—'}
+                    #{impact.recordNumber ?? '—'}
                 </span>
                 <span
                     style={{
@@ -94,7 +96,7 @@ export function NativeRecordRow({impact, record, fieldsByName, onOpen, onSelect,
             </div>
 
             {record ? (
-                <div style={{display: 'grid', gridTemplateColumns: '88px 1fr', columnGap: tokens.space.sm, rowGap: 6}}>
+                <div style={{display: 'grid', gridTemplateColumns: '108px 1fr', columnGap: tokens.space.sm, rowGap: 6}}>
                     {VISIBLE_FIELDS.map(key => {
                         const fieldName = FIELDS[key];
                         const field = fieldsByName.get(fieldName);
@@ -106,7 +108,7 @@ export function NativeRecordRow({impact, record, fieldsByName, onOpen, onSelect,
                         );
                     })}
                     {(() => {
-                        const desc = fieldsByName.get(FIELDS.description);
+                        const desc = fieldsByName.get(FIELDS.descriptionAsIs);
                         if (!desc) return null;
                         return (
                             <FieldRow label={desc.name}>
@@ -126,7 +128,7 @@ export function NativeRecordRow({impact, record, fieldsByName, onOpen, onSelect,
                 </div>
             ) : (
                 <div style={{fontSize: 12, color: tokens.colors.textMuted}}>
-                    {impact.component || '(no component)'} · {impact.persona ?? '—'}
+                    {impact.changeComponent || '(no component)'} · {impact.role || impact.persona || '—'}
                 </div>
             )}
         </button>

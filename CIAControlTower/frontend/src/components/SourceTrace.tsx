@@ -25,26 +25,14 @@ interface Props {
     onOpen: (id: string) => void;
 }
 
-const ARROW_RE = /-->|→|=>/;
-
-function splitAsIsToBe(description: string): {asIs: string; toBe: string} {
-    const parts = description.split(ARROW_RE);
-    if (parts.length >= 2) {
-        const asIs = (parts[0] ?? '').replace(/^AS-IS\s*:?/i, '').trim();
-        const toBe = (parts[1] ?? '').replace(/^TO-BE\s*:?/i, '').trim();
-        return {asIs, toBe};
-    }
-    const asIsMatch = description.match(/AS-IS\s*:?\s*([\s\S]*?)(?:TO-BE|$)/i);
-    const toBeMatch = description.match(/TO-BE\s*:?\s*([\s\S]*)$/i);
-    return {
-        asIs: asIsMatch?.[1]?.trim() ?? '',
-        toBe: toBeMatch?.[1]?.trim() ?? '',
-    };
-}
-
 const NATIVE_FIELDS: Array<keyof typeof FIELDS> = [
+    'businessArchetypes',
+    'affiliate',
+    'role',
+    'changeCategory',
     'actionRequired',
     'responsible',
+    'eclStream',
     'actionOwner',
     'timeline',
     'dependencies',
@@ -59,13 +47,12 @@ export function SourceTrace({impact, record, fieldsByName, onOpen}: Props) {
             </Panel>
         );
     }
-    const {asIs, toBe} = splitAsIsToBe(impact.description);
 
     return (
         <Panel
             eyebrow="Zone 04"
             title="Source trace"
-            subtitle={`Impact #${impact.rowId ?? '—'} · ${impact.persona ?? '—'} · ${impact.component || 'Unspecified'}`}
+            subtitle={`#${impact.recordNumber ?? '—'} · ${impact.role || impact.persona || '—'} · ${impact.changeComponent || 'Unspecified'}`}
             actions={
                 <button
                     type="button"
@@ -106,14 +93,14 @@ export function SourceTrace({impact, record, fieldsByName, onOpen}: Props) {
                             alignItems: 'center',
                         }}
                     >
-                        <SeverityBadge severity={impact.severity} size="md" />
+                        <SeverityBadge severity={impact.changeImpact} size="md" />
                         <ConfidenceBadge confidence={impact.confidence} />
                         {impact.tags.map(t => (
                             <TagChip key={t} tag={t} />
                         ))}
                     </div>
                     <div style={{marginTop: tokens.space.xl}}>
-                        <FlowAsIsToBe asIs={asIs} toBe={toBe} />
+                        <FlowAsIsToBe asIs={impact.descriptionAsIs} toBe={impact.descriptionToBe} />
                     </div>
                 </div>
 
@@ -123,7 +110,7 @@ export function SourceTrace({impact, record, fieldsByName, onOpen}: Props) {
                         <div
                             style={{
                                 display: 'grid',
-                                gridTemplateColumns: '120px 1fr',
+                                gridTemplateColumns: '128px 1fr',
                                 rowGap: tokens.space.sm,
                                 columnGap: tokens.space.md,
                                 background: tokens.colors.bgPanel,
@@ -227,9 +214,13 @@ function ConfidenceBadge({confidence}: {confidence: string | null}) {
 function FlowAsIsToBe({asIs, toBe}: {asIs: string; toBe: string}) {
     return (
         <div style={{display: 'flex', flexDirection: 'column', gap: tokens.space.md}}>
-            <FlowStep eyebrow="As-is" body={asIs || 'Not captured.'} accent={tokens.colors.sevHigh} />
+            <FlowStep eyebrow="As-is" body={asIs.trim() || 'Not captured.'} accent={tokens.colors.sevHigh} />
             <Arrow />
-            <FlowStep eyebrow="To-be" body={toBe || 'Not captured.'} accent={tokens.colors.sevLow} />
+            <FlowStep
+                eyebrow="To-be"
+                body={toBe.trim() || 'Source did not articulate future state.'}
+                accent={tokens.colors.sevLow}
+            />
         </div>
     );
 }
