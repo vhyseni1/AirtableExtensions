@@ -14,8 +14,8 @@ export function HeatmapsView({filtered, onDrill}: Props) {
     return (
         <div
             style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
+                display: 'flex',
+                flexDirection: 'column',
                 gap: tokens.space.md,
             }}
         >
