@@ -211,7 +211,9 @@ export interface HeadlineMetrics {
 export function headlineMetrics(records: Impact[]): HeadlineMetrics {
     const reviewed = records.filter(r => r.validationStatus === 'Reviewed');
     const highSeverity = reviewed.filter(r => r.changeImpact === 'High').length;
-    const gapsOpen = reviewed.filter(r => r.tags.includes('Gap') && !r.reviewerNotes.trim()).length;
+    const gapsOpen = reviewed.filter(
+        r => r.tags.includes('Gap') && !r.actionOwner.trim() && !r.notes.trim(),
+    ).length;
     const pressureFlags = reviewed.filter(r => r.tags.includes('Pressure')).length;
     const frictionPoints = reviewed.filter(r => r.tags.includes('Friction')).length;
     const highConf = reviewed.filter(r => r.confidence === 'High').length;

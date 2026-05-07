@@ -36,7 +36,7 @@ const NATIVE_FIELDS: Array<keyof typeof FIELDS> = [
     'actionOwner',
     'timeline',
     'dependencies',
-    'reviewerNotes',
+    'notes',
 ];
 
 export function SourceTrace({impact, record, fieldsByName, onOpen}: Props) {

@@ -53,8 +53,10 @@ export function buildDrillSpec(
                 key,
                 title: 'Open gaps',
                 eyebrow: 'Drill-down',
-                records: filtered.filter(r => r.tags.includes('Gap') && !r.reviewerNotes.trim()),
-                emptyLine: 'Every gap has a reviewer note. Audit-clean.',
+                records: filtered.filter(
+                    r => r.tags.includes('Gap') && !r.actionOwner.trim() && !r.notes.trim(),
+                ),
+                emptyLine: 'Every gap has an owner or follow-up note. Audit-clean.',
             };
         case 'pressure':
             return {

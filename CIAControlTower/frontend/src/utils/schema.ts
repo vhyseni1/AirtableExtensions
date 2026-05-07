@@ -7,7 +7,7 @@ export const FIELDS = {
     businessArchetypes: 'Business_Archetypes',
     affiliate: 'Affiliate',
     role: 'Role',
-    persona: 'Persona',
+    persona: 'Persona (from Role)',
     changeCategory: 'Change_Category',
     changeComponent: 'Change_Component',
     descriptionAsIs: 'Description_As-Is',
@@ -24,7 +24,6 @@ export const FIELDS = {
     timeline: 'Timeline',
     dependencies: 'Dependencies',
     notes: 'Notes',
-    reviewerNotes: 'Reviewer_Notes',
 } as const;
 
 export const REQUIRED_FIELD_LIST: ReadonlyArray<string> = Object.values(FIELDS);
@@ -102,7 +101,6 @@ export interface Impact {
     timeline: string;
     dependencies: string;
     notes: string;
-    reviewerNotes: string;
 }
 
 export const CHANGE_IMPACT_WEIGHT: Record<ChangeImpact, number> = {High: 3, Medium: 2, Low: 1};

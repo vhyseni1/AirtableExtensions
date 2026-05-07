@@ -113,7 +113,6 @@ function buildImpact(rec: AirtableRecord, present: ReadonlySet<string>): Impact 
         timeline: safeStr(rec, FIELDS.timeline, present),
         dependencies: safeStr(rec, FIELDS.dependencies, present),
         notes: safeStr(rec, FIELDS.notes, present),
-        reviewerNotes: safeStr(rec, FIELDS.reviewerNotes, present),
     };
 }
 

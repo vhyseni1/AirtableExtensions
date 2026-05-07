@@ -41,8 +41,8 @@ Single source table named **`Impacts`** with these fields, names exact:
 | `Source_Run` | Single line text | batch tag, e.g. `Steerco_2026-04-22` |
 | `Business_Archetypes` | Multi-select | `i8 First Mover`, `i7 First Mover`, `i8`, `i7`, `Global Function` |
 | `Affiliate` | Single select | `Global`, `DE`, `UK`, `FR`, `ES`, `IT`, `CA`, `BR` |
-| `Role` | Single line text or linked record | canonical Role from the Roles table |
-| `Persona` | Single select (auto-derived from Role) | `PJP`, `HCD`, `HSP`, `GSCL`, `CSR`, `Admin` |
+| `Role` | Linked record → Roles table | canonical Role from the Roles table |
+| `Persona (from Role)` | Lookup (auto-derived from `Role`) | `PJP`, `HCD`, `HSP`, `GSCL`, `CSR`, `Admin`, `Primary Point of Contact`, `BI & Analytics`, `Admin`… (whatever Roles maps to) |
 | `Change_Category` | Single select | `Process & Workflow`, `Technology & Integration`, `Data Ownership & Integrity`, `Analytics & Measurements`, `Roles & Responsibilities`, `Skill & Capability`, `Mindset & Cultural Sentiment`, `Engagement & Communication` |
 | `Change_Component` | Single line text | canonical system / process / artifact, e.g. `Vault 3.0`, `Global Procurement Queue` |
 | `Description_As-Is` | Long text | current state, ≤25 words |
@@ -58,8 +58,7 @@ Single source table named **`Impacts`** with these fields, names exact:
 | `Action_Owner` | Single line text | named human who explicitly accepted the action |
 | `Timeline` | Single line text | explicit dates / milestones |
 | `Dependencies` | Long text | explicit dependencies |
-| `Notes` | Long text | open questions or canonical-Role wording flags |
-| `Reviewer_Notes` | Long text | human reviewer notes — used by the dashboard's "audit-clean" gate |
+| `Notes` | Long text | open questions, canonical-Role flags, reviewer follow-ups (used by the dashboard's "audit-clean" gate) |
 
 If any of these fields are missing the extension renders a schema-mismatch error listing the gaps. Field names are matched exactly; do not rename.
 

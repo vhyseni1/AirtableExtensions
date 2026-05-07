@@ -77,11 +77,11 @@ export function WaterfallsView({filtered, allImpacts, runs, onDrill}: Props) {
     const resolutionSteps = useMemo<WaterfallStep[]>(() => {
         const gaps = filtered.filter(r => r.tags.includes('Gap'));
         const noOwner = gaps.filter(r => !(r.actionOwner.trim() || r.responsible));
-        const remainingAfterOwner = gaps.filter(r => r.actionOwner.trim() || r.responsible);
-        const noTimeline = remainingAfterOwner.filter(r => !r.timeline.trim());
-        const remainingAfterTimeline = remainingAfterOwner.filter(r => r.timeline.trim());
-        const noReviewerNote = remainingAfterTimeline.filter(r => !r.reviewerNotes.trim());
-        const auditClean = remainingAfterTimeline.filter(r => r.reviewerNotes.trim());
+        const afterOwner = gaps.filter(r => r.actionOwner.trim() || r.responsible);
+        const noTimeline = afterOwner.filter(r => !r.timeline.trim());
+        const afterTimeline = afterOwner.filter(r => r.timeline.trim());
+        const noNote = afterTimeline.filter(r => !r.notes.trim());
+        const auditClean = afterTimeline.filter(r => r.notes.trim());
         return [
             {label: 'All gaps', value: gaps.length, kind: 'start', records: gaps, drillTitle: 'All gaps'},
             {
@@ -99,11 +99,11 @@ export function WaterfallsView({filtered, allImpacts, runs, onDrill}: Props) {
                 drillTitle: 'Gaps without timeline',
             },
             {
-                label: 'No reviewer note',
-                value: noReviewerNote.length,
+                label: 'No notes',
+                value: noNote.length,
                 kind: 'negative',
-                records: noReviewerNote,
-                drillTitle: 'Gaps without reviewer note',
+                records: noNote,
+                drillTitle: 'Gaps without follow-up notes',
             },
             {
                 label: 'Audit-clean',
