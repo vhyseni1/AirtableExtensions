@@ -1,7 +1,7 @@
 import {useMemo} from 'react';
 import {sevColor, tokens} from '../styles/tokens';
 import {type DashboardAggregations} from '../hooks/useAggregations';
-import {type Impact, type Persona, CHANGE_CATEGORIES} from '../utils/schema';
+import {type Impact, CHANGE_CATEGORIES} from '../utils/schema';
 import {EmptyState} from './primitives/EmptyState';
 import {Panel} from './primitives/Panel';
 
@@ -50,10 +50,10 @@ export function HeatMap({aggregations, filtered, onDrill}: Props) {
         <Panel
             eyebrow="Zone 02"
             title="Where the impact concentrates"
-            subtitle="Change_Component × Persona — cell shading by count, color by avg Change_Impact"
+            subtitle="Change_Component × Role — cell shading by count, color by avg Change_Impact"
         >
-            {matrix.components.length === 0 ? (
-                <EmptyState line="No components in scope. Adjust filters to see the matrix." />
+            {matrix.components.length === 0 || matrix.rows.length === 0 ? (
+                <EmptyState line="No components or roles in scope. Adjust filters to see the matrix." />
             ) : (
                 <div style={{display: 'flex', flexDirection: 'column', gap: tokens.space.xl}}>
                     <Matrix matrix={matrix} max={max} onDrill={onDrill} />
@@ -102,7 +102,7 @@ interface MatrixProps {
 }
 
 function Matrix({matrix, max, onDrill}: MatrixProps) {
-    const personas = matrix.personas;
+    const rows = matrix.rows;
     const components = matrix.components;
     const colSize = `minmax(84px, 1fr)`;
 
@@ -111,20 +111,20 @@ function Matrix({matrix, max, onDrill}: MatrixProps) {
             <div
                 style={{
                     display: 'grid',
-                    gridTemplateColumns: `120px repeat(${components.length}, ${colSize})`,
+                    gridTemplateColumns: `160px repeat(${components.length}, ${colSize})`,
                     gap: 4,
-                    minWidth: 120 + components.length * 84,
+                    minWidth: 160 + components.length * 84,
                 }}
             >
                 <div />
                 {components.map(c => (
                     <ColHeader key={c} label={c} total={matrix.componentTotals.get(c) ?? 0} />
                 ))}
-                {personas.map(p => (
+                {rows.map(rowKey => (
                     <RowFragment
-                        key={p}
-                        persona={p}
-                        personaTotal={matrix.personaTotals.get(p) ?? 0}
+                        key={rowKey}
+                        rowLabel={rowKey}
+                        rowTotal={matrix.rowTotals.get(rowKey) ?? 0}
                         components={components}
                         cells={matrix.cells}
                         max={max}
@@ -169,15 +169,15 @@ function ColHeader({label, total}: {label: string; total: number}) {
 }
 
 interface RowFragmentProps {
-    persona: Persona;
-    personaTotal: number;
+    rowLabel: string;
+    rowTotal: number;
     components: string[];
     cells: DashboardAggregations['matrix']['cells'];
     max: number;
     onDrill: (records: Impact[], title: string) => void;
 }
 
-function RowFragment({persona, personaTotal, components, cells, max, onDrill}: RowFragmentProps) {
+function RowFragment({rowLabel, rowTotal, components, cells, max, onDrill}: RowFragmentProps) {
     return (
         <>
             <div
@@ -189,18 +189,22 @@ function RowFragment({persona, personaTotal, components, cells, max, onDrill}: R
                     fontSize: 11,
                     color: tokens.colors.text,
                     fontWeight: 600,
-                    letterSpacing: '0.06em',
-                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
                     borderRight: `1px solid ${tokens.colors.ruleSoft}`,
+                    gap: 6,
+                    overflow: 'hidden',
                 }}
+                title={rowLabel}
             >
-                <span>{persona}</span>
+                <span style={{overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+                    {rowLabel}
+                </span>
                 <span className="cia-num" style={{color: tokens.colors.textFaint, fontWeight: 500}}>
-                    {personaTotal}
+                    {rowTotal}
                 </span>
             </div>
             {components.map(c => {
-                const cell = cells.get(c)?.get(persona);
+                const cell = cells.get(c)?.get(rowLabel);
                 const count = cell?.count ?? 0;
                 const intensity = count === 0 ? 0 : 0.15 + (count / max) * 0.7;
                 const color = severityHexFromAvg(cell?.avgSev ?? 0);
@@ -210,7 +214,7 @@ function RowFragment({persona, personaTotal, components, cells, max, onDrill}: R
                         key={c}
                         type="button"
                         disabled={count === 0}
-                        onClick={() => onDrill(cell?.records ?? [], `${persona} · ${c}`)}
+                        onClick={() => onDrill(cell?.records ?? [], `${rowLabel} · ${c}`)}
                         title={
                             count === 0
                                 ? 'No impacts'

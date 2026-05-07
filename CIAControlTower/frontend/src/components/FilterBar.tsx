@@ -65,9 +65,15 @@ export function FilterBar({filter, onChange, runs, freshness}: Props) {
             : [...filter.archetypes, a];
         onChange({...filter, archetypes: next});
     };
+    const toggleRun = (run: string) => {
+        const next = filter.sourceRuns.includes(run)
+            ? filter.sourceRuns.filter(x => x !== run)
+            : [...filter.sourceRuns, run];
+        onChange({...filter, sourceRuns: next});
+    };
 
     const isDefault =
-        filter.sourceRun === DEFAULT_FILTER.sourceRun &&
+        filter.sourceRuns.length === 0 &&
         filter.affiliate === DEFAULT_FILTER.affiliate &&
         filter.archetypes.length === 0 &&
         filter.personas.length === 0 &&
@@ -87,28 +93,50 @@ export function FilterBar({filter, onChange, runs, freshness}: Props) {
                 borderRadius: tokens.radius.md,
             }}
         >
-            <Group label="Run">
-                <select
-                    value={filter.sourceRun}
-                    onChange={e => onChange({...filter, sourceRun: e.target.value as FilterState['sourceRun']})}
-                    style={{
-                        padding: '4px 8px',
-                        border: `1px solid ${tokens.colors.rule}`,
-                        borderRadius: tokens.radius.sm,
-                        fontSize: 12,
-                        background: tokens.colors.bg,
-                        fontFamily: tokens.fonts.mono,
-                        color: tokens.colors.text,
-                        minWidth: 180,
-                    }}
-                >
-                    <option value="All">All runs</option>
-                    {runs.map(r => (
-                        <option key={r} value={r}>
-                            {r}
-                        </option>
-                    ))}
-                </select>
+            <Group label="Runs">
+                {runs.length === 0 ? (
+                    <span style={{fontSize: 11, color: tokens.colors.textFaint}}>—</span>
+                ) : (
+                    <div style={{display: 'flex', gap: 4, flexWrap: 'wrap', maxWidth: 520}}>
+                        {runs.map(r => (
+                            <button
+                                key={r}
+                                type="button"
+                                onClick={() => toggleRun(r)}
+                                title={r}
+                                style={{
+                                    ...chipBtn(filter.sourceRuns.includes(r)),
+                                    fontFamily: tokens.fonts.mono,
+                                    textTransform: 'none',
+                                    letterSpacing: '0.02em',
+                                    maxWidth: 240,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                }}
+                            >
+                                {r}
+                            </button>
+                        ))}
+                        {filter.sourceRuns.length > 0 ? (
+                            <button
+                                type="button"
+                                onClick={() => onChange({...filter, sourceRuns: []})}
+                                style={{
+                                    padding: '3px 9px',
+                                    border: `1px dashed ${tokens.colors.rule}`,
+                                    borderRadius: 999,
+                                    fontSize: 11,
+                                    color: tokens.colors.textMuted,
+                                    fontWeight: 600,
+                                    letterSpacing: '0.04em',
+                                }}
+                            >
+                                ALL RUNS
+                            </button>
+                        ) : null}
+                    </div>
+                )}
             </Group>
 
             <Group label="Affiliate">

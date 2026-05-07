@@ -4,7 +4,6 @@ import {
     type Persona,
     type Tag,
     CHANGE_IMPACT_WEIGHT,
-    PERSONAS,
 } from './schema';
 
 export interface CellAgg {
@@ -18,10 +17,11 @@ export interface CellAgg {
 
 export interface MatrixAgg {
     components: string[];
-    personas: ReadonlyArray<Persona>;
-    cells: Map<string, Map<Persona, CellAgg>>;
+    /** Y-axis labels, ordered by descending row total. Currently sourced from Role. */
+    rows: string[];
+    cells: Map<string, Map<string, CellAgg>>;
     componentTotals: Map<string, number>;
-    personaTotals: Map<Persona, number>;
+    rowTotals: Map<string, number>;
     maxCellCount: number;
 }
 
@@ -30,26 +30,28 @@ export function emptyCell(): CellAgg {
 }
 
 export function buildMatrix(records: Impact[]): MatrixAgg {
-    const cells = new Map<string, Map<Persona, CellAgg>>();
+    const cells = new Map<string, Map<string, CellAgg>>();
     const componentTotals = new Map<string, number>();
-    const personaTotals = new Map<Persona, number>();
+    const rowTotals = new Map<string, number>();
     const componentSet = new Set<string>();
+    const rowSet = new Set<string>();
 
     for (const r of records) {
         const c = r.changeComponent?.trim() || '(unspecified)';
-        const p = r.persona;
-        if (!p) continue;
+        const rowKey = r.role?.trim();
+        if (!rowKey) continue;
         componentSet.add(c);
+        rowSet.add(rowKey);
 
         let row = cells.get(c);
         if (!row) {
-            row = new Map<Persona, CellAgg>();
+            row = new Map<string, CellAgg>();
             cells.set(c, row);
         }
-        let cell = row.get(p);
+        let cell = row.get(rowKey);
         if (!cell) {
             cell = emptyCell();
-            row.set(p, cell);
+            row.set(rowKey, cell);
         }
         cell.records.push(r);
         cell.count += 1;
@@ -58,7 +60,7 @@ export function buildMatrix(records: Impact[]): MatrixAgg {
             cell.sevCount += 1;
         }
         componentTotals.set(c, (componentTotals.get(c) ?? 0) + 1);
-        personaTotals.set(p, (personaTotals.get(p) ?? 0) + 1);
+        rowTotals.set(rowKey, (rowTotals.get(rowKey) ?? 0) + 1);
     }
 
     let maxCellCount = 0;
@@ -75,16 +77,24 @@ export function buildMatrix(records: Impact[]): MatrixAgg {
         const db = componentTotals.get(a) ?? 0;
         return da - db || a.localeCompare(b);
     });
+    const rows = [...rowSet].sort((a, b) => {
+        const da = rowTotals.get(b) ?? 0;
+        const db = rowTotals.get(a) ?? 0;
+        return da - db || a.localeCompare(b);
+    });
 
     return {
         components,
-        personas: PERSONAS,
+        rows,
         cells,
         componentTotals,
-        personaTotals,
+        rowTotals,
         maxCellCount,
     };
 }
+
+/** Re-export for components that still consume the persona-typed pressure rollup. */
+export type {Persona};
 
 function pickDominantTag(records: Impact[]): Tag | null {
     const counts = new Map<Tag, number>();

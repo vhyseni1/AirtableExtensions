@@ -1,5 +1,5 @@
 import {expandRecord, useBase} from '@airtable/blocks/interface/ui';
-import {useCallback, useEffect, useMemo, useState} from 'react';
+import {useCallback, useMemo, useState} from 'react';
 import {useAggregations} from '../hooks/useAggregations';
 import {DEFAULT_FILTER, type FilterState, useFilteredImpacts} from '../hooks/useFilteredImpacts';
 import {useImpacts} from '../hooks/useImpacts';
@@ -90,12 +90,6 @@ function DashboardBody({tableName}: {tableName: string}) {
 
     const filtered = useFilteredImpacts(impacts, filter);
     const aggregations = useAggregations(filtered, impacts);
-
-    useEffect(() => {
-        if (filter.sourceRun === 'All' && aggregations.runs[0]) {
-            setFilter(f => (f.sourceRun === 'All' ? {...f, sourceRun: aggregations.runs[0] ?? 'All'} : f));
-        }
-    }, [aggregations.runs, filter.sourceRun]);
 
     const openRecord = useCallback(
         (id: string) => {

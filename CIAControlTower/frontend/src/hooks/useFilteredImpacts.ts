@@ -12,7 +12,8 @@ export type AffiliateFilter = 'All' | Affiliate;
 export type ImpactFilter = 'All' | ChangeImpact;
 
 export interface FilterState {
-    sourceRun: string | 'All';
+    /** Empty array means "all runs". */
+    sourceRuns: string[];
     affiliate: AffiliateFilter;
     archetypes: BusinessArchetype[];
     personas: Persona[];
@@ -21,7 +22,7 @@ export interface FilterState {
 }
 
 export const DEFAULT_FILTER: FilterState = {
-    sourceRun: 'All',
+    sourceRuns: [],
     affiliate: 'All',
     archetypes: [],
     personas: [],
@@ -32,7 +33,7 @@ export const DEFAULT_FILTER: FilterState = {
 export function applyFilters(records: Impact[], f: FilterState): Impact[] {
     return records.filter(r => {
         if (r.validationStatus !== 'Reviewed') return false;
-        if (f.sourceRun !== 'All' && r.sourceRun !== f.sourceRun) return false;
+        if (f.sourceRuns.length && !f.sourceRuns.includes(r.sourceRun)) return false;
         if (f.affiliate !== 'All' && r.affiliate !== f.affiliate) return false;
         if (f.changeImpact !== 'All' && r.changeImpact !== f.changeImpact) return false;
         if (f.personas.length && (!r.persona || !f.personas.includes(r.persona))) return false;
