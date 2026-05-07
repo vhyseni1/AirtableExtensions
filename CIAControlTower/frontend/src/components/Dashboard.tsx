@@ -31,17 +31,39 @@ interface AirtableTableLike {
     fields: ReadonlyArray<{id: string; name: string}>;
 }
 
+interface BaseLike {
+    tables: ReadonlyArray<AirtableTableLike>;
+    getTableByNameIfExists(name: string): AirtableTableLike | null;
+}
+
+const SCHEMA_SIGNAL_FIELDS: ReadonlyArray<string> = [
+    'Validation_Status',
+    'Change_Component',
+    'Change_Impact',
+    'Tags',
+];
+
+function pickImpactsTable(base: BaseLike): {table: AirtableTableLike | null; tried: string[]} {
+    const exact = base.getTableByNameIfExists(TABLE_NAME);
+    if (exact) return {table: exact, tried: []};
+    const tried = base.tables.map(t => t.name);
+    for (const t of base.tables) {
+        const present = new Set(t.fields.map(f => f.name));
+        const matches = SCHEMA_SIGNAL_FIELDS.every(s => present.has(s));
+        if (matches) return {table: t, tried};
+    }
+    return {table: null, tried};
+}
+
 export function Dashboard() {
-    const base = useBase() as unknown as {getTableByNameIfExists(name: string): AirtableTableLike | null};
-    const table = base.getTableByNameIfExists(TABLE_NAME);
+    const base = useBase() as unknown as BaseLike;
+    const {table, tried} = pickImpactsTable(base);
 
     if (!table) {
-        return (
-            <ErrorScreen
-                title="No Impacts table found"
-                detail={`This extension expects a table named “${TABLE_NAME}” in the current base.`}
-            />
-        );
+        const detail = tried.length
+            ? `Could not find a table named “${TABLE_NAME}” or one with the v3.1 fields. Visible tables: ${tried.join(', ') || '(none)'}.`
+            : `This extension expects a table named “${TABLE_NAME}” in the current base.`;
+        return <ErrorScreen title="No Impacts table found" detail={detail} />;
     }
 
     const present = new Set(table.fields.map(f => f.name));
@@ -50,16 +72,16 @@ export function Dashboard() {
         return (
             <ErrorScreen
                 title="Schema mismatch"
-                detail={`Missing required fields: ${missing.join(', ')}`}
+                detail={`Reading table “${table.name}”. Missing required fields: ${missing.join(', ')}`}
             />
         );
     }
 
-    return <DashboardBody />;
+    return <DashboardBody tableName={table.name} />;
 }
 
-function DashboardBody() {
-    const {recordsById, fieldsByName, impacts, isReady} = useImpacts();
+function DashboardBody({tableName}: {tableName: string}) {
+    const {recordsById, fieldsByName, impacts, isReady} = useImpacts(tableName);
     const [filter, setFilter] = useState<FilterState>(DEFAULT_FILTER);
     const [activeDrill, setActiveDrill] = useState<ActiveDrill | null>(null);
     const [selectedId, setSelectedId] = useState<string | null>(null);

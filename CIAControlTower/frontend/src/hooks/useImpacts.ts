@@ -125,9 +125,9 @@ export interface UseImpactsResult {
     isReady: boolean;
 }
 
-export function useImpacts(): UseImpactsResult {
+export function useImpacts(tableName: string = TABLE_NAME): UseImpactsResult {
     const base = useBase() as unknown as {getTableByNameIfExists(name: string): AirtableTable | null};
-    const table = base.getTableByNameIfExists(TABLE_NAME);
+    const table = base.getTableByNameIfExists(tableName);
 
     const presentFieldNames = useMemo(() => {
         if (!table) return new Set<string>();
