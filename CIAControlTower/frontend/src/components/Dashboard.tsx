@@ -1,10 +1,10 @@
-import {expandRecord} from '@airtable/blocks/interface/ui';
+import {expandRecord, useBase} from '@airtable/blocks/interface/ui';
 import {useCallback, useEffect, useMemo, useState} from 'react';
 import {useAggregations} from '../hooks/useAggregations';
 import {DEFAULT_FILTER, type FilterState, useFilteredImpacts} from '../hooks/useFilteredImpacts';
 import {useImpacts} from '../hooks/useImpacts';
 import {tokens} from '../styles/tokens';
-import {type Impact} from '../utils/schema';
+import {REQUIRED_FIELD_LIST, TABLE_NAME, type Impact} from '../utils/schema';
 import {DiagnosticGrid} from './DiagnosticGrid';
 import {FilterBar} from './FilterBar';
 import {HeadlineBar, type DrillSpec} from './HeadlineBar';
@@ -25,8 +25,41 @@ interface ActiveDrill {
     emptyLine?: string;
 }
 
+interface AirtableTableLike {
+    id: string;
+    name: string;
+    fields: ReadonlyArray<{id: string; name: string}>;
+}
+
 export function Dashboard() {
-    const {table, impacts, recordsById, fieldsByName, missingFields, isReady} = useImpacts();
+    const base = useBase() as unknown as {getTableByNameIfExists(name: string): AirtableTableLike | null};
+    const table = base.getTableByNameIfExists(TABLE_NAME);
+
+    if (!table) {
+        return (
+            <ErrorScreen
+                title="No Impacts table found"
+                detail={`This extension expects a table named “${TABLE_NAME}” in the current base.`}
+            />
+        );
+    }
+
+    const present = new Set(table.fields.map(f => f.name));
+    const missing = REQUIRED_FIELD_LIST.filter(n => !present.has(n));
+    if (missing.length) {
+        return (
+            <ErrorScreen
+                title="Schema mismatch"
+                detail={`Missing required fields: ${missing.join(', ')}`}
+            />
+        );
+    }
+
+    return <DashboardBody />;
+}
+
+function DashboardBody() {
+    const {recordsById, fieldsByName, impacts, isReady} = useImpacts();
     const [filter, setFilter] = useState<FilterState>(DEFAULT_FILTER);
     const [activeDrill, setActiveDrill] = useState<ActiveDrill | null>(null);
     const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -79,24 +112,8 @@ export function Dashboard() {
         return m?.[1] ?? latest;
     }, [aggregations.runs]);
 
-    if (!table) {
-        return (
-            <ErrorScreen
-                title="No Impacts table found"
-                detail="This extension expects a table named “Impacts” in the current base."
-            />
-        );
-    }
     if (!isReady) {
         return <SkeletonScreen />;
-    }
-    if (missingFields.length) {
-        return (
-            <ErrorScreen
-                title="Schema mismatch"
-                detail={`Missing required fields: ${missingFields.join(', ')}`}
-            />
-        );
     }
 
     return (
