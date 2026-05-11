@@ -1,4 +1,4 @@
-import {tokens} from '../styles/tokens';
+import {tagColor, tokens} from '../styles/tokens';
 import {
     DEFAULT_FILTER,
     type AffiliateFilter,
@@ -13,7 +13,7 @@ import {
     type BusinessArchetype,
     type Tag,
 } from '../utils/schema';
-import {TagChip} from './primitives/TagChip';
+import {MultiSelectDropdown, type DropdownOption} from './primitives/MultiSelectDropdown';
 
 interface Props {
     filter: FilterState;
@@ -36,41 +36,7 @@ const segmentBtn = (active: boolean): React.CSSProperties => ({
     transition: 'background 120ms ease',
 });
 
-const chipBtn = (active: boolean): React.CSSProperties => ({
-    padding: '3px 9px',
-    background: active ? tokens.colors.text : 'transparent',
-    color: active ? tokens.colors.bg : tokens.colors.textMuted,
-    border: `1px solid ${active ? tokens.colors.text : tokens.colors.rule}`,
-    borderRadius: 999,
-    fontSize: 11,
-    fontWeight: 600,
-    letterSpacing: '0.04em',
-});
-
 export function FilterBar({filter, onChange, runs, roles, freshness}: Props) {
-    const toggleRole = (r: string) => {
-        const next = filter.roles.includes(r)
-            ? filter.roles.filter(x => x !== r)
-            : [...filter.roles, r];
-        onChange({...filter, roles: next});
-    };
-    const toggleTag = (t: Tag) => {
-        const next = filter.tags.includes(t) ? filter.tags.filter(x => x !== t) : [...filter.tags, t];
-        onChange({...filter, tags: next});
-    };
-    const toggleArchetype = (a: BusinessArchetype) => {
-        const next = filter.archetypes.includes(a)
-            ? filter.archetypes.filter(x => x !== a)
-            : [...filter.archetypes, a];
-        onChange({...filter, archetypes: next});
-    };
-    const toggleRun = (run: string) => {
-        const next = filter.sourceRuns.includes(run)
-            ? filter.sourceRuns.filter(x => x !== run)
-            : [...filter.sourceRuns, run];
-        onChange({...filter, sourceRuns: next});
-    };
-
     const isDefault =
         filter.sourceRuns.length === 0 &&
         filter.affiliate === DEFAULT_FILTER.affiliate &&
@@ -79,64 +45,32 @@ export function FilterBar({filter, onChange, runs, roles, freshness}: Props) {
         filter.tags.length === 0 &&
         filter.changeImpact === DEFAULT_FILTER.changeImpact;
 
+    const runOptions: DropdownOption[] = runs.map(r => ({value: r, label: r}));
+    const roleOptions: DropdownOption[] = roles.map(r => ({value: r, label: r}));
+    const archetypeOptions: DropdownOption[] = BUSINESS_ARCHETYPES.map(a => ({value: a, label: a}));
+    const tagOptions: DropdownOption[] = TAGS.map(t => ({value: t, label: t, swatch: tagColor(t)}));
+
     return (
         <div
             style={{
                 display: 'flex',
                 flexWrap: 'wrap',
                 alignItems: 'center',
-                gap: tokens.space.lg,
+                gap: tokens.space.sm,
                 padding: `${tokens.space.sm} ${tokens.space.md}`,
                 background: tokens.colors.bgPanel,
                 border: `1px solid ${tokens.colors.rule}`,
                 borderRadius: tokens.radius.md,
             }}
         >
-            <Group label="Runs">
-                {runs.length === 0 ? (
-                    <span style={{fontSize: 11, color: tokens.colors.textFaint}}>—</span>
-                ) : (
-                    <div style={{display: 'flex', gap: 4, flexWrap: 'wrap', maxWidth: 520}}>
-                        {runs.map(r => (
-                            <button
-                                key={r}
-                                type="button"
-                                onClick={() => toggleRun(r)}
-                                title={r}
-                                style={{
-                                    ...chipBtn(filter.sourceRuns.includes(r)),
-                                    fontFamily: tokens.fonts.mono,
-                                    textTransform: 'none',
-                                    letterSpacing: '0.02em',
-                                    maxWidth: 240,
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                }}
-                            >
-                                {r}
-                            </button>
-                        ))}
-                        {filter.sourceRuns.length > 0 ? (
-                            <button
-                                type="button"
-                                onClick={() => onChange({...filter, sourceRuns: []})}
-                                style={{
-                                    padding: '3px 9px',
-                                    border: `1px dashed ${tokens.colors.rule}`,
-                                    borderRadius: 999,
-                                    fontSize: 11,
-                                    color: tokens.colors.textMuted,
-                                    fontWeight: 600,
-                                    letterSpacing: '0.04em',
-                                }}
-                            >
-                                ALL RUNS
-                            </button>
-                        ) : null}
-                    </div>
-                )}
-            </Group>
+            <MultiSelectDropdown
+                label="Runs"
+                options={runOptions}
+                selected={filter.sourceRuns}
+                onChange={next => onChange({...filter, sourceRuns: next})}
+                width={320}
+                monoValues
+            />
 
             <Group label="Affiliate">
                 <select
@@ -150,7 +84,7 @@ export function FilterBar({filter, onChange, runs, roles, freshness}: Props) {
                         background: tokens.colors.bg,
                         fontFamily: tokens.fonts.mono,
                         color: tokens.colors.text,
-                        minWidth: 100,
+                        minWidth: 90,
                     }}
                 >
                     <option value="All">All</option>
@@ -170,61 +104,27 @@ export function FilterBar({filter, onChange, runs, roles, freshness}: Props) {
                 />
             </Group>
 
-            <Group label="Archetype">
-                <div style={{display: 'flex', gap: 4, flexWrap: 'wrap'}}>
-                    {BUSINESS_ARCHETYPES.map(a => (
-                        <button
-                            key={a}
-                            type="button"
-                            onClick={() => toggleArchetype(a)}
-                            style={chipBtn(filter.archetypes.includes(a))}
-                        >
-                            {a}
-                        </button>
-                    ))}
-                </div>
-            </Group>
+            <MultiSelectDropdown
+                label="Archetype"
+                options={archetypeOptions}
+                selected={filter.archetypes}
+                onChange={next => onChange({...filter, archetypes: next as BusinessArchetype[]})}
+            />
 
-            <Group label="Role">
-                {roles.length === 0 ? (
-                    <span style={{fontSize: 11, color: tokens.colors.textFaint}}>—</span>
-                ) : (
-                    <div style={{display: 'flex', gap: 4, flexWrap: 'wrap', maxWidth: 520}}>
-                        {roles.map(r => (
-                            <button
-                                key={r}
-                                type="button"
-                                onClick={() => toggleRole(r)}
-                                title={r}
-                                style={{
-                                    ...chipBtn(filter.roles.includes(r)),
-                                    maxWidth: 220,
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                    textTransform: 'none',
-                                    letterSpacing: '0.02em',
-                                }}
-                            >
-                                {r}
-                            </button>
-                        ))}
-                    </div>
-                )}
-            </Group>
+            <MultiSelectDropdown
+                label="Role"
+                options={roleOptions}
+                selected={filter.roles}
+                onChange={next => onChange({...filter, roles: next})}
+                width={320}
+            />
 
-            <Group label="Tags">
-                <div style={{display: 'flex', gap: 4, flexWrap: 'wrap'}}>
-                    {TAGS.map(t => (
-                        <TagChip
-                            key={t}
-                            tag={t}
-                            active={filter.tags.includes(t)}
-                            onClick={() => toggleTag(t)}
-                        />
-                    ))}
-                </div>
-            </Group>
+            <MultiSelectDropdown
+                label="Tags"
+                options={tagOptions}
+                selected={filter.tags}
+                onChange={next => onChange({...filter, tags: next as Tag[]})}
+            />
 
             <div style={{marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: tokens.space.md}}>
                 {freshness ? (
@@ -264,7 +164,7 @@ export function FilterBar({filter, onChange, runs, roles, freshness}: Props) {
 
 function Group({label, children}: {label: string; children: React.ReactNode}) {
     return (
-        <div style={{display: 'flex', alignItems: 'center', gap: tokens.space.sm}}>
+        <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
             <span
                 style={{
                     fontSize: 10,
