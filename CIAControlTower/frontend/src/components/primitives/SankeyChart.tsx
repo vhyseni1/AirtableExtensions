@@ -72,7 +72,8 @@ export function SankeyChart({records, columns, onDrill, height = 360, bandColorS
     }
 
     const colXCenter = (col: number) => (width / 3) * col + width / 6;
-    const NODE_W = 12;
+    const NODE_W = 18;
+    const HEADER_Y = 18;
 
     return (
         <div style={{width: '100%'}}>
@@ -83,8 +84,8 @@ export function SankeyChart({records, columns, onDrill, height = 360, bandColorS
             >
                 <text
                     x={colXCenter(0)}
-                    y={12}
-                    fontSize={9}
+                    y={HEADER_Y}
+                    fontSize={13}
                     fill={tokens.colors.textFaint}
                     textAnchor="middle"
                     fontWeight={700}
@@ -94,8 +95,8 @@ export function SankeyChart({records, columns, onDrill, height = 360, bandColorS
                 </text>
                 <text
                     x={colXCenter(1)}
-                    y={12}
-                    fontSize={9}
+                    y={HEADER_Y}
+                    fontSize={13}
                     fill={tokens.colors.textFaint}
                     textAnchor="middle"
                     fontWeight={700}
@@ -105,8 +106,8 @@ export function SankeyChart({records, columns, onDrill, height = 360, bandColorS
                 </text>
                 <text
                     x={colXCenter(2)}
-                    y={12}
-                    fontSize={9}
+                    y={HEADER_Y}
+                    fontSize={13}
                     fill={tokens.colors.textFaint}
                     textAnchor="middle"
                     fontWeight={700}
@@ -167,19 +168,19 @@ export function SankeyChart({records, columns, onDrill, height = 360, bandColorS
                                 <title>{`${n.label}: ${n.total}`}</title>
                             </rect>
                             <text
-                                x={n.column === 0 ? x - 6 : n.column === 2 ? x + NODE_W + 6 : x + NODE_W + 4}
-                                y={n.y + n.h / 2 + 3}
-                                fontSize={10}
+                                x={n.column === 0 ? x - 10 : x + NODE_W + 10}
+                                y={n.y + n.h / 2 + 5}
+                                fontSize={14}
                                 fill={tokens.colors.text}
                                 textAnchor={n.column === 0 ? 'end' : 'start'}
                                 fontWeight={600}
                             >
-                                <tspan>{truncate(n.label, n.column === 1 ? 18 : 22)}</tspan>
+                                <tspan>{truncate(n.label, n.column === 1 ? 22 : 28)}</tspan>
                                 <tspan
-                                    dx={6}
+                                    dx={8}
                                     fill={tokens.colors.textFaint}
                                     fontFamily={tokens.fonts.mono}
-                                    fontSize={9}
+                                    fontSize={12}
                                 >
                                     {n.total}
                                 </tspan>
@@ -217,8 +218,8 @@ function buildLayout(
     height: number,
     bandColorSource: 'source' | 'target',
 ) {
-    const width = 720;
-    const padTop = 24;
+    const width = 1240;
+    const padTop = 36;
     const padBottom = 18;
     const inner = height - padTop - padBottom;
     const NODE_GAP = 6;

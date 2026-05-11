@@ -212,7 +212,7 @@ function DashboardBody({tableName}: {tableName: string}) {
             ) : (
                 <RadarsView
                     filtered={filtered}
-                    personas={aggregations.personas}
+                    roles={aggregations.roles}
                     onDrill={handleDrillFromMatrix}
                 />
             )}

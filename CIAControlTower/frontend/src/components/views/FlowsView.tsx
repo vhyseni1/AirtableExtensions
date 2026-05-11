@@ -57,6 +57,7 @@ export function FlowsView({filtered, onDrill}: Props) {
                     columns={[affiliate, categoryCol, impactCol]}
                     onDrill={onDrill}
                     bandColorSource="target"
+                    height={420}
                 />
             </Panel>
 
@@ -70,6 +71,7 @@ export function FlowsView({filtered, onDrill}: Props) {
                     columns={[role, categoryCol, tagCol]}
                     onDrill={(records, title) => onDrill(dedupeById(records), title)}
                     bandColorSource="target"
+                    height={480}
                 />
             </Panel>
         </div>

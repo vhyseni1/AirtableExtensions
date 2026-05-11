@@ -10,7 +10,7 @@ import {RadarChart, type RadarSeries} from '../primitives/RadarChart';
 
 interface Props {
     filtered: Impact[];
-    personas: string[];
+    roles: string[];
     onDrill: (records: Impact[], title: string) => void;
 }
 
@@ -18,7 +18,7 @@ const PALETTE = ['#0B41CD', '#FF7D29', '#BC36F0', '#00B458', '#C40000', '#1482FA
 
 type ProfileAxis = 'category' | 'tag' | 'topComponents';
 
-export function RadarsView({filtered, personas, onDrill}: Props) {
+export function RadarsView({filtered, roles, onDrill}: Props) {
     return (
         <div
             style={{
@@ -27,55 +27,52 @@ export function RadarsView({filtered, personas, onDrill}: Props) {
                 gap: tokens.space.md,
             }}
         >
-            <PersonaProfilePanel filtered={filtered} personas={personas} onDrill={onDrill} />
-            <AffiliateRiskPanel filtered={filtered} personas={personas} onDrill={onDrill} />
+            <RoleProfilePanel filtered={filtered} roles={roles} onDrill={onDrill} />
+            <AffiliateRiskPanel filtered={filtered} roles={roles} onDrill={onDrill} />
         </div>
     );
 }
 
-function PersonaProfilePanel({filtered, personas, onDrill}: Props) {
+function RoleProfilePanel({filtered, roles, onDrill}: Props) {
     const [axis, setAxis] = useState<ProfileAxis>('category');
-    const [selectedPersonas, setSelectedPersonas] = useState<string[]>([]);
+    const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
 
     useEffect(() => {
-        // Default to the top three personas by data volume, but only once we know what they are.
-        if (selectedPersonas.length === 0 && personas.length > 0) {
-            setSelectedPersonas(personas.slice(0, 3));
+        if (selectedRoles.length === 0 && roles.length > 0) {
+            setSelectedRoles(roles.slice(0, 3));
         }
-    }, [personas, selectedPersonas.length]);
+    }, [roles, selectedRoles.length]);
 
-    const togglePersona = (p: string) => {
-        setSelectedPersonas(prev =>
+    const toggleRole = (p: string) => {
+        setSelectedRoles(prev =>
             prev.includes(p) ? prev.filter(x => x !== p) : prev.length >= 5 ? prev : [...prev, p],
         );
     };
 
     const {spokes, seriesData} = useMemo(() => {
-        const {spokeList, valueByPersonaPerSpoke, recordsByPersonaPerSpoke} = computePersonaSpokes(
+        const {spokeList, valuesBySeries, recordsBySeries} = computeRoleSpokes(
             filtered,
             axis,
-            selectedPersonas,
+            selectedRoles,
         );
-        const series: RadarSeries[] = selectedPersonas.map((persona, idx) => {
-            const values = spokeList.map(s => valueByPersonaPerSpoke.get(persona)?.get(s) ?? 0);
-            const records = spokeList.map(
-                s => recordsByPersonaPerSpoke.get(persona)?.get(s) ?? [],
-            );
+        const series: RadarSeries[] = selectedRoles.map((role, idx) => {
+            const values = spokeList.map(s => valuesBySeries.get(role)?.get(s) ?? 0);
+            const records = spokeList.map(s => recordsBySeries.get(role)?.get(s) ?? []);
             return {
-                label: persona,
+                label: role,
                 color: PALETTE[idx % PALETTE.length] ?? '#0B41CD',
                 values,
                 records,
             };
         });
         return {spokes: spokeList, seriesData: series};
-    }, [filtered, axis, selectedPersonas]);
+    }, [filtered, axis, selectedRoles]);
 
     return (
         <Panel
             eyebrow="Radar · 01"
-            title="Persona profile"
-            subtitle="Compare how different personas are exposed across categories, tags, or top components"
+            title="Role profile"
+            subtitle="Compare how different roles are exposed across categories, tags, or top components"
         >
             <div
                 style={{
@@ -99,16 +96,17 @@ function PersonaProfilePanel({filtered, personas, onDrill}: Props) {
                         <option value="topComponents">Top 6 Change_Components</option>
                     </select>
                 </Field>
-                <Field label="Personas to overlay (max 5)">
+                <Field label="Roles to overlay (max 5)">
                     <div style={{display: 'flex', gap: 4, flexWrap: 'wrap'}}>
-                        {personas.map(p => {
-                            const active = selectedPersonas.includes(p);
+                        {roles.map(p => {
+                            const active = selectedRoles.includes(p);
                             return (
                                 <button
                                     key={p}
                                     type="button"
-                                    onClick={() => togglePersona(p)}
+                                    onClick={() => toggleRole(p)}
                                     style={chipStyle(active)}
+                                    title={p}
                                 >
                                     {p}
                                 </button>
@@ -190,18 +188,18 @@ function AffiliateRiskPanel({filtered, onDrill}: Props) {
     );
 }
 
-function computePersonaSpokes(
+function computeRoleSpokes(
     records: Impact[],
     axis: ProfileAxis,
-    personas: ReadonlyArray<string>,
+    seriesKeys: ReadonlyArray<string>,
 ): {
     spokeList: string[];
-    valueByPersonaPerSpoke: Map<string, Map<string, number>>;
-    recordsByPersonaPerSpoke: Map<string, Map<string, Impact[]>>;
+    valuesBySeries: Map<string, Map<string, number>>;
+    recordsBySeries: Map<string, Map<string, Impact[]>>;
 } {
     const valueMap = new Map<string, Map<string, number>>();
     const recordMap = new Map<string, Map<string, Impact[]>>();
-    for (const p of personas) {
+    for (const p of seriesKeys) {
         valueMap.set(p, new Map());
         recordMap.set(p, new Map());
     }
@@ -225,8 +223,8 @@ function computePersonaSpokes(
     }
 
     for (const r of records) {
-        if (!r.persona || !personas.includes(r.persona)) continue;
-        const persona = r.persona;
+        const key = r.role?.trim();
+        if (!key || !seriesKeys.includes(key)) continue;
         const buckets: string[] =
             axis === 'category'
                 ? r.changeCategory
@@ -240,16 +238,16 @@ function computePersonaSpokes(
 
         for (const b of buckets) {
             if (!spokeList.includes(b)) continue;
-            const vMap = valueMap.get(persona)!;
+            const vMap = valueMap.get(key)!;
             vMap.set(b, (vMap.get(b) ?? 0) + 1);
-            const rMap = recordMap.get(persona)!;
+            const rMap = recordMap.get(key)!;
             const arr = rMap.get(b) ?? [];
             arr.push(r);
             rMap.set(b, arr);
         }
     }
 
-    return {spokeList, valueByPersonaPerSpoke: valueMap, recordsByPersonaPerSpoke: recordMap};
+    return {spokeList, valuesBySeries: valueMap, recordsBySeries: recordMap};
 }
 
 function pct(n: number, total: number): number {
