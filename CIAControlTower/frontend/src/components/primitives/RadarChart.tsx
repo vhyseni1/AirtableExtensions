@@ -154,20 +154,6 @@ export function RadarChart({
                                     strokeLinejoin="round"
                                 />
                             );
-                        } else if (nonZeroPoints.length === 2) {
-                            const a = nonZeroPoints[0]!;
-                            const b = nonZeroPoints[1]!;
-                            pathEl = (
-                                <line
-                                    x1={a.x}
-                                    y1={a.y}
-                                    x2={b.x}
-                                    y2={b.y}
-                                    stroke={s.color}
-                                    strokeWidth={1.5}
-                                    strokeLinecap="round"
-                                />
-                            );
                         }
 
                         return (
