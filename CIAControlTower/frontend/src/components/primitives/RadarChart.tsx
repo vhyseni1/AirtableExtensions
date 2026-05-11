@@ -130,12 +130,21 @@ export function RadarChart({
                     })}
 
                     {visibleSeries.map(s => {
-                        const points = spokes.map((_, i) => polar(i, s.values[i] ?? 0));
-                        const d = points
-                            .map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
-                            .join(' ') + ' Z';
-                        return (
-                            <g key={s.label}>
+                        const allPoints = spokes.map((_, i) => polar(i, s.values[i] ?? 0));
+                        const nonZeroIndices: number[] = [];
+                        spokes.forEach((_, i) => {
+                            if ((s.values[i] ?? 0) > 0) nonZeroIndices.push(i);
+                        });
+                        const nonZeroPoints = nonZeroIndices
+                            .map(i => allPoints[i])
+                            .filter((p): p is {x: number; y: number} => !!p);
+
+                        let pathEl: React.ReactNode = null;
+                        if (nonZeroPoints.length >= 3) {
+                            const d = nonZeroPoints
+                                .map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
+                                .join(' ') + ' Z';
+                            pathEl = (
                                 <path
                                     d={d}
                                     fill={s.color}
@@ -144,7 +153,29 @@ export function RadarChart({
                                     strokeWidth={1.5}
                                     strokeLinejoin="round"
                                 />
-                                {points.map((p, i) => {
+                            );
+                        } else if (nonZeroPoints.length === 2) {
+                            const a = nonZeroPoints[0]!;
+                            const b = nonZeroPoints[1]!;
+                            pathEl = (
+                                <line
+                                    x1={a.x}
+                                    y1={a.y}
+                                    x2={b.x}
+                                    y2={b.y}
+                                    stroke={s.color}
+                                    strokeWidth={1.5}
+                                    strokeLinecap="round"
+                                />
+                            );
+                        }
+
+                        return (
+                            <g key={s.label}>
+                                {pathEl}
+                                {allPoints.map((p, i) => {
+                                    const value = s.values[i] ?? 0;
+                                    if (value === 0) return null;
                                     const recs = s.records[i] ?? [];
                                     const interactive = !!onDrill && recs.length > 0;
                                     return (
@@ -152,10 +183,10 @@ export function RadarChart({
                                             key={i}
                                             cx={p.x}
                                             cy={p.y}
-                                            r={3}
+                                            r={3.5}
                                             fill={s.color}
                                             stroke="#fff"
-                                            strokeWidth={1}
+                                            strokeWidth={1.5}
                                             style={{cursor: interactive ? 'pointer' : 'default'}}
                                             onClick={() => {
                                                 if (interactive && onDrill) {
@@ -166,7 +197,7 @@ export function RadarChart({
                                                 }
                                             }}
                                         >
-                                            <title>{`${s.label} · ${spokes[i] ?? ''}: ${valueFormatter(s.values[i] ?? 0)}`}</title>
+                                            <title>{`${s.label} · ${spokes[i] ?? ''}: ${valueFormatter(value)}`}</title>
                                         </circle>
                                     );
                                 })}
