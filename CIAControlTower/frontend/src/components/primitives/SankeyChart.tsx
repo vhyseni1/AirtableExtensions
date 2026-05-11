@@ -78,8 +78,8 @@ export function SankeyChart({records, columns, onDrill, height = 360, bandColorS
         <div style={{width: '100%'}}>
             <svg
                 viewBox={`0 0 ${width} ${height}`}
-                preserveAspectRatio="none"
-                style={{width: '100%', height, display: 'block'}}
+                preserveAspectRatio="xMidYMid meet"
+                style={{width: '100%', height: 'auto', maxHeight: height, display: 'block'}}
             >
                 <text
                     x={colXCenter(0)}

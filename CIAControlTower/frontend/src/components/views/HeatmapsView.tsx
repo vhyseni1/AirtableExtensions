@@ -3,7 +3,6 @@ import {
     AFFILIATES,
     BUSINESS_ARCHETYPES,
     CHANGE_CATEGORIES,
-    PERSONAS,
     type Impact,
 } from '../../utils/schema';
 import {MatrixHeatMap} from '../primitives/MatrixHeatMap';
@@ -33,7 +32,6 @@ export function HeatmapsView({filtered, onDrill}: Props) {
                     records={filtered}
                     rowKey={r => r.persona ?? null}
                     colKey={r => (r.changeComponent?.trim() ? r.changeComponent : null)}
-                    rowOrder={PERSONAS}
                     rowLabel="Persona"
                     colLabel="Change_Component"
                     onDrill={onDrill}
@@ -49,7 +47,6 @@ export function HeatmapsView({filtered, onDrill}: Props) {
                     records={filtered}
                     rowKey={r => r.persona ?? null}
                     colKey={r => r.changeCategory ?? null}
-                    rowOrder={PERSONAS}
                     colOrder={CHANGE_CATEGORIES}
                     rowLabel="Persona"
                     colLabel="Change_Category"

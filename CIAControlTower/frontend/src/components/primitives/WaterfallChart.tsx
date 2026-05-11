@@ -106,8 +106,8 @@ export function WaterfallChart({steps, onDrill, emptyLine, height = 240}: Props)
         <div style={{width: '100%'}}>
             <svg
                 viewBox={`0 0 ${100 * barCount + 60} ${height}`}
-                preserveAspectRatio="none"
-                style={{width: '100%', height, display: 'block'}}
+                preserveAspectRatio="xMidYMid meet"
+                style={{width: '100%', height: 'auto', maxHeight: height, display: 'block'}}
             >
                 {ticks.map((t, i) => {
                     const y = yFor(t);

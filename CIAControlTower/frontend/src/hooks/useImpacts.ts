@@ -8,7 +8,6 @@ import {
     CONFIDENCES,
     ECL_STREAMS,
     FIELDS,
-    PERSONAS,
     REQUIRED_FIELD_LIST,
     RESPONSIBLES,
     TABLE_NAME,
@@ -96,7 +95,10 @@ function buildImpact(rec: AirtableRecord, present: ReadonlySet<string>): Impact 
         businessArchetypes: normalizeMany<BusinessArchetype>(safeStr(rec, FIELDS.businessArchetypes, present), BUSINESS_ARCHETYPES),
         affiliate: normalizeOne<Affiliate>(safeStr(rec, FIELDS.affiliate, present), AFFILIATES),
         role: safeStr(rec, FIELDS.role, present).trim(),
-        persona: normalizeOne<Persona>(safeStr(rec, FIELDS.persona, present), PERSONAS),
+        persona: (() => {
+            const v = safeStr(rec, FIELDS.persona, present).trim();
+            return v ? v : null;
+        })(),
         changeCategory: normalizeOne<ChangeCategory>(safeStr(rec, FIELDS.changeCategory, present), CHANGE_CATEGORIES),
         changeComponent: safeStr(rec, FIELDS.changeComponent, present).trim(),
         descriptionAsIs: safeStr(rec, FIELDS.descriptionAsIs, present),

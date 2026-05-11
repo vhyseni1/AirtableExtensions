@@ -28,8 +28,14 @@ export const FIELDS = {
 
 export const REQUIRED_FIELD_LIST: ReadonlyArray<string> = Object.values(FIELDS);
 
-export const PERSONAS = ['PJP', 'HCD', 'HSP', 'GSCL', 'CSR', 'Admin'] as const;
-export type Persona = (typeof PERSONAS)[number];
+/**
+ * Persona values are auto-derived from Role in Airtable; the framework-listed
+ * PJP/HCD/HSP/GSCL/CSR/Admin set is a starting reference only. Real bases
+ * may surface different lookup values (e.g. "Primary Point of Contact",
+ * "BI & Analytics", "Admin"). Treat Persona as free-form string and source
+ * the list of values from the actual data.
+ */
+export type Persona = string;
 
 export const CHANGE_CATEGORIES = [
     'Process & Workflow',

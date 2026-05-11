@@ -210,7 +210,11 @@ function DashboardBody({tableName}: {tableName: string}) {
             ) : tab === 'flows' ? (
                 <FlowsView filtered={filtered} onDrill={handleDrillFromMatrix} />
             ) : (
-                <RadarsView filtered={filtered} onDrill={handleDrillFromMatrix} />
+                <RadarsView
+                    filtered={filtered}
+                    personas={aggregations.personas}
+                    onDrill={handleDrillFromMatrix}
+                />
             )}
 
             {activeDrill ? (

@@ -55,9 +55,11 @@ export function RadarChart({
     }
 
     const size = height;
-    const cx = size / 2;
+    const SIDE_PAD = 180;
+    const viewBoxWidth = size + SIDE_PAD * 2;
+    const cx = viewBoxWidth / 2;
     const cy = size / 2;
-    const radius = size * 0.38;
+    const radius = size * 0.34;
 
     const angleFor = (i: number) => (Math.PI * 2 * i) / spokes.length - Math.PI / 2;
 
@@ -93,11 +95,11 @@ export function RadarChart({
     return (
         <div style={{display: 'flex', flexDirection: 'column', gap: tokens.space.md, width: '100%'}}>
             <svg
-                viewBox={`0 0 ${size + 60} ${size}`}
+                viewBox={`0 0 ${viewBoxWidth} ${size}`}
                 preserveAspectRatio="xMidYMid meet"
                 style={{display: 'block', maxWidth: '100%', height: 'auto'}}
             >
-                <g transform={`translate(30, 0)`}>
+                <g>
                     {rings.map((r, i) => (
                         <circle
                             key={i}

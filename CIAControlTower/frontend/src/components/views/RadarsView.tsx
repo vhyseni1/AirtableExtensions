@@ -1,17 +1,16 @@
-import {useMemo, useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import {tokens} from '../../styles/tokens';
 import {
     AFFILIATES,
     CHANGE_CATEGORIES,
     type Impact,
-    type Persona,
-    PERSONAS,
 } from '../../utils/schema';
 import {Panel} from '../primitives/Panel';
 import {RadarChart, type RadarSeries} from '../primitives/RadarChart';
 
 interface Props {
     filtered: Impact[];
+    personas: string[];
     onDrill: (records: Impact[], title: string) => void;
 }
 
@@ -19,7 +18,7 @@ const PALETTE = ['#0B41CD', '#FF7D29', '#BC36F0', '#00B458', '#C40000', '#1482FA
 
 type ProfileAxis = 'category' | 'tag' | 'topComponents';
 
-export function RadarsView({filtered, onDrill}: Props) {
+export function RadarsView({filtered, personas, onDrill}: Props) {
     return (
         <div
             style={{
@@ -28,17 +27,24 @@ export function RadarsView({filtered, onDrill}: Props) {
                 gap: tokens.space.md,
             }}
         >
-            <PersonaProfilePanel filtered={filtered} onDrill={onDrill} />
-            <AffiliateRiskPanel filtered={filtered} onDrill={onDrill} />
+            <PersonaProfilePanel filtered={filtered} personas={personas} onDrill={onDrill} />
+            <AffiliateRiskPanel filtered={filtered} personas={personas} onDrill={onDrill} />
         </div>
     );
 }
 
-function PersonaProfilePanel({filtered, onDrill}: Props) {
+function PersonaProfilePanel({filtered, personas, onDrill}: Props) {
     const [axis, setAxis] = useState<ProfileAxis>('category');
-    const [selectedPersonas, setSelectedPersonas] = useState<Persona[]>(['PJP', 'HCD', 'HSP']);
+    const [selectedPersonas, setSelectedPersonas] = useState<string[]>([]);
 
-    const togglePersona = (p: Persona) => {
+    useEffect(() => {
+        // Default to the top three personas by data volume, but only once we know what they are.
+        if (selectedPersonas.length === 0 && personas.length > 0) {
+            setSelectedPersonas(personas.slice(0, 3));
+        }
+    }, [personas, selectedPersonas.length]);
+
+    const togglePersona = (p: string) => {
         setSelectedPersonas(prev =>
             prev.includes(p) ? prev.filter(x => x !== p) : prev.length >= 5 ? prev : [...prev, p],
         );
@@ -95,7 +101,7 @@ function PersonaProfilePanel({filtered, onDrill}: Props) {
                 </Field>
                 <Field label="Personas to overlay (max 5)">
                     <div style={{display: 'flex', gap: 4, flexWrap: 'wrap'}}>
-                        {PERSONAS.map(p => {
+                        {personas.map(p => {
                             const active = selectedPersonas.includes(p);
                             return (
                                 <button
@@ -187,14 +193,14 @@ function AffiliateRiskPanel({filtered, onDrill}: Props) {
 function computePersonaSpokes(
     records: Impact[],
     axis: ProfileAxis,
-    personas: ReadonlyArray<Persona>,
+    personas: ReadonlyArray<string>,
 ): {
     spokeList: string[];
-    valueByPersonaPerSpoke: Map<Persona, Map<string, number>>;
-    recordsByPersonaPerSpoke: Map<Persona, Map<string, Impact[]>>;
+    valueByPersonaPerSpoke: Map<string, Map<string, number>>;
+    recordsByPersonaPerSpoke: Map<string, Map<string, Impact[]>>;
 } {
-    const valueMap = new Map<Persona, Map<string, number>>();
-    const recordMap = new Map<Persona, Map<string, Impact[]>>();
+    const valueMap = new Map<string, Map<string, number>>();
+    const recordMap = new Map<string, Map<string, Impact[]>>();
     for (const p of personas) {
         valueMap.set(p, new Map());
         recordMap.set(p, new Map());
@@ -219,8 +225,8 @@ function computePersonaSpokes(
     }
 
     for (const r of records) {
-        if (!r.persona || !(personas as ReadonlyArray<string>).includes(r.persona)) continue;
-        const persona = r.persona as Persona;
+        if (!r.persona || !personas.includes(r.persona)) continue;
+        const persona = r.persona;
         const buckets: string[] =
             axis === 'category'
                 ? r.changeCategory
