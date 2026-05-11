@@ -1,6 +1,6 @@
 import {tokens} from '../styles/tokens';
 
-export type TabKey = 'overview' | 'heatmaps' | 'waterfalls';
+export type TabKey = 'overview' | 'heatmaps' | 'waterfalls' | 'flows' | 'radars';
 
 export interface TabSpec {
     key: TabKey;
@@ -12,6 +12,8 @@ export const TABS: ReadonlyArray<TabSpec> = [
     {key: 'overview', label: 'General overview', eyebrow: '01'},
     {key: 'heatmaps', label: 'Heat maps', eyebrow: '02'},
     {key: 'waterfalls', label: 'Waterfalls', eyebrow: '03'},
+    {key: 'flows', label: 'Flows', eyebrow: '04'},
+    {key: 'radars', label: 'Radars', eyebrow: '05'},
 ];
 
 interface Props {

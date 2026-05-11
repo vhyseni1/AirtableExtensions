@@ -14,7 +14,9 @@ import {DrillSheet} from './primitives/DrillSheet';
 import {EmptyState} from './primitives/EmptyState';
 import {SourceTrace} from './SourceTrace';
 import {Tabs, type TabKey} from './Tabs';
+import {FlowsView} from './views/FlowsView';
 import {HeatmapsView} from './views/HeatmapsView';
+import {RadarsView} from './views/RadarsView';
 import {WaterfallsView} from './views/WaterfallsView';
 
 interface ActiveDrill {
@@ -198,13 +200,17 @@ function DashboardBody({tableName}: {tableName: string}) {
                 </>
             ) : tab === 'heatmaps' ? (
                 <HeatmapsView filtered={filtered} onDrill={handleDrillFromMatrix} />
-            ) : (
+            ) : tab === 'waterfalls' ? (
                 <WaterfallsView
                     filtered={filtered}
                     allImpacts={impacts}
                     runs={aggregations.runs}
                     onDrill={handleDrillFromMatrix}
                 />
+            ) : tab === 'flows' ? (
+                <FlowsView filtered={filtered} onDrill={handleDrillFromMatrix} />
+            ) : (
+                <RadarsView filtered={filtered} onDrill={handleDrillFromMatrix} />
             )}
 
             {activeDrill ? (
