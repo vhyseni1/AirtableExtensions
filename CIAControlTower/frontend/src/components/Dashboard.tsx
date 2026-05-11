@@ -167,6 +167,7 @@ function DashboardBody({tableName}: {tableName: string}) {
                     filter={filter}
                     onChange={setFilter}
                     runs={aggregations.runs}
+                    roles={aggregations.roles}
                     freshness={freshness}
                 />
                 <Tabs active={tab} onChange={setTab} />

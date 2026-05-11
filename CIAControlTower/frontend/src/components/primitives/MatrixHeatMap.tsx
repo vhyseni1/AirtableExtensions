@@ -1,9 +1,20 @@
 import {useMemo} from 'react';
-import {sevColor, tokens} from '../../styles/tokens';
+import {tokens} from '../../styles/tokens';
 import {CHANGE_IMPACT_WEIGHT, type ChangeImpact, type Impact} from '../../utils/schema';
 import {EmptyState} from './EmptyState';
 
 export type Orientation = 'rotate' | 'flat' | 'wrap';
+
+export type Tint = 'high' | 'medium' | 'low' | 'neutral';
+
+export interface MetricResult {
+    /** Display string in the cell (e.g. "12" or "2.3"). */
+    display: string;
+    /** Raw number used for intensity scaling across cells. */
+    raw: number;
+    /** Color category — drives the cell tint. */
+    tint: Tint;
+}
 
 interface Cell {
     count: number;
@@ -21,14 +32,9 @@ export interface MatrixHeatMapProps {
     colLabel?: string;
     colOrientation?: Orientation;
     minColWidth?: number;
+    /** Override cell value and color. Default: count + severity tint. */
+    metricFn?: (records: Impact[]) => MetricResult;
     onDrill: (records: Impact[], title: string) => void;
-}
-
-function severityHexFromAvg(avg: number): string {
-    if (avg >= 2.5) return sevColor('High');
-    if (avg >= 1.5) return sevColor('Medium');
-    if (avg > 0) return sevColor('Low');
-    return tokens.colors.textFaint;
 }
 
 function withAlpha(hex: string, alpha: number): string {
@@ -93,6 +99,24 @@ function build(
     return {rows, cols, cells, rowTotals, colTotals, maxCount};
 }
 
+function tintColor(tint: Tint): string {
+    if (tint === 'high') return '#FF1F26';
+    if (tint === 'medium') return '#FFD60C';
+    if (tint === 'low') return '#00B458';
+    return tokens.colors.accent;
+}
+
+function defaultMetric(records: Impact[]): MetricResult {
+    if (records.length === 0) return {display: '', raw: 0, tint: 'neutral'};
+    const sevs: number[] = [];
+    for (const r of records) {
+        if (r.changeImpact) sevs.push(CHANGE_IMPACT_WEIGHT[r.changeImpact as ChangeImpact]);
+    }
+    const avg = sevs.length ? sevs.reduce((a, b) => a + b, 0) / sevs.length : 0;
+    const tint: Tint = avg >= 2.5 ? 'high' : avg >= 1.5 ? 'medium' : avg > 0 ? 'low' : 'neutral';
+    return {display: String(records.length), raw: records.length, tint};
+}
+
 export function MatrixHeatMap({
     records,
     rowKey,
@@ -103,12 +127,32 @@ export function MatrixHeatMap({
     colLabel,
     colOrientation = 'wrap',
     minColWidth = 84,
+    metricFn,
     onDrill,
 }: MatrixHeatMapProps) {
-    const {rows, cols, cells, rowTotals, colTotals, maxCount} = useMemo(
+    const {rows, cols, cells, rowTotals, colTotals} = useMemo(
         () => build(records, rowKey, colKey, rowOrder, colOrder),
         [records, rowKey, colKey, rowOrder, colOrder],
     );
+
+    const fn = metricFn ?? defaultMetric;
+
+    const {cellMetrics, maxRaw} = useMemo(() => {
+        const m = new Map<string, Map<string, MetricResult>>();
+        let max = 0;
+        for (const row of rows) {
+            const inner = new Map<string, MetricResult>();
+            for (const col of cols) {
+                const cell = cells.get(row)?.get(col);
+                const recs = cell?.records ?? [];
+                const result = fn(recs);
+                inner.set(col, result);
+                if (result.raw > max) max = result.raw;
+            }
+            m.set(row, inner);
+        }
+        return {cellMetrics: m, maxRaw: max || 1};
+    }, [rows, cols, cells, fn]);
 
     if (rows.length === 0 || cols.length === 0) {
         return <EmptyState line="No data in scope for this matrix." />;
@@ -147,7 +191,8 @@ export function MatrixHeatMap({
                         rowTotal={rowTotals.get(r) ?? 0}
                         cols={cols}
                         cells={cells}
-                        max={maxCount}
+                        cellMetrics={cellMetrics.get(r) ?? new Map()}
+                        maxRaw={maxRaw}
                         onDrill={onDrill}
                     />
                 ))}
@@ -235,11 +280,12 @@ interface RowFragmentProps {
     rowTotal: number;
     cols: ReadonlyArray<string>;
     cells: Map<string, Map<string, Cell>>;
-    max: number;
+    cellMetrics: Map<string, MetricResult>;
+    maxRaw: number;
     onDrill: (records: Impact[], title: string) => void;
 }
 
-function RowFragment({row, rowTotal, cols, cells, max, onDrill}: RowFragmentProps) {
+function RowFragment({row, rowTotal, cols, cells, cellMetrics, maxRaw, onDrill}: RowFragmentProps) {
     return (
         <>
             <div
@@ -268,24 +314,22 @@ function RowFragment({row, rowTotal, cols, cells, max, onDrill}: RowFragmentProp
             </div>
             {cols.map(c => {
                 const cell = cells.get(row)?.get(c);
-                const count = cell?.count ?? 0;
-                const intensity = count === 0 ? 0 : 0.18 + (count / max) * 0.7;
-                const color = severityHexFromAvg(cell?.avgSev ?? 0);
-                const bg = count === 0 ? tokens.colors.bgAlt : withAlpha(color, intensity);
+                const metric = cellMetrics.get(c);
+                const empty = !metric || metric.raw === 0;
+                const intensity = empty ? 0 : 0.18 + (metric.raw / maxRaw) * 0.7;
+                const color = empty ? tokens.colors.textFaint : tintColor(metric.tint);
+                const bg = empty ? tokens.colors.bgAlt : withAlpha(color, intensity);
+                const records = cell?.records ?? [];
                 return (
                     <button
                         key={c}
                         type="button"
-                        disabled={count === 0}
-                        onClick={() => onDrill(cell?.records ?? [], `${row} · ${c}`)}
-                        title={
-                            count === 0
-                                ? 'No impacts'
-                                : `${count} impact${count === 1 ? '' : 's'} · avg severity ${(cell?.avgSev ?? 0).toFixed(1)}`
-                        }
+                        disabled={empty}
+                        onClick={() => onDrill(records, `${row} · ${c}`)}
+                        title={empty ? 'No data' : `${row} · ${c}: ${metric?.display ?? ''}`}
                         style={{
                             background: bg,
-                            border: `1px solid ${count > 0 ? withAlpha(color, 0.4) : tokens.colors.ruleSoft}`,
+                            border: `1px solid ${empty ? tokens.colors.ruleSoft : withAlpha(color, 0.4)}`,
                             borderRadius: tokens.radius.sm,
                             minHeight: 36,
                             display: 'flex',
@@ -294,18 +338,18 @@ function RowFragment({row, rowTotal, cols, cells, max, onDrill}: RowFragmentProp
                             fontFamily: tokens.fonts.mono,
                             fontSize: 11,
                             fontWeight: 600,
-                            color: count === 0 ? tokens.colors.textFaint : intensity > 0.55 ? '#fff' : color,
-                            cursor: count === 0 ? 'default' : 'pointer',
+                            color: empty ? tokens.colors.textFaint : intensity > 0.55 ? '#fff' : color,
+                            cursor: empty ? 'default' : 'pointer',
                             transition: 'transform 80ms ease',
                         }}
                         onMouseEnter={e => {
-                            if (count > 0) (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.05)';
+                            if (!empty) (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.05)';
                         }}
                         onMouseLeave={e => {
                             (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)';
                         }}
                     >
-                        {count > 0 ? count : ''}
+                        {metric?.display ?? ''}
                     </button>
                 );
             })}

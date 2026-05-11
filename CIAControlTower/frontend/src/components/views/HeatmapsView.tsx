@@ -8,6 +8,7 @@ import {
 } from '../../utils/schema';
 import {MatrixHeatMap} from '../primitives/MatrixHeatMap';
 import {Panel} from '../primitives/Panel';
+import {CustomHeatmapBuilder} from './CustomHeatmapBuilder';
 
 interface Props {
     filtered: Impact[];
@@ -88,6 +89,8 @@ export function HeatmapsView({filtered, onDrill}: Props) {
                     onDrill={(records, title) => onDrill(dedupeById(records), title)}
                 />
             </Panel>
+
+            <CustomHeatmapBuilder filtered={filtered} onDrill={onDrill} />
         </div>
     );
 }

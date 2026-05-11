@@ -6,6 +6,7 @@ import {
     frictionList,
     gapsList,
     headlineMetrics,
+    listRoles,
     listRuns,
     pressureByPersona,
     topComponentsBySeverity,
@@ -26,12 +27,14 @@ export interface DashboardAggregations {
     friction: Impact[];
     affiliateSlices: AffiliateSlice[];
     runs: string[];
+    roles: string[];
     delta: ReturnType<typeof deltaBetweenRuns> | null;
 }
 
 export function useAggregations(filtered: Impact[], all: Impact[]): DashboardAggregations {
     return useMemo<DashboardAggregations>(() => {
         const runs = listRuns(all);
+        const roles = listRoles(all);
         let delta: ReturnType<typeof deltaBetweenRuns> | null = null;
         if (runs.length >= 2) {
             const currentRun = runs[0];
@@ -51,6 +54,7 @@ export function useAggregations(filtered: Impact[], all: Impact[]): DashboardAgg
             friction: frictionList(filtered),
             affiliateSlices: affiliateSlices(filtered),
             runs,
+            roles,
             delta,
         };
     }, [filtered, all]);

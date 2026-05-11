@@ -9,10 +9,8 @@ import {
     AFFILIATES,
     BUSINESS_ARCHETYPES,
     CHANGE_IMPACTS,
-    PERSONAS,
     TAGS,
     type BusinessArchetype,
-    type Persona,
     type Tag,
 } from '../utils/schema';
 import {TagChip} from './primitives/TagChip';
@@ -21,6 +19,7 @@ interface Props {
     filter: FilterState;
     onChange: (next: FilterState) => void;
     runs: string[];
+    roles: string[];
     freshness: string | null;
 }
 
@@ -48,12 +47,12 @@ const chipBtn = (active: boolean): React.CSSProperties => ({
     letterSpacing: '0.04em',
 });
 
-export function FilterBar({filter, onChange, runs, freshness}: Props) {
-    const togglePersona = (p: Persona) => {
-        const next = filter.personas.includes(p)
-            ? filter.personas.filter(x => x !== p)
-            : [...filter.personas, p];
-        onChange({...filter, personas: next});
+export function FilterBar({filter, onChange, runs, roles, freshness}: Props) {
+    const toggleRole = (r: string) => {
+        const next = filter.roles.includes(r)
+            ? filter.roles.filter(x => x !== r)
+            : [...filter.roles, r];
+        onChange({...filter, roles: next});
     };
     const toggleTag = (t: Tag) => {
         const next = filter.tags.includes(t) ? filter.tags.filter(x => x !== t) : [...filter.tags, t];
@@ -76,7 +75,7 @@ export function FilterBar({filter, onChange, runs, freshness}: Props) {
         filter.sourceRuns.length === 0 &&
         filter.affiliate === DEFAULT_FILTER.affiliate &&
         filter.archetypes.length === 0 &&
-        filter.personas.length === 0 &&
+        filter.roles.length === 0 &&
         filter.tags.length === 0 &&
         filter.changeImpact === DEFAULT_FILTER.changeImpact;
 
@@ -186,19 +185,32 @@ export function FilterBar({filter, onChange, runs, freshness}: Props) {
                 </div>
             </Group>
 
-            <Group label="Persona">
-                <div style={{display: 'flex', gap: 4, flexWrap: 'wrap'}}>
-                    {PERSONAS.map(p => (
-                        <button
-                            key={p}
-                            type="button"
-                            onClick={() => togglePersona(p)}
-                            style={chipBtn(filter.personas.includes(p))}
-                        >
-                            {p}
-                        </button>
-                    ))}
-                </div>
+            <Group label="Role">
+                {roles.length === 0 ? (
+                    <span style={{fontSize: 11, color: tokens.colors.textFaint}}>—</span>
+                ) : (
+                    <div style={{display: 'flex', gap: 4, flexWrap: 'wrap', maxWidth: 520}}>
+                        {roles.map(r => (
+                            <button
+                                key={r}
+                                type="button"
+                                onClick={() => toggleRole(r)}
+                                title={r}
+                                style={{
+                                    ...chipBtn(filter.roles.includes(r)),
+                                    maxWidth: 220,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    textTransform: 'none',
+                                    letterSpacing: '0.02em',
+                                }}
+                            >
+                                {r}
+                            </button>
+                        ))}
+                    </div>
+                )}
             </Group>
 
             <Group label="Tags">
