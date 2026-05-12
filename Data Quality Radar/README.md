@@ -49,11 +49,18 @@ instead of attempting to load.
 ```bash
 cd "Data Quality Radar"
 npm install
+
+# one-time per machine/base: register this folder with an existing
+# interface extension placeholder in Airtable (the UI gives you the
+# baseId/blockId pair when you "Build an interface extension").
+block init <baseId-or-NONE>/<blockId>
+
+# dev loop
 block run
 ```
 
-The CLI prints a dev URL. In your Airtable base open Extensions → Add an
-extension → Build a custom extension → paste the URL.
+The CLI prints a dev URL. In your Airtable interface, add the extension
+element and paste the URL when prompted.
 
 ## Release
 
@@ -89,9 +96,10 @@ Data Quality Radar/
 
 ## Notes
 
-- The dashboard uses the same React 16.14 + `@airtable/blocks ^1.18.0`
-  stack as the engine extension so both install cleanly in the same
-  base with no peer-dep drift.
+- The dashboard is built as an **Airtable Interface Extension** using
+  `@airtable/blocks` (`interface-alpha`) and React 19. Hooks are
+  imported from `@airtable/blocks/interface/ui` and `initializeBlock`
+  is called with `{interface: () => <App />}`.
 - The bar chart in Panel 2 is custom-rendered div elements — no
   charting library — to keep the visual language uniform and the
   bundle small.

@@ -1,5 +1,5 @@
 import React, {useState} from 'react';
-import {useBase, useRecords, expandRecord, Dialog} from '@airtable/blocks/ui';
+import {useBase, useRecords, expandRecord} from '@airtable/blocks/interface/ui';
 import Card from './Card';
 import {colors, typography} from '../theme';
 
@@ -202,33 +202,80 @@ export default function ExceptionList({
             )}
 
             {showAll && (
-                <Dialog onClose={() => setShowAll(false)} width="800px">
-                    <Dialog.CloseButton />
+                <div
+                    onClick={() => setShowAll(false)}
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        background: 'rgba(0,0,0,0.4)',
+                        zIndex: 100,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                    }}
+                >
                     <div
+                        onClick={e => e.stopPropagation()}
                         style={{
-                            fontFamily: typography.family,
-                            fontSize: typography.h2.size,
-                            fontWeight: typography.h2.weight,
-                            marginBottom: 12,
-                            color: colors.textPrimary,
-                        }}
-                    >
-                        All high-severity exceptions ({total})
-                    </div>
-                    <div
-                        style={{
+                            background: colors.white,
+                            borderRadius: 4,
+                            width: 'min(90vw, 800px)',
+                            maxHeight: '85vh',
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: 8,
-                            maxHeight: 480,
-                            overflowY: 'auto',
+                            padding: 24,
+                            fontFamily: typography.family,
                         }}
                     >
-                        {allHighSeverity.map((row, i) => (
-                            <Row key={row._recordId || i} row={row} onExpandRecord={handleExpandRecord} />
-                        ))}
+                        <div
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                marginBottom: 12,
+                            }}
+                        >
+                            <div
+                                style={{
+                                    fontSize: typography.h2.size,
+                                    fontWeight: typography.h2.weight,
+                                    color: colors.textPrimary,
+                                }}
+                            >
+                                All high-severity exceptions ({total})
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowAll(false)}
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    fontSize: 18,
+                                    color: colors.textSecondary,
+                                    cursor: 'pointer',
+                                    padding: 4,
+                                    lineHeight: 1,
+                                }}
+                                aria-label="Close"
+                            >
+                                ×
+                            </button>
+                        </div>
+                        <div
+                            style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 8,
+                                overflowY: 'auto',
+                                flex: 1,
+                            }}
+                        >
+                            {allHighSeverity.map((row, i) => (
+                                <Row key={row._recordId || i} row={row} onExpandRecord={handleExpandRecord} />
+                            ))}
+                        </div>
                     </div>
-                </Dialog>
+                </div>
             )}
         </Card>
     );

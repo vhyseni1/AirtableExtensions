@@ -1,5 +1,5 @@
 import {useMemo} from 'react';
-import {useBase, useRecords} from '@airtable/blocks/ui';
+import {useBase, useRecords} from '@airtable/blocks/interface/ui';
 
 const DQ_RESULTS_FIELDS = [
     'Result_ID', 'Run_Timestamp', 'Rule_ID', 'Rule_Name', 'DQ_Dimension',
