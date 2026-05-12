@@ -1,6 +1,7 @@
 import {loadSources} from './sources';
 import {RULES} from './rules';
 import {truncateResults, writeResults} from './writer';
+import {isRuleActive, asNormalizedString} from './helpers';
 
 export async function runEngine({base, rulesTable, resultsTable, onProgress, onLog}) {
     const start = Date.now();
@@ -16,12 +17,12 @@ export async function runEngine({base, rulesTable, resultsTable, onProgress, onL
     onLog('Reading Rules table…');
     const rulesQuery = await rulesTable.selectRecordsAsync();
     const ruleRows = rulesQuery.records.map(r => ({
-        Rule_ID: r.getCellValueAsString('Rule_ID'),
-        Rule_Name: r.getCellValueAsString('Rule_Name'),
-        DQ_Dimension: r.getCellValueAsString('DQ_Dimension'),
-        Severity: r.getCellValueAsString('Severity'),
-        Scope: r.getCellValueAsString('Scope'),
-        Active: r.getCellValueAsString('Active'),
+        Rule_ID: asNormalizedString(r.getCellValue('Rule_ID')),
+        Rule_Name: asNormalizedString(r.getCellValue('Rule_Name')),
+        DQ_Dimension: asNormalizedString(r.getCellValue('DQ_Dimension')),
+        Severity: asNormalizedString(r.getCellValue('Severity')),
+        Scope: asNormalizedString(r.getCellValue('Scope')),
+        Active: r.getCellValue('Active'),
     }));
     rulesQuery.unloadData();
 
@@ -34,7 +35,7 @@ export async function runEngine({base, rulesTable, resultsTable, onProgress, onL
         if (!codeRuleIds.has(id)) onLog(`WARNING: ${id} listed in Rules table but no implementation.`);
     }
 
-    const activeRules = ruleRows.filter(r => r.Active === 'Yes' && RULES[r.Rule_ID]);
+    const activeRules = ruleRows.filter(r => isRuleActive(r.Active) && RULES[r.Rule_ID]);
     onLog(`${activeRules.length} active rule(s) to execute.`);
 
     onLog('Truncating DQ_Results…');

@@ -1,5 +1,6 @@
 import React, {useState} from 'react';
 import {Box, Heading, Switch, Text, Icon} from '@airtable/blocks/ui';
+import {isRuleActive, asNormalizedString} from '../engine/helpers';
 
 export default function RulesPanel({table, records, disabled}) {
     const [open, setOpen] = useState(false);
@@ -7,13 +8,20 @@ export default function RulesPanel({table, records, disabled}) {
     if (!records) return null;
 
     const activeCount = records.filter(
-        r => r.getCellValueAsString('Active') === 'Yes',
+        r => isRuleActive(r.getCellValue('Active')),
     ).length;
 
     async function toggle(record, on) {
-        await table.updateRecordAsync(record, {
-            Active: {name: on ? 'Yes' : 'No'},
-        });
+        const activeField = table.getFieldByNameIfExists('Active');
+        let payload;
+        if (activeField && activeField.type === 'checkbox') {
+            payload = on;
+        } else if (activeField && activeField.type === 'singleLineText') {
+            payload = on ? 'Yes' : 'No';
+        } else {
+            payload = {name: on ? 'Yes' : 'No'};
+        }
+        await table.updateRecordAsync(record, {Active: payload});
     }
 
     return (
@@ -33,10 +41,10 @@ export default function RulesPanel({table, records, disabled}) {
             {open && (
                 <Box marginTop={2} paddingLeft={2}>
                     {records.map(record => {
-                        const id = record.getCellValueAsString('Rule_ID');
-                        const name = record.getCellValueAsString('Rule_Name');
-                        const severity = record.getCellValueAsString('Severity');
-                        const isOn = record.getCellValueAsString('Active') === 'Yes';
+                        const id = asNormalizedString(record.getCellValue('Rule_ID'));
+                        const name = asNormalizedString(record.getCellValue('Rule_Name'));
+                        const severity = asNormalizedString(record.getCellValue('Severity'));
+                        const isOn = isRuleActive(record.getCellValue('Active'));
                         return (
                             <Box
                                 key={record.id}
