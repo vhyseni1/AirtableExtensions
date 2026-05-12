@@ -16,14 +16,49 @@ const styles = {
     },
     h1: {fontSize: 20, fontWeight: 600, margin: '0 0 4px 0'},
     sub: {color: '#6b7280', marginBottom: 16},
-    error: {color: '#b91c1c'},
+    error: {color: '#b91c1c', whiteSpace: 'pre-wrap'},
+    list: {margin: '8px 0 0 0', paddingLeft: 20},
 };
+
+const REQUIRED = ['EPP', 'Fieldglass', 'PurchaseOrders', 'Spend', 'Valid_Cost_Centers', 'Rules', 'DQ_Results'];
 
 export default function App() {
     const base = useBase();
+
+    const missing = REQUIRED.filter(name => !base.getTableByNameIfExists(name));
+    if (missing.length > 0) {
+        return (
+            <div style={styles.root}>
+                <h1 style={styles.h1}>EW Data Quality Engine</h1>
+                <p style={styles.error}>
+                    The following table(s) are not reachable from this interface extension:
+                </p>
+                <ul style={styles.list}>
+                    {missing.map(n => <li key={n}>{n}</li>)}
+                </ul>
+                <p style={styles.error}>
+                    Interface extensions typically need each source table bound via the
+                    interface page's extension configuration. If the tables exist in the
+                    base, open the interface page in Designer, edit this extension, and
+                    grant it access to the required tables.
+                </p>
+            </div>
+        );
+    }
+
     const rulesTable = base.getTableByNameIfExists('Rules');
     const resultsTable = base.getTableByNameIfExists('DQ_Results');
 
+    return (
+        <AppInner
+            base={base}
+            rulesTable={rulesTable}
+            resultsTable={resultsTable}
+        />
+    );
+}
+
+function AppInner({base, rulesTable, resultsTable}) {
     const ruleRecords = useRecords(rulesTable);
     const resultRecords = useRecords(resultsTable);
 
@@ -50,10 +85,6 @@ export default function App() {
     };
 
     async function handleRun() {
-        if (!rulesTable || !resultsTable) {
-            appendLog('Missing Rules or DQ_Results table.');
-            return;
-        }
         setRunning(true);
         setSummary(null);
         setProgress(null);
@@ -86,18 +117,6 @@ export default function App() {
             setRunning(false);
             setProgress(null);
         }
-    }
-
-    if (!rulesTable || !resultsTable) {
-        return (
-            <div style={styles.root}>
-                <h1 style={styles.h1}>EW Data Quality Engine</h1>
-                <p style={styles.error}>
-                    Missing required table. This extension expects tables named
-                    "Rules" and "DQ_Results" in the current base.
-                </p>
-            </div>
-        );
     }
 
     return (
