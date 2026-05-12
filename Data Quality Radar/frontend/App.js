@@ -11,6 +11,7 @@ import ConsistencyCard from './components/ConsistencyCard';
 import RrpLeaderboard from './components/RrpLeaderboard';
 import ExceptionList from './components/ExceptionList';
 import RunHistoryFooter from './components/RunHistoryFooter';
+import DrillDownModal from './components/DrillDownModal';
 
 const DEFAULT_FILTERS = {
     severity: 'All',
@@ -18,6 +19,22 @@ const DEFAULT_FILTERS = {
     sourceTable: 'All',
     ownerRrp: 'All',
 };
+
+function safeGet(record, field) {
+    try {
+        return record.getCellValueAsString(field);
+    } catch (e) {
+        return '';
+    }
+}
+
+function passesFilters(record, filters) {
+    if (filters.severity !== 'All' && safeGet(record, 'Severity') !== filters.severity) return false;
+    if (filters.dimension !== 'All' && safeGet(record, 'DQ_Dimension') !== filters.dimension) return false;
+    if (filters.sourceTable !== 'All' && safeGet(record, 'Source_Table') !== filters.sourceTable) return false;
+    if (filters.ownerRrp !== 'All' && safeGet(record, 'Owner_RRP') !== filters.ownerRrp) return false;
+    return true;
+}
 
 function PageShell({children}) {
     return (
@@ -92,14 +109,28 @@ function Loading() {
 function Dashboard({tables}) {
     const [filters, setFilters] = useState(DEFAULT_FILTERS);
     const [refreshTick, setRefreshTick] = useState(Date.now());
+    const [drilldown, setDrilldown] = useState(null);
 
-    const {raw, eppRecords} = useDqData(tables);
+    const {raw, eppRecords, dqResultsRecords} = useDqData(tables);
     const data = useFilteredData(raw, filters);
 
     const activeRulesCount = useMemo(() => {
         if (!raw) return 0;
         return raw.rules.filter(r => r && r.Active === 'Yes').length;
     }, [raw]);
+
+    const drilldownRecords = useMemo(() => {
+        if (!drilldown || !dqResultsRecords) return [];
+        return dqResultsRecords.filter(r => {
+            if (!r) return false;
+            if (!passesFilters(r, filters)) return false;
+            try {
+                return drilldown.predicate(r);
+            } catch (e) {
+                return false;
+            }
+        });
+    }, [drilldown, dqResultsRecords, filters]);
 
     if (!data) return <Loading />;
 
@@ -108,6 +139,9 @@ function Dashboard({tables}) {
     const handleClearRrp = () => setFilters(f => ({...f, ownerRrp: 'All'}));
     const handleReset = () => setFilters(DEFAULT_FILTERS);
     const handleRefresh = () => setRefreshTick(Date.now());
+    const handleDrillDown = (title, predicate) =>
+        setDrilldown({title, predicate});
+    const handleCloseDrilldown = () => setDrilldown(null);
 
     return (
         <PageShell>
@@ -132,17 +166,26 @@ function Dashboard({tables}) {
                     gap: spacing.cardGap,
                 }}
             >
-                <KpiStrip data={data} />
-                <DimensionBars byDimension={data.byDimension} />
+                <KpiStrip data={data} onDrillDown={handleDrillDown} />
+                <DimensionBars
+                    byDimension={data.byDimension}
+                    onDrillDown={handleDrillDown}
+                />
                 <div style={{display: 'flex', gap: spacing.cardGap}}>
                     <div style={{flex: 1, minWidth: 0, display: 'flex'}}>
                         <div style={{flex: 1}}>
-                            <CompletenessCard fieldCompleteness={data.fieldCompleteness} />
+                            <CompletenessCard
+                                fieldCompleteness={data.fieldCompleteness}
+                                onDrillDown={handleDrillDown}
+                            />
                         </div>
                     </div>
                     <div style={{flex: 1, minWidth: 0, display: 'flex'}}>
                         <div style={{flex: 1}}>
-                            <ConsistencyCard consistencyPairs={data.consistencyPairs} />
+                            <ConsistencyCard
+                                consistencyPairs={data.consistencyPairs}
+                                onDrillDown={handleDrillDown}
+                            />
                         </div>
                     </div>
                 </div>
@@ -150,6 +193,7 @@ function Dashboard({tables}) {
                     rrpLeaderboard={data.rrpLeaderboard}
                     activeRrp={filters.ownerRrp === 'All' ? null : filters.ownerRrp}
                     onSelectRrp={handleSelectRrp}
+                    onDrillDown={handleDrillDown}
                 />
                 <ExceptionList
                     recentHighSeverity={data.recentHighSeverity}
@@ -164,6 +208,14 @@ function Dashboard({tables}) {
                     totalExceptions={raw ? raw.dqResults.length : 0}
                 />
             </div>
+            {drilldown && (
+                <DrillDownModal
+                    title={drilldown.title}
+                    records={drilldownRecords}
+                    eppRecords={eppRecords}
+                    onClose={handleCloseDrilldown}
+                />
+            )}
         </PageShell>
     );
 }

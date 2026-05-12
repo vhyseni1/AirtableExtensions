@@ -1,9 +1,19 @@
 import React from 'react';
 import {colors, spacing, typography, scoreColor} from '../theme';
 
-function Card({label, value, valueColor, subLabel, subColor}) {
+function safeGet(record, field) {
+    try {
+        return record.getCellValueAsString(field);
+    } catch (e) {
+        return '';
+    }
+}
+
+function Card({label, value, valueColor, subLabel, subColor, onClick}) {
+    const interactive = typeof onClick === 'function';
     return (
         <div
+            onClick={interactive ? onClick : undefined}
             style={{
                 flex: 1,
                 background: colors.white,
@@ -15,7 +25,16 @@ function Card({label, value, valueColor, subLabel, subColor}) {
                 flexDirection: 'column',
                 gap: 8,
                 minWidth: 0,
+                cursor: interactive ? 'pointer' : 'default',
+                transition: 'border-color 120ms ease',
             }}
+            onMouseEnter={e => {
+                if (interactive) e.currentTarget.style.borderColor = colors.rocheBlue;
+            }}
+            onMouseLeave={e => {
+                if (interactive) e.currentTarget.style.borderColor = colors.border;
+            }}
+            title={interactive ? 'Click to drill into underlying records' : undefined}
         >
             <div style={{fontSize: typography.small.size, color: colors.textTertiary}}>
                 {label}
@@ -37,7 +56,7 @@ function Card({label, value, valueColor, subLabel, subColor}) {
     );
 }
 
-export default function KpiStrip({data}) {
+export default function KpiStrip({data, onDrillDown}) {
     const {
         totalEpp,
         recordsWithExceptions,
@@ -58,12 +77,17 @@ export default function KpiStrip({data}) {
                 value={`${recordsWithExceptions} / ${totalEpp}`}
                 subLabel={`${exceptionPct}% of EW base`}
                 subColor={colors.rocheRed}
+                onClick={() => onDrillDown(
+                    'EPP records with exceptions',
+                    r => safeGet(r, 'Source_Table') === 'EPP',
+                )}
             />
             <Card
                 label="Total exceptions"
                 value={totalExceptions}
                 subLabel={`across ${dimensionCount} dimension${dimensionCount === 1 ? '' : 's'}`}
                 subColor={colors.textTertiary}
+                onClick={() => onDrillDown('All exceptions', () => true)}
             />
             <Card
                 label="High severity"
@@ -71,6 +95,10 @@ export default function KpiStrip({data}) {
                 valueColor={colors.rocheRed}
                 subLabel="CSRD-blocking"
                 subColor={colors.rocheRed}
+                onClick={() => onDrillDown(
+                    'High-severity exceptions',
+                    r => safeGet(r, 'Severity') === 'High',
+                )}
             />
             <Card
                 label="Composite DQ score"

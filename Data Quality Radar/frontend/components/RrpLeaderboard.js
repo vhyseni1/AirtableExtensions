@@ -2,6 +2,14 @@ import React, {useState} from 'react';
 import Card from './Card';
 import {colors, typography, badgeStyle} from '../theme';
 
+function safeGet(record, field) {
+    try {
+        return record.getCellValueAsString(field);
+    } catch (e) {
+        return '';
+    }
+}
+
 function ExceptionBadge({count}) {
     const {bg, text} = badgeStyle(count);
     return (
@@ -22,12 +30,17 @@ function ExceptionBadge({count}) {
     );
 }
 
-export default function RrpLeaderboard({rrpLeaderboard, activeRrp, onSelectRrp}) {
+export default function RrpLeaderboard({
+    rrpLeaderboard,
+    activeRrp,
+    onSelectRrp,
+    onDrillDown,
+}) {
     const [hoverIdx, setHoverIdx] = useState(null);
 
     const rightSlot = (
         <span style={{fontSize: 12, color: colors.textTertiary, fontFamily: typography.family}}>
-            Click row to drill down
+            Click row to drill into records · ⌥/Alt-click to filter dashboard
         </span>
     );
 
@@ -54,7 +67,18 @@ export default function RrpLeaderboard({rrpLeaderboard, activeRrp, onSelectRrp})
                         return (
                             <div
                                 key={row.rrp}
-                                onClick={() => onSelectRrp(row.rrp)}
+                                onClick={e => {
+                                    if (e.altKey && typeof onSelectRrp === 'function') {
+                                        onSelectRrp(row.rrp);
+                                        return;
+                                    }
+                                    if (typeof onDrillDown === 'function') {
+                                        onDrillDown(
+                                            `RRP — ${row.rrp}`,
+                                            r => safeGet(r, 'Owner_RRP') === row.rrp,
+                                        );
+                                    }
+                                }}
                                 onMouseEnter={() => setHoverIdx(i)}
                                 onMouseLeave={() => setHoverIdx(null)}
                                 style={{
@@ -67,6 +91,7 @@ export default function RrpLeaderboard({rrpLeaderboard, activeRrp, onSelectRrp})
                                     fontFamily: typography.family,
                                     borderLeft: isActive ? `3px solid ${colors.rocheBlue}` : '3px solid transparent',
                                 }}
+                                title="Click: view records · Alt-click: filter dashboard"
                             >
                                 <div
                                     style={{

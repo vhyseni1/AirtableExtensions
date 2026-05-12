@@ -63,5 +63,5 @@ export default function useDqData({dqResultsTable, rulesTable, eppTable}) {
         epp: normalizeRecords(eppRecords, EPP_FIELDS),
     }), [dqResultsRecords, rulesRecords, eppRecords]);
 
-    return {raw, eppRecords};
+    return {raw, eppRecords, dqResultsRecords};
 }
