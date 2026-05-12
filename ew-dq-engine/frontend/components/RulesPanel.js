@@ -1,6 +1,32 @@
 import React, {useState} from 'react';
-import {Box, Heading, Switch, Text, Icon} from '@airtable/blocks/ui';
 import {isRuleActive, asNormalizedString} from '../engine/helpers';
+
+const styles = {
+    wrap: {marginBottom: 16},
+    header: {
+        display: 'flex',
+        alignItems: 'center',
+        cursor: 'pointer',
+        userSelect: 'none',
+    },
+    caret: {
+        display: 'inline-block',
+        width: 16,
+        textAlign: 'center',
+        marginRight: 4,
+        color: '#6b7280',
+    },
+    h2: {fontSize: 14, fontWeight: 600, margin: 0},
+    list: {marginTop: 8, paddingLeft: 8},
+    row: {
+        display: 'flex',
+        alignItems: 'center',
+        padding: '4px 0',
+        borderBottom: '1px solid #f3f4f6',
+    },
+    label: {marginLeft: 8, flex: 1, fontSize: 13},
+    sev: {color: '#6b7280', fontSize: 12, marginLeft: 8},
+};
 
 export default function RulesPanel({table, records, disabled}) {
     const [open, setOpen] = useState(false);
@@ -25,49 +51,38 @@ export default function RulesPanel({table, records, disabled}) {
     }
 
     return (
-        <Box marginBottom={3}>
-            <Box
-                display="flex"
-                alignItems="center"
-                style={{cursor: 'pointer'}}
-                onClick={() => setOpen(!open)}
-            >
-                <Icon name={open ? 'chevronDown' : 'chevronRight'} size={16} />
-                <Heading size="small" marginLeft={1}>
+        <div style={styles.wrap}>
+            <div style={styles.header} onClick={() => setOpen(!open)}>
+                <span style={styles.caret}>{open ? '▾' : '▸'}</span>
+                <h2 style={styles.h2}>
                     Active rules ({activeCount}/{records.length})
-                </Heading>
-            </Box>
+                </h2>
+            </div>
 
             {open && (
-                <Box marginTop={2} paddingLeft={2}>
+                <div style={styles.list}>
                     {records.map(record => {
                         const id = asNormalizedString(record.getCellValue('Rule_ID'));
                         const name = asNormalizedString(record.getCellValue('Rule_Name'));
                         const severity = asNormalizedString(record.getCellValue('Severity'));
                         const isOn = isRuleActive(record.getCellValue('Active'));
                         return (
-                            <Box
-                                key={record.id}
-                                display="flex"
-                                alignItems="center"
-                                marginBottom={1}
-                            >
-                                <Switch
-                                    value={isOn}
-                                    onChange={v => toggle(record, v)}
+                            <div key={record.id} style={styles.row}>
+                                <input
+                                    type="checkbox"
+                                    checked={isOn}
+                                    onChange={e => toggle(record, e.target.checked)}
                                     disabled={disabled}
-                                    label=""
-                                    width="auto"
                                 />
-                                <Text marginLeft={2} flex="1">
+                                <span style={styles.label}>
                                     <strong>{id}</strong> — {name}
-                                </Text>
-                                <Text textColor="light">{severity}</Text>
-                            </Box>
+                                </span>
+                                <span style={styles.sev}>{severity}</span>
+                            </div>
                         );
                     })}
-                </Box>
+                </div>
             )}
-        </Box>
+        </div>
     );
 }
