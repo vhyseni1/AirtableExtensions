@@ -1,44 +1,57 @@
 import React, {useState} from 'react';
-import {Box, Heading, Text, Icon} from '@airtable/blocks/ui';
+
+const styles = {
+    wrap: {},
+    header: {
+        display: 'flex',
+        alignItems: 'center',
+        cursor: 'pointer',
+        userSelect: 'none',
+    },
+    caret: {
+        display: 'inline-block',
+        width: 16,
+        textAlign: 'center',
+        marginRight: 4,
+        color: '#6b7280',
+    },
+    h2: {fontSize: 14, fontWeight: 600, margin: 0},
+    body: {
+        marginTop: 8,
+        padding: 10,
+        background: '#f3f4f6',
+        borderRadius: 6,
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        fontSize: 12,
+        maxHeight: 320,
+        overflowY: 'auto',
+        whiteSpace: 'pre-wrap',
+    },
+    empty: {color: '#6b7280', margin: 0},
+    line: {margin: 0},
+};
 
 export default function LogPanel({lines}) {
     const [open, setOpen] = useState(false);
 
     return (
-        <Box>
-            <Box
-                display="flex"
-                alignItems="center"
-                style={{cursor: 'pointer'}}
-                onClick={() => setOpen(!open)}
-            >
-                <Icon name={open ? 'chevronDown' : 'chevronRight'} size={16} />
-                <Heading size="small" marginLeft={1}>
-                    Log ({lines.length})
-                </Heading>
-            </Box>
+        <div style={styles.wrap}>
+            <div style={styles.header} onClick={() => setOpen(!open)}>
+                <span style={styles.caret}>{open ? '▾' : '▸'}</span>
+                <h2 style={styles.h2}>Log ({lines.length})</h2>
+            </div>
 
             {open && (
-                <Box
-                    marginTop={2}
-                    padding={2}
-                    backgroundColor="lightGray1"
-                    style={{
-                        fontFamily: 'monospace',
-                        fontSize: 12,
-                        maxHeight: 320,
-                        overflowY: 'auto',
-                    }}
-                >
+                <div style={styles.body}>
                     {lines.length === 0 ? (
-                        <Text textColor="light">No log entries yet.</Text>
+                        <p style={styles.empty}>No log entries yet.</p>
                     ) : (
                         lines.map((line, i) => (
-                            <Text key={i} style={{whiteSpace: 'pre-wrap'}}>{line}</Text>
+                            <p key={i} style={styles.line}>{line}</p>
                         ))
                     )}
-                </Box>
+                </div>
             )}
-        </Box>
+        </div>
     );
 }

@@ -1,50 +1,94 @@
 import React from 'react';
-import {Box, Button, Text, ProgressBar, Heading} from '@airtable/blocks/ui';
+
+const styles = {
+    wrap: {marginBottom: 16},
+    btn: {
+        background: '#2563eb',
+        color: '#fff',
+        border: 'none',
+        padding: '10px 18px',
+        borderRadius: 6,
+        fontSize: 14,
+        fontWeight: 600,
+        cursor: 'pointer',
+    },
+    btnDisabled: {opacity: 0.6, cursor: 'not-allowed'},
+    progressWrap: {marginTop: 12},
+    progressText: {marginBottom: 6, fontSize: 13, color: '#374151'},
+    progressTrack: {
+        width: '100%',
+        height: 8,
+        background: '#e5e7eb',
+        borderRadius: 4,
+        overflow: 'hidden',
+    },
+    progressFill: {
+        height: '100%',
+        background: '#2563eb',
+        transition: 'width 120ms linear',
+    },
+    summary: {
+        marginTop: 16,
+        padding: 12,
+        border: '2px solid #d1d5db',
+        borderRadius: 6,
+    },
+    summaryH: {fontSize: 14, fontWeight: 600, margin: '0 0 8px 0'},
+    summarySection: {marginTop: 8},
+    summaryLabel: {fontWeight: 600, margin: '0 0 4px 0'},
+    summaryLine: {margin: 0, fontSize: 13},
+};
 
 export default function RunPanel({running, progress, summary, onRun}) {
     const label = running ? 'Running…' : summary ? 'Run again' : 'Run checks';
+    const pct = progress ? Math.round((progress.current / progress.total) * 100) : 0;
 
     return (
-        <Box marginBottom={3}>
-            <Button
-                variant="primary"
-                size="large"
+        <div style={styles.wrap}>
+            <button
+                style={{...styles.btn, ...(running ? styles.btnDisabled : {})}}
                 disabled={running}
                 onClick={onRun}
             >
                 {label}
-            </Button>
+            </button>
 
             {running && progress && (
-                <Box marginTop={2}>
-                    <Text marginBottom={1}>
+                <div style={styles.progressWrap}>
+                    <div style={styles.progressText}>
                         Rule {progress.current} of {progress.total}: {progress.ruleId} — {progress.ruleName}
-                    </Text>
-                    <ProgressBar progress={progress.current / progress.total} />
-                </Box>
+                    </div>
+                    <div style={styles.progressTrack}>
+                        <div style={{...styles.progressFill, width: `${pct}%`}} />
+                    </div>
+                </div>
             )}
 
             {summary && !running && (
-                <Box marginTop={3} padding={2} border="thick" borderRadius="default">
-                    <Heading size="small" marginBottom={2}>Summary</Heading>
-                    <Text>Total exceptions: <strong>{summary.total}</strong></Text>
-                    <Text>Duration: {summary.duration.toFixed(1)}s</Text>
+                <div style={styles.summary}>
+                    <h2 style={styles.summaryH}>Summary</h2>
+                    <p style={styles.summaryLine}>
+                        Total exceptions: <strong>{summary.total}</strong>
+                    </p>
+                    <p style={styles.summaryLine}>
+                        Duration: {summary.duration.toFixed(1)}s
+                    </p>
 
-                    <Box marginTop={2}>
-                        <Text variant="paragraph"><strong>By severity</strong></Text>
+                    <div style={styles.summarySection}>
+                        <p style={styles.summaryLabel}>By severity</p>
                         {Object.entries(summary.severity).map(([k, v]) => (
-                            <Text key={k}>{k}: {v}</Text>
+                            <p key={k} style={styles.summaryLine}>{k}: {v}</p>
                         ))}
-                    </Box>
+                    </div>
 
-                    <Box marginTop={2}>
-                        <Text variant="paragraph"><strong>By dimension</strong></Text>
+                    <div style={styles.summarySection}>
+                        <p style={styles.summaryLabel}>By dimension</p>
                         {Object.entries(summary.dimension).map(([k, v]) => (
-                            <Text key={k}>{k}: {v}</Text>
+                            <p key={k} style={styles.summaryLine}>{k}: {v}</p>
                         ))}
-                    </Box>
-                </Box>
+                    </div>
+                </div>
             )}
-        </Box>
+        </div>
     );
 }
