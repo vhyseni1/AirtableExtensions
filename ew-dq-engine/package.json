@@ -1,0 +1,10 @@
+{
+  "name": "ew-dq-engine",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@airtable/blocks": "^1.18.0",
+    "react": "16.13.1",
+    "react-dom": "16.13.1"
+  }
+}
