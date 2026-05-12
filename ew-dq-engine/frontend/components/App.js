@@ -1,23 +1,9 @@
 import React, {useState, useMemo} from 'react';
-import {useBase, useRecords} from '@airtable/blocks/interface/ui';
+import {useBase, useRecords, Box, Heading, Text} from '@airtable/blocks/ui';
 import RunPanel from './RunPanel';
 import RulesPanel from './RulesPanel';
 import LogPanel from './LogPanel';
 import {runEngine} from '../engine/runner';
-
-const styles = {
-    root: {
-        padding: 16,
-        fontFamily:
-            '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-        color: '#1f2937',
-        fontSize: 14,
-        lineHeight: 1.4,
-    },
-    h1: {fontSize: 20, fontWeight: 600, margin: '0 0 4px 0'},
-    sub: {color: '#6b7280', marginBottom: 16},
-    error: {color: '#b91c1c'},
-};
 
 export default function App() {
     const base = useBase();
@@ -90,20 +76,22 @@ export default function App() {
 
     if (!rulesTable || !resultsTable) {
         return (
-            <div style={styles.root}>
-                <h1 style={styles.h1}>EW Data Quality Engine</h1>
-                <p style={styles.error}>
+            <Box padding={3}>
+                <Heading>EW Data Quality Engine</Heading>
+                <Text textColor="red">
                     Missing required table. This extension expects tables named
                     "Rules" and "DQ_Results" in the current base.
-                </p>
-            </div>
+                </Text>
+            </Box>
         );
     }
 
     return (
-        <div style={styles.root}>
-            <h1 style={styles.h1}>EW Data Quality Engine</h1>
-            <div style={styles.sub}>Last run: {lastRun || '—'}</div>
+        <Box padding={3}>
+            <Heading>EW Data Quality Engine</Heading>
+            <Text textColor="light" marginBottom={3}>
+                Last run: {lastRun || '—'}
+            </Text>
             <RunPanel
                 running={running}
                 progress={progress}
@@ -116,6 +104,6 @@ export default function App() {
                 disabled={running}
             />
             <LogPanel lines={log} />
-        </div>
+        </Box>
     );
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import {initializeBlock} from '@airtable/blocks/interface/ui';
+import {initializeBlock} from '@airtable/blocks/ui';
 import App from './components/App';
 
-initializeBlock({interface: () => <App />});
+initializeBlock(() => <App />);
