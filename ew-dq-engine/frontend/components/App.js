@@ -1,64 +1,15 @@
 import React, {useState, useMemo} from 'react';
-import {useBase, useRecords} from '@airtable/blocks/interface/ui';
+import {useBase, useRecords, Box, Heading, Text} from '@airtable/blocks/ui';
 import RunPanel from './RunPanel';
 import RulesPanel from './RulesPanel';
 import LogPanel from './LogPanel';
 import {runEngine} from '../engine/runner';
 
-const styles = {
-    root: {
-        padding: 16,
-        fontFamily:
-            '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-        color: '#1f2937',
-        fontSize: 14,
-        lineHeight: 1.4,
-    },
-    h1: {fontSize: 20, fontWeight: 600, margin: '0 0 4px 0'},
-    sub: {color: '#6b7280', marginBottom: 16},
-    error: {color: '#b91c1c', whiteSpace: 'pre-wrap'},
-    list: {margin: '8px 0 0 0', paddingLeft: 20},
-};
-
-const REQUIRED = ['EPP', 'Fieldglass', 'PurchaseOrders', 'Spend', 'Valid_Cost_Centers', 'Rules', 'DQ_Results'];
-
 export default function App() {
     const base = useBase();
-
-    const missing = REQUIRED.filter(name => !base.getTableByNameIfExists(name));
-    if (missing.length > 0) {
-        return (
-            <div style={styles.root}>
-                <h1 style={styles.h1}>EW Data Quality Engine</h1>
-                <p style={styles.error}>
-                    The following table(s) are not reachable from this interface extension:
-                </p>
-                <ul style={styles.list}>
-                    {missing.map(n => <li key={n}>{n}</li>)}
-                </ul>
-                <p style={styles.error}>
-                    Interface extensions typically need each source table bound via the
-                    interface page's extension configuration. If the tables exist in the
-                    base, open the interface page in Designer, edit this extension, and
-                    grant it access to the required tables.
-                </p>
-            </div>
-        );
-    }
-
     const rulesTable = base.getTableByNameIfExists('Rules');
     const resultsTable = base.getTableByNameIfExists('DQ_Results');
 
-    return (
-        <AppInner
-            base={base}
-            rulesTable={rulesTable}
-            resultsTable={resultsTable}
-        />
-    );
-}
-
-function AppInner({base, rulesTable, resultsTable}) {
     const ruleRecords = useRecords(rulesTable);
     const resultRecords = useRecords(resultsTable);
 
@@ -85,6 +36,10 @@ function AppInner({base, rulesTable, resultsTable}) {
     };
 
     async function handleRun() {
+        if (!rulesTable || !resultsTable) {
+            appendLog('Missing Rules or DQ_Results table.');
+            return;
+        }
         setRunning(true);
         setSummary(null);
         setProgress(null);
@@ -119,10 +74,24 @@ function AppInner({base, rulesTable, resultsTable}) {
         }
     }
 
+    if (!rulesTable || !resultsTable) {
+        return (
+            <Box padding={3}>
+                <Heading>EW Data Quality Engine</Heading>
+                <Text textColor="red">
+                    Missing required table. This extension expects tables named
+                    "Rules" and "DQ_Results" in the current base.
+                </Text>
+            </Box>
+        );
+    }
+
     return (
-        <div style={styles.root}>
-            <h1 style={styles.h1}>EW Data Quality Engine</h1>
-            <div style={styles.sub}>Last run: {lastRun || '—'}</div>
+        <Box padding={3}>
+            <Heading>EW Data Quality Engine</Heading>
+            <Text textColor="light" marginBottom={3}>
+                Last run: {lastRun || '—'}
+            </Text>
             <RunPanel
                 running={running}
                 progress={progress}
@@ -135,6 +104,6 @@ function AppInner({base, rulesTable, resultsTable}) {
                 disabled={running}
             />
             <LogPanel lines={log} />
-        </div>
+        </Box>
     );
 }
