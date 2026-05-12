@@ -11,10 +11,19 @@ const RULES_FIELDS = ['Rule_ID', 'Rule_Name', 'DQ_Dimension', 'Severity', 'Scope
 
 const EPP_FIELDS = ['Worker_ID', 'RRP_ID', 'Company_Code', 'Roche_Country'];
 
+function safeCellValue(record, field) {
+    try {
+        return record.getCellValue(field);
+    } catch (e) {
+        return null;
+    }
+}
+
 function extract(record, fieldNames) {
+    if (!record) return null;
     const out = {_recordId: record.id};
     for (const f of fieldNames) {
-        const v = record.getCellValue(f);
+        const v = safeCellValue(record, f);
         if (v && typeof v === 'object' && 'name' in v) {
             out[f] = v.name;
         } else {
@@ -25,33 +34,34 @@ function extract(record, fieldNames) {
 }
 
 function normalizeRecords(records, fieldNames) {
-    if (!records) return null;
-    return records.map(r => extract(r, fieldNames));
+    if (!records) return [];
+    return records.map(r => extract(r, fieldNames)).filter(Boolean);
 }
 
-export default function useDqData() {
+export function useDqTables() {
     const base = useBase();
-    const dqResultsTable = base.getTableByNameIfExists('DQ_Results');
-    const rulesTable = base.getTableByNameIfExists('Rules');
-    const eppTable = base.getTableByNameIfExists('EPP');
-
-    const dqResultsRecords = useRecords(dqResultsTable, {fields: DQ_RESULTS_FIELDS});
-    const rulesRecords = useRecords(rulesTable, {fields: RULES_FIELDS});
-    const eppRecords = useRecords(eppTable, {fields: EPP_FIELDS});
+    const dqResultsTable = base ? base.getTableByNameIfExists('DQ_Results') : null;
+    const rulesTable = base ? base.getTableByNameIfExists('Rules') : null;
+    const eppTable = base ? base.getTableByNameIfExists('EPP') : null;
 
     const missingTables = [];
     if (!dqResultsTable) missingTables.push('DQ_Results');
     if (!rulesTable) missingTables.push('Rules');
     if (!eppTable) missingTables.push('EPP');
 
-    const raw = useMemo(() => {
-        if (missingTables.length) return null;
-        return {
-            dqResults: normalizeRecords(dqResultsRecords, DQ_RESULTS_FIELDS) || [],
-            rules: normalizeRecords(rulesRecords, RULES_FIELDS) || [],
-            epp: normalizeRecords(eppRecords, EPP_FIELDS) || [],
-        };
-    }, [dqResultsRecords, rulesRecords, eppRecords, missingTables.length]);
+    return {dqResultsTable, rulesTable, eppTable, missingTables};
+}
 
-    return {raw, missingTables};
+export default function useDqData({dqResultsTable, rulesTable, eppTable}) {
+    const dqResultsRecords = useRecords(dqResultsTable, {fields: DQ_RESULTS_FIELDS});
+    const rulesRecords = useRecords(rulesTable, {fields: RULES_FIELDS});
+    const eppRecords = useRecords(eppTable, {fields: EPP_FIELDS});
+
+    const raw = useMemo(() => ({
+        dqResults: normalizeRecords(dqResultsRecords, DQ_RESULTS_FIELDS),
+        rules: normalizeRecords(rulesRecords, RULES_FIELDS),
+        epp: normalizeRecords(eppRecords, EPP_FIELDS),
+    }), [dqResultsRecords, rulesRecords, eppRecords]);
+
+    return {raw, eppRecords};
 }

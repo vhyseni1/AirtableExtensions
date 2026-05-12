@@ -1,5 +1,5 @@
 import React, {useState} from 'react';
-import {useBase, useRecords, expandRecord} from '@airtable/blocks/interface/ui';
+import {expandRecord} from '@airtable/blocks/interface/ui';
 import Card from './Card';
 import {colors, typography} from '../theme';
 
@@ -105,16 +105,21 @@ export default function ExceptionList({
     allHighSeverity,
     activeRrp,
     onClearRrp,
+    eppRecords,
 }) {
     const [showAll, setShowAll] = useState(false);
-    const base = useBase();
-    const eppTable = base.getTableByNameIfExists('EPP');
-    const eppRecords = useRecords(eppTable, {fields: ['Worker_ID']});
 
     function handleExpandRecord(recordId) {
-        if (!eppTable || !eppRecords || !recordId) return;
-        const match = eppRecords.find(r => r.getCellValueAsString('Worker_ID') === String(recordId));
-        if (match) expandRecord(match);
+        if (!eppRecords || !recordId) return;
+        try {
+            const match = eppRecords.find(
+                r => r && r.getCellValueAsString('Worker_ID') === String(recordId),
+            );
+            if (match) expandRecord(match);
+        } catch (e) {
+            // expandRecord may not be available in all interface contexts;
+            // silently ignore if it isn't.
+        }
     }
 
     const total = allHighSeverity ? allHighSeverity.length : 0;

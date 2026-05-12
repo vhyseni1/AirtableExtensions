@@ -1,6 +1,6 @@
 import React, {useState, useMemo} from 'react';
 import {colors, spacing, typography} from './theme';
-import useDqData from './hooks/useDqData';
+import useDqData, {useDqTables} from './hooks/useDqData';
 import useFilteredData from './hooks/useFilteredData';
 import Header from './components/Header';
 import FilterBar from './components/FilterBar';
@@ -19,15 +19,24 @@ const DEFAULT_FILTERS = {
     ownerRrp: 'All',
 };
 
-function MissingTables({missingTables}) {
+function PageShell({children}) {
     return (
         <div
             style={{
                 background: colors.bgPage,
                 minHeight: '100vh',
                 fontFamily: typography.family,
+                color: colors.textPrimary,
             }}
         >
+            {children}
+        </div>
+    );
+}
+
+function MissingTables({missingTables}) {
+    return (
+        <PageShell>
             <Header lastRefresh={null} onRefresh={() => {}} />
             <div
                 style={{
@@ -52,80 +61,56 @@ function MissingTables({missingTables}) {
                     Missing required tables
                 </h1>
                 <p style={{margin: 0, marginBottom: 12, color: colors.textSecondary, fontSize: 14}}>
-                    This dashboard expects the following tables to exist in the current base:
+                    This dashboard expects the following tables to exist in the current base
+                    and be exposed to this interface page:
                 </p>
                 <ul style={{margin: 0, paddingLeft: 20, color: colors.textPrimary, fontSize: 14}}>
                     {missingTables.map(t => (
-                        <li key={t}><code style={{fontFamily: 'ui-monospace, monospace'}}>{t}</code></li>
+                        <li key={t}>
+                            <code style={{fontFamily: 'ui-monospace, monospace'}}>{t}</code>
+                        </li>
                     ))}
                 </ul>
                 <p style={{marginTop: 16, color: colors.textTertiary, fontSize: 12}}>
-                    Install the EW Data Quality Engine extension first — it creates and
-                    populates <code>DQ_Results</code>. The dashboard reads from the
-                    same base.
+                    If the EW Data Quality Engine extension is installed and these tables
+                    exist in the base, open the interface in edit mode and add the missing
+                    tables as data sources for this page.
                 </p>
             </div>
-        </div>
+        </PageShell>
     );
 }
 
-export default function App() {
+function Loading() {
+    return (
+        <PageShell>
+            <div style={{padding: 32, color: colors.textTertiary}}>Loading…</div>
+        </PageShell>
+    );
+}
+
+function Dashboard({tables}) {
     const [filters, setFilters] = useState(DEFAULT_FILTERS);
     const [refreshTick, setRefreshTick] = useState(Date.now());
 
-    const {raw, missingTables} = useDqData();
+    const {raw, eppRecords} = useDqData(tables);
     const data = useFilteredData(raw, filters);
 
     const activeRulesCount = useMemo(() => {
         if (!raw) return 0;
-        return raw.rules.filter(r => r.Active === 'Yes').length;
+        return raw.rules.filter(r => r && r.Active === 'Yes').length;
     }, [raw]);
 
-    if (missingTables.length > 0) {
-        return <MissingTables missingTables={missingTables} />;
-    }
+    if (!data) return <Loading />;
 
-    if (!data) {
-        return (
-            <div
-                style={{
-                    background: colors.bgPage,
-                    minHeight: '100vh',
-                    fontFamily: typography.family,
-                    color: colors.textTertiary,
-                    padding: 32,
-                }}
-            >
-                Loading…
-            </div>
-        );
-    }
-
-    function handleSelectRrp(rrp) {
+    const handleSelectRrp = (rrp) =>
         setFilters(f => ({...f, ownerRrp: f.ownerRrp === rrp ? 'All' : rrp}));
-    }
-
-    function handleClearRrp() {
-        setFilters(f => ({...f, ownerRrp: 'All'}));
-    }
-
-    function handleReset() {
-        setFilters(DEFAULT_FILTERS);
-    }
-
-    function handleRefresh() {
-        setRefreshTick(Date.now());
-    }
+    const handleClearRrp = () => setFilters(f => ({...f, ownerRrp: 'All'}));
+    const handleReset = () => setFilters(DEFAULT_FILTERS);
+    const handleRefresh = () => setRefreshTick(Date.now());
 
     return (
-        <div
-            style={{
-                background: colors.bgPage,
-                minHeight: '100vh',
-                fontFamily: typography.family,
-                color: colors.textPrimary,
-            }}
-        >
+        <PageShell>
             <Header
                 lastRefresh={new Date(refreshTick).toISOString()}
                 onRefresh={handleRefresh}
@@ -171,6 +156,7 @@ export default function App() {
                     allHighSeverity={data.allHighSeverity}
                     activeRrp={filters.ownerRrp === 'All' ? null : filters.ownerRrp}
                     onClearRrp={handleClearRrp}
+                    eppRecords={eppRecords}
                 />
                 <RunHistoryFooter
                     lastRunTimestamp={data.lastRunTimestamp}
@@ -178,6 +164,16 @@ export default function App() {
                     totalExceptions={raw ? raw.dqResults.length : 0}
                 />
             </div>
-        </div>
+        </PageShell>
     );
+}
+
+export default function App() {
+    const {dqResultsTable, rulesTable, eppTable, missingTables} = useDqTables();
+
+    if (missingTables.length > 0) {
+        return <MissingTables missingTables={missingTables} />;
+    }
+
+    return <Dashboard tables={{dqResultsTable, rulesTable, eppTable}} />;
 }
