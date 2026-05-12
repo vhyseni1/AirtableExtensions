@@ -78,6 +78,21 @@ for the implementation and the brief for exact logic per rule.
 With the v1 reference dataset (EPP 154, FG 143, PO 141, Spend 353), a clean run
 produces approximately 149 exceptions in under 30 seconds.
 
+## Offline sanity check
+
+Before loading data into Airtable, verify rule counts against the v1 reference
+CSVs:
+
+```bash
+# Drop the 7 CSVs into ./data/ (or pass a path)
+node scripts/check-rules.mjs              # uses ./data
+node scripts/check-rules.mjs /path/to/csvs
+```
+
+Prints per-rule actual vs expected counts and exits non-zero if any rule is
+outside ±2 of expected or if R009 (uniqueness) returns an odd count. No
+dependencies, no Airtable connection — runs straight from rules.js.
+
 ## File layout
 
 ```
@@ -96,4 +111,7 @@ ew-dq-engine/
       rules.js      map of Rule_ID → async function(sources) => exceptions[]
       sources.js    load + index source tables
       writer.js     truncate + batch-write DQ_Results (50/batch)
+      package.json  marks this dir as ESM so check-rules.mjs can import rules.js
+  scripts/
+    check-rules.mjs  offline sanity check against local CSVs
 ```
