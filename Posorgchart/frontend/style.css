@@ -158,6 +158,20 @@
     max-width: 1320px;
 }
 
+.org-header {
+    width: 100%;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 12px 12px;
+    margin-bottom: 4px;
+    border-bottom: 2px solid #2563eb;
+}
+
+.org-header-name { font-size: 16px; font-weight: 700; color: #0f172a; }
+.org-header-count { font-size: 12px; color: #64748b; white-space: nowrap; }
+
 /* dropdown menus (export) */
 .export-wrap { position: relative; display: inline-flex; }
 

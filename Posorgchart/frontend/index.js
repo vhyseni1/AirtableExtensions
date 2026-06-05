@@ -36,6 +36,9 @@ const FIELDS = {
     parentLinkField: 'Future Manager',
     employeeIdField: '[E] Employee ID',
     managerIdField: '[F] Manager ID',
+    // Field powering the "Organization" checkbox filter. Falls back to the
+    // department field if this name doesn't resolve.
+    orgFilterField: 'Future Organization',
 };
 
 // ─── Field helpers ────────────────────────────────────────────────────────────
@@ -139,7 +142,7 @@ function sampleValue(records, field) {
 
 function buildOrg(records, cfg) {
     const {parentField, nameField, jobTitleField, departmentField, statusField,
-        employeeIdField, managerIdField} = cfg;
+        employeeIdField, managerIdField, orgFilterField} = cfg;
     const nodeMap = {};
     const idByName = {};
     const idByEmployeeId = {}; // employee-id value → record id
@@ -158,6 +161,7 @@ function buildOrg(records, cfg) {
             vacant,
             jobTitle,
             department: readText(r, departmentField),
+            org: readText(r, orgFilterField),
             status: readText(r, statusField),
             childIds: [],
             parentId: null,
@@ -403,10 +407,28 @@ function drawPersonCard(pdf, x, y, w, h, card, isFocus) {
     }
 }
 
-// managers: [{manager: card, reports: [card, ...]}]; each card is
-// {name, title, dept, directs, total}. Each manager starts on a new page; the
-// manager card repeats on top of each of its pages; footer reads "Page x / y".
-function exportVectorPDF(managers) {
+// Banner header used by org-filter sections (org name + position count).
+function drawOrgBanner(pdf, x, y, w, h, name, count) {
+    pdf.setFillColor(239, 246, 255);
+    pdf.setDrawColor(...PDF_COLORS.borderFocus);
+    pdf.setLineWidth(0.8);
+    pdf.roundedRect(x, y, w, h, 5, 5, 'FD');
+    pdf.setFillColor(...PDF_COLORS.borderFocus);
+    pdf.rect(x, y + 4, 4, h - 8, 'F');
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(12);
+    pdf.setTextColor(...PDF_COLORS.name);
+    pdf.text(pdf.splitTextToSize(String(name), w - 170)[0], x + 14, y + h / 2 + 4);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9);
+    pdf.setTextColor(...PDF_COLORS.title);
+    pdf.text(`${count} position${count !== 1 ? 's' : ''}`, x + w - 12, y + h / 2 + 4, {align: 'right'});
+}
+
+// sections: [{kind:'manager'|'org', header, reports:[card,...]}].
+// Each section starts on a new page; its header (manager card, or org banner)
+// repeats on top of each of its pages; footer reads "Page x / y".
+function exportVectorPDF(sections) {
     const pdf = new jsPDF({orientation: 'landscape', unit: 'pt', format: 'a4'});
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
@@ -421,28 +443,32 @@ function exportVectorPDF(managers) {
     const cols = Math.max(1, Math.min(6, Math.floor((availW + colGap) / (targetCardW + colGap))));
     const cardW = (availW - (cols - 1) * colGap) / cols;
     const cardH = 88;
-    // Manager header: spans two report columns, same height as a report card —
-    // emphasized by the blue border/accent rather than by being oversized.
     const mgrW = Math.min(2 * cardW + colGap, availW);
-    const mgrH = cardH;
-    const gridTop = margin + mgrH + headerGap;
-    const reportsAvailH = pageH - margin - footer - gridTop;
-    const rowsPerPage = Math.max(1, Math.floor((reportsAvailH + rowGap) / (cardH + rowGap)));
+    const orgHeaderH = 38;
 
-    const pagesFor = m => {
-        const rows = Math.ceil(m.reports.length / cols);
-        return Math.max(1, Math.ceil(rows / rowsPerPage) || 1);
+    const headerHFor = sec => (sec.kind === 'org' ? orgHeaderH : cardH);
+    const rowsPerPageFor = sec => {
+        const avail = pageH - margin - footer - (margin + headerHFor(sec) + headerGap);
+        return Math.max(1, Math.floor((avail + rowGap) / (cardH + rowGap)));
     };
-    const totalPages = managers.reduce((s, m) => s + pagesFor(m), 0);
+    const pagesFor = sec =>
+        Math.max(1, Math.ceil(Math.ceil(sec.reports.length / cols) / rowsPerPageFor(sec)) || 1);
+    const totalPages = sections.reduce((s, sec) => s + pagesFor(sec), 0);
 
     let pageIndex = 0;
-    managers.forEach(m => {
-        const rowsTotal = Math.ceil(m.reports.length / cols);
-        const nPages = pagesFor(m);
+    sections.forEach(sec => {
+        const headerH = headerHFor(sec);
+        const gridTop = margin + headerH + headerGap;
+        const rowsPerPage = rowsPerPageFor(sec);
+        const rowsTotal = Math.ceil(sec.reports.length / cols);
+        const nPages = pagesFor(sec);
         for (let pg = 0; pg < nPages; pg++) {
             if (pageIndex > 0) pdf.addPage();
-            // Manager card on top of every page for this manager.
-            drawPersonCard(pdf, margin + (availW - mgrW) / 2, margin, mgrW, mgrH, m.manager, true);
+            if (sec.kind === 'org') {
+                drawOrgBanner(pdf, margin, margin, availW, orgHeaderH, sec.header.name, sec.header.count);
+            } else {
+                drawPersonCard(pdf, margin + (availW - mgrW) / 2, margin, mgrW, cardH, sec.header, true);
+            }
 
             const startRow = pg * rowsPerPage;
             const endRow = Math.min(rowsTotal, startRow + rowsPerPage);
@@ -450,9 +476,9 @@ function exportVectorPDF(managers) {
                 const y = gridTop + (row - startRow) * (cardH + rowGap);
                 for (let c = 0; c < cols; c++) {
                     const idx = row * cols + c;
-                    if (idx >= m.reports.length) break;
+                    if (idx >= sec.reports.length) break;
                     const x = margin + c * (cardW + colGap);
-                    drawPersonCard(pdf, x, y, cardW, cardH, m.reports[idx], false);
+                    drawPersonCard(pdf, x, y, cardW, cardH, sec.reports[idx], false);
                 }
             }
 
@@ -683,6 +709,7 @@ function FieldsModal({table, cfg, records, onClose}) {
         ['Manager link', FIELDS.parentLinkField, cfg.parentField],
         ['Employee id', FIELDS.employeeIdField, cfg.employeeIdField],
         ['Manager id', FIELDS.managerIdField, cfg.managerIdField],
+        ['Org filter', FIELDS.orgFilterField, cfg.orgFilterField],
     ];
 
     const clip = s => (s.length > 60 ? s.slice(0, 60) + '…' : s);
@@ -818,12 +845,42 @@ function ManagerSection({node, nodeMap, totals, statusColors, showAvatar, onDril
     );
 }
 
+// An organization + the positions in it (used by the Organization filter view).
+function OrgSection({org, members, totals, statusColors, showAvatar, onDrill, onOpen}) {
+    return (
+        <div className="manager-section">
+            <div className="org-header">
+                <span className="org-header-name">{org}</span>
+                <span className="org-header-count">
+                    {members.length} position{members.length !== 1 ? 's' : ''}
+                </span>
+            </div>
+            <div className="reports-grid">
+                {members.map(n => (
+                    <PersonCard
+                        key={n.id}
+                        node={n}
+                        variant="report"
+                        directs={n.childIds.length}
+                        total={totals[n.id] || 0}
+                        statusColor={n.status ? statusColors[n.status] : null}
+                        showAvatar={showAvatar}
+                        onDrill={onDrill}
+                        onOpen={onOpen}
+                    />
+                ))}
+            </div>
+        </div>
+    );
+}
+
 // ─── Main Workday-style chart ─────────────────────────────────────────────────
 
 function WorkdayChart({table}) {
     const records = useRecords(table);
     const [focusIdState, setFocusIdState] = useState(null);
     const [managerFilter, setManagerFilter] = useState(() => new Set());
+    const [orgFilter, setOrgFilter] = useState(() => new Set());
     const [showAvatars, setShowAvatars] = useState(true);
     const [showAbout, setShowAbout] = useState(false);
     const [showFields, setShowFields] = useState(false);
@@ -836,14 +893,17 @@ function WorkdayChart({table}) {
         const parentField = FIELDS.parentLinkField
             ? findFieldByName(table, FIELDS.parentLinkField)
             : (table.fields.find(f => f.type === 'multipleRecordLinks') || null);
+        const departmentField = findFieldByName(table, FIELDS.departmentField);
         return {
             nameField,
             jobTitleField: findFieldByName(table, FIELDS.jobTitleField),
-            departmentField: findFieldByName(table, FIELDS.departmentField),
+            departmentField,
             statusField: findFieldByName(table, FIELDS.statusField),
             parentField,
             employeeIdField: findFieldByName(table, FIELDS.employeeIdField),
             managerIdField: findFieldByName(table, FIELDS.managerIdField),
+            // Org filter field, falling back to the department/supervisory org.
+            orgFilterField: findFieldByName(table, FIELDS.orgFilterField) || departmentField,
         };
     }, [table]);
     const cfgKey = Object.values(cfg).map(f => (f ? f.id : '∅')).join('|');
@@ -871,6 +931,29 @@ function WorkdayChart({table}) {
             });
     }, [nodeMap]);
 
+    // Organizations = distinct values of the org field, with a position count.
+    const orgOptions = useMemo(() => {
+        const counts = new Map();
+        Object.values(nodeMap).forEach(n => {
+            const org = (n.org || '').trim();
+            if (org) counts.set(org, (counts.get(org) || 0) + 1);
+        });
+        return [...counts.entries()]
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([org, c]) => ({value: org, label: org, sub: `${c} position${c !== 1 ? 's' : ''}`}));
+    }, [nodeMap]);
+
+    // The Manager and Organization filters are mutually exclusive — selecting in
+    // one clears the other so the board shows a single, unambiguous view.
+    const selectManagers = useCallback(next => {
+        setManagerFilter(next);
+        if (next.size) setOrgFilter(new Set());
+    }, []);
+    const selectOrgs = useCallback(next => {
+        setOrgFilter(next);
+        if (next.size) setManagerFilter(new Set());
+    }, []);
+
     const defaultFocusId = useMemo(() => {
         if (rootIds.length === 0) return null;
         return [...rootIds].sort((a, b) => (totals[b] || 0) - (totals[a] || 0))[0];
@@ -885,22 +968,37 @@ function WorkdayChart({table}) {
     );
 
     const drill = useCallback(id => setFocusIdState(id), []);
-    // Clicking a card while a manager filter is active jumps to normal navigation.
+    // Clicking a card while a filter is active jumps back to normal navigation.
     const drillFromFilter = useCallback(id => {
         setManagerFilter(new Set());
+        setOrgFilter(new Set());
         setFocusIdState(id);
     }, []);
     const openRecord = useCallback(node => { if (node && node.record) expandRecord(node.record); }, []);
 
-    const filterActive = managerFilter.size > 0;
+    const managerActive = managerFilter.size > 0;
+    const orgActive = orgFilter.size > 0;
+    const filterActive = managerActive || orgActive;
     const selectedManagers = useMemo(
         () => [...managerFilter].filter(id => nodeMap[id]),
         [managerFilter, nodeMap],
     );
+    // Selected orgs → the positions in each, sorted managers-first then by name.
+    const selectedOrgs = useMemo(() => {
+        if (!orgActive) return [];
+        return [...orgFilter].sort((a, b) => a.localeCompare(b)).map(org => ({
+            org,
+            members: Object.values(nodeMap)
+                .filter(n => (n.org || '').trim() === org)
+                .sort((a, b) =>
+                    (b.childIds.length > 0) - (a.childIds.length > 0) ||
+                    a.displayName.localeCompare(b.displayName)),
+        }));
+    }, [orgActive, orgFilter, nodeMap]);
 
-    // Build the data the vector PDF draws from: one entry per manager, each with
-    // its direct reports. Filter view = the selected managers; otherwise the
-    // currently focused person.
+    // Build the sections the vector PDF draws: a manager section (manager card +
+    // direct reports) per manager, OR an org section (org banner + members) per
+    // organization, OR the focused manager when no filter is active.
     const buildExportData = useCallback(() => {
         const toCard = n => ({
             name: n.displayName,
@@ -911,14 +1009,22 @@ function WorkdayChart({table}) {
             total: totals[n.id] || 0,
             vacant: n.vacant,
         });
-        const ids = filterActive
+        if (orgActive) {
+            return selectedOrgs.map(({org, members}) => ({
+                kind: 'org',
+                header: {name: org, count: members.length},
+                reports: members.map(toCard),
+            }));
+        }
+        const ids = managerActive
             ? [...selectedManagers].sort((a, b) => nodeMap[a].displayName.localeCompare(nodeMap[b].displayName))
             : (focusId ? [focusId] : []);
         return ids.map(id => ({
-            manager: toCard(nodeMap[id]),
+            kind: 'manager',
+            header: toCard(nodeMap[id]),
             reports: nodeMap[id].childIds.map(c => toCard(nodeMap[c])),
         }));
-    }, [filterActive, selectedManagers, focusId, nodeMap, totals]);
+    }, [orgActive, selectedOrgs, managerActive, selectedManagers, focusId, nodeMap, totals]);
 
     if (!focus) {
         return (
@@ -948,15 +1054,25 @@ function WorkdayChart({table}) {
                         label="Manager"
                         options={managerOptions}
                         selected={managerFilter}
-                        onChange={setManagerFilter}
+                        onChange={selectManagers}
                     />
+                    {cfg.orgFilterField && (
+                        <CheckboxFilter
+                            label="Organization"
+                            options={orgOptions}
+                            selected={orgFilter}
+                            onChange={selectOrgs}
+                        />
+                    )}
                     {filterActive && (
                         <button
                             className="tb-btn tb-btn-clear"
-                            onClick={() => setManagerFilter(new Set())}
-                            title="Clear manager filter"
+                            onClick={() => { setManagerFilter(new Set()); setOrgFilter(new Set()); }}
+                            title="Clear filters"
                         >
-                            Clear · {selectedManagers.length} manager{selectedManagers.length !== 1 ? 's' : ''}
+                            {orgActive
+                                ? `Clear · ${selectedOrgs.length} org${selectedOrgs.length !== 1 ? 's' : ''}`
+                                : `Clear · ${selectedManagers.length} manager${selectedManagers.length !== 1 ? 's' : ''}`}
                         </button>
                     )}
                 </div>
@@ -1001,7 +1117,25 @@ function WorkdayChart({table}) {
 
             {/* Board */}
             <div className="board-scroll">
-                {filterActive ? (
+                {orgActive ? (
+                    <div className="board board-filtered" ref={boardRef}>
+                        {selectedOrgs.length === 0 && (
+                            <div className="no-reports">No matching organizations.</div>
+                        )}
+                        {selectedOrgs.map(({org, members}) => (
+                            <OrgSection
+                                key={org}
+                                org={org}
+                                members={members}
+                                totals={totals}
+                                statusColors={statusColors}
+                                showAvatar={showAvatars}
+                                onDrill={drillFromFilter}
+                                onOpen={openRecord}
+                            />
+                        ))}
+                    </div>
+                ) : managerActive ? (
                     <div className="board board-filtered" ref={boardRef}>
                         {selectedManagers.length === 0 && (
                             <div className="no-reports">No matching managers.</div>
