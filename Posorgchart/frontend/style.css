@@ -356,7 +356,7 @@
 
 .person-card-focus .person-avatar { width: 64px; height: 64px; font-size: 22px; }
 
-.person-info { width: 100%; }
+.person-info { width: 100%; flex: 1 1 auto; }
 
 .person-name {
     font-size: 14px;
