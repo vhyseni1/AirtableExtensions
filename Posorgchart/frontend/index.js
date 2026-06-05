@@ -293,11 +293,19 @@ function timestamp() {
 }
 
 async function exportPNG(boardEl) {
-    const canvas = await renderChartCanvas(boardEl, {scale: 2});
+    const canvas = await renderChartCanvas(boardEl, {scale: 3});
     downloadDataUrl(canvas.toDataURL('image/png'), `org-chart-${timestamp()}.png`);
 }
 
-const EXPORT_SCALE = 2;
+const TARGET_DPI = 300;
+
+// Capture scale needed so an element that will be drawn `widthPt` points wide
+// lands near TARGET_DPI. Clamped so files/memory stay reasonable.
+function exportScaleFor(widthPx, widthPt) {
+    const targetPx = (widthPt / 72) * TARGET_DPI;
+    const scale = targetPx / Math.max(1, widthPx);
+    return Math.max(2, Math.min(4, scale));
+}
 
 function sliceToDataUrl(canvas, sy, sh) {
     const tile = document.createElement('canvas');
@@ -311,9 +319,9 @@ function sliceToDataUrl(canvas, sy, sh) {
 }
 
 // Measure the vertical band of each card row inside a flex-wrapped grid, in
-// canvas pixels (= CSS px × EXPORT_SCALE). Lets us paginate on row boundaries so
-// cards are never sliced in half.
-function measureRows(gridEl) {
+// canvas pixels (= CSS px × scale). Lets us paginate on row boundaries so cards
+// are never sliced in half.
+function measureRows(gridEl, scale) {
     const gridTop = gridEl.getBoundingClientRect().top;
     const cards = gridEl.querySelectorAll(':scope > .person-card');
     const rows = [];
@@ -327,7 +335,7 @@ function measureRows(gridEl) {
         row.bottom = Math.max(row.bottom, bottom);
     });
     rows.sort((a, b) => a.top - b.top);
-    return rows.map(r => ({top: r.top * EXPORT_SCALE, bottom: r.bottom * EXPORT_SCALE}));
+    return rows.map(r => ({top: r.top * scale, bottom: r.bottom * scale}));
 }
 
 // Greedily pack rows into pages no taller than maxCanvasPx; returns {sy, sh}
@@ -354,9 +362,13 @@ function paginateRows(rows, canvasHeight, maxCanvasPx) {
 // fill the page width, and split the reports onto pages at card-row boundaries.
 async function layoutManager(focusEl, reportsEl, geom) {
     const {margin, availW, fullH, gap} = geom;
-    const rows = reportsEl ? measureRows(reportsEl) : [];
-    const headerCanvas = await renderChartCanvas(focusEl, {scale: EXPORT_SCALE});
-    const reportsCanvas = reportsEl ? await renderChartCanvas(reportsEl, {scale: EXPORT_SCALE}) : null;
+    // Capture at ~300 DPI relative to the page width so zooming the PDF stays
+    // sharp (the chart is embedded as a bitmap, not vector text).
+    const widthPx = (reportsEl ? reportsEl.scrollWidth : focusEl.scrollWidth) || 1;
+    const scale = exportScaleFor(widthPx, availW);
+    const rows = reportsEl ? measureRows(reportsEl, scale) : [];
+    const headerCanvas = await renderChartCanvas(focusEl, {scale});
+    const reportsCanvas = reportsEl ? await renderChartCanvas(reportsEl, {scale}) : null;
 
     const baseWidth = Math.max(headerCanvas.width, reportsCanvas ? reportsCanvas.width : 0) || 1;
     const renderScale = availW / baseWidth;
