@@ -678,10 +678,14 @@ function PersonCard({node, variant, directs, total, statusColor, showAvatar, onD
                 <div className="person-name">{node.displayName}</div>
                 {node.jobTitle && <div className="person-title">{node.jobTitle}</div>}
                 {node.department && <div className="person-dept">{node.department}</div>}
-                {directs > 0 && (
-                    <div className="person-reports">
-                        {directs} direct{directs !== 1 ? 's' : ''} · {total} total
-                    </div>
+            </div>
+            <div className="person-foot">
+                {directs > 0 ? (
+                    <span className="person-reports">
+                        ({directs} direct report{directs !== 1 ? 's' : ''} · {total} total)
+                    </span>
+                ) : (
+                    <span className="person-ic">(Individual contributor)</span>
                 )}
             </div>
             {drillable && <div className="person-drill">▾</div>}
