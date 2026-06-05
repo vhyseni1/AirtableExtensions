@@ -395,8 +395,15 @@ async function exportPDF(boardEl) {
     // Scale everything so the wider of (header, reports) fills the page width.
     const baseWidth = Math.max(headerCanvas.width, reportsCanvas ? reportsCanvas.width : 0);
     const renderScale = availW / baseWidth;
-    const headerDrawW = headerCanvas.width * renderScale;
-    const headerDrawH = headerCanvas.height * renderScale;
+    let headerDrawW = headerCanvas.width * renderScale;
+    let headerDrawH = headerCanvas.height * renderScale;
+    // Cap the repeated manager header so it never crowds out the reports band.
+    const headerMaxH = fullH * 0.32;
+    if (headerDrawH > headerMaxH) {
+        const s = headerMaxH / headerDrawH;
+        headerDrawH = headerMaxH;
+        headerDrawW *= s;
+    }
     const headerX = margin + (availW - headerDrawW) / 2;
 
     if (!reportsCanvas) {
@@ -420,8 +427,18 @@ async function exportPDF(boardEl) {
         // Manager card on top of every page.
         pdf.addImage(headerCanvas.toDataURL('image/png'), 'PNG', headerX, margin, headerDrawW, headerDrawH);
         if (slice.sh > 0) {
+            // Fill width, but never overflow the band — shrink (centered) if a
+            // single row is taller than the space left under the header.
+            let drawW = availW;
+            let drawH = slice.sh * renderScale;
+            if (drawH > reportsAvailH) {
+                const s = reportsAvailH / drawH;
+                drawH = reportsAvailH;
+                drawW *= s;
+            }
+            const x = margin + (availW - drawW) / 2;
             const y = margin + headerDrawH + gap;
-            pdf.addImage(sliceToDataUrl(reportsCanvas, slice.sy, slice.sh), 'PNG', margin, y, availW, slice.sh * renderScale);
+            pdf.addImage(sliceToDataUrl(reportsCanvas, slice.sy, slice.sh), 'PNG', x, y, drawW, drawH);
         }
         pdf.setFontSize(8);
         pdf.setTextColor(150);
