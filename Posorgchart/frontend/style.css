@@ -77,6 +77,86 @@
 
 .tb-btn:disabled { opacity: 0.6; cursor: progress; }
 
+.tb-btn-active { background: #1e293b; color: white; border-color: #1e293b; }
+.tb-btn-active:hover:not(:disabled) { background: #0f172a; color: white; }
+.tb-btn-clear { border-style: dashed; color: #64748b; }
+
+/* ─── Checkbox filter ──────────────────────────────────────────────────────── */
+
+.filter-wrap { position: relative; display: inline-flex; }
+
+.filter-menu {
+    left: 0;
+    right: auto;
+    width: 260px;
+    padding: 6px;
+}
+
+.filter-search {
+    width: 100%;
+    padding: 5px 8px;
+    margin-bottom: 6px;
+    font-size: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 5px;
+    outline: none;
+}
+
+.filter-search:focus { border-color: #93c5fd; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15); }
+
+.filter-actions { display: flex; gap: 6px; margin-bottom: 4px; }
+
+.filter-actions button {
+    flex: 1;
+    padding: 4px 6px;
+    font-size: 11px;
+    color: #475569;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.filter-actions button:hover { background: #eef2f7; color: #1e293b; }
+
+.filter-list { max-height: 280px; overflow-y: auto; }
+
+.filter-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 5px 6px;
+    font-size: 12px;
+    color: #334155;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.filter-option:hover { background: #f1f5f9; }
+.filter-option input { margin-top: 2px; flex-shrink: 0; cursor: pointer; }
+.filter-option-text { display: flex; flex-direction: column; min-width: 0; }
+.filter-option-label { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filter-option-sub { font-size: 10.5px; color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filter-empty { padding: 10px; font-size: 11px; color: #94a3b8; text-align: center; }
+
+/* ─── Manager filter sections ─────────────────────────────────────────────── */
+
+.board-filtered { gap: 32px; }
+
+.manager-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 20px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    width: 100%;
+    max-width: 1320px;
+}
+
 /* dropdown menus (export) */
 .export-wrap { position: relative; display: inline-flex; }
 
