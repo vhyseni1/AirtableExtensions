@@ -15,6 +15,8 @@ import './style.css';
 // to match the exact field names in your Airtable table — nothing else in the
 // file hardcodes a field name.
 //
+//   tableName         : the table to read from. When null, the first table in
+//                       the base is used.
 //   primaryNameSource : 'name'  → use the record's primary field as the card title,
 //                       or a field-name string to use a specific field instead.
 //   jobTitleField     : sub-text line 1 (set to null to hide).
@@ -28,12 +30,13 @@ import './style.css';
 //                       table is auto-detected.
 //
 const FIELDS = {
-    primaryNameSource: 'name',
-    jobTitleField: 'Job Title',
-    departmentField: 'Department',
+    tableName: 'Employees & Positions',
+    primaryNameSource: '[E] First Name, Last Name',
+    jobTitleField: 'REF Title [F]',
+    departmentField: '[F] Supervisory Organization 🔗',
     statusField: null,            // e.g. 'Employee Status' — set to enable border coloring
     headcountField: null,         // e.g. 'Headcount' — null ⇒ 1 per node
-    parentLinkField: null,        // e.g. 'Reports To' — null ⇒ auto-detect first link field
+    parentLinkField: 'Future Manager',
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -1069,12 +1072,15 @@ function OrgChartWithData({table}) {
 
 function OrgChartApp() {
     const base = useBase();
-    const table = base.tables[0];
+    const table = (FIELDS.tableName && base.getTableByNameIfExists(FIELDS.tableName))
+        || base.tables[0];
 
     if (!table) {
         return (
             <div style={{padding: 16, color: '#dc2626'}}>
-                No table found. Please configure a table in the Data panel.
+                {FIELDS.tableName
+                    ? `Table "${FIELDS.tableName}" not found. Check the tableName in the FIELDS config, or configure a table in the Data panel.`
+                    : 'No table found. Please configure a table in the Data panel.'}
             </div>
         );
     }

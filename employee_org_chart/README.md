@@ -9,14 +9,15 @@ All field-name dependencies live in one place — the `FIELDS` object at the top
 of `frontend/index.js`. Edit these to match your table; nothing else hardcodes a
 field name.
 
-| Config key          | Purpose                                                        | Default       |
-| ------------------- | ------------------------------------------------------------- | ------------- |
-| `primaryNameSource` | Card title. `'name'` = record's primary field, or a field name | `'name'`     |
-| `jobTitleField`     | Sub-text line 1 (set `null` to hide)                          | `'Job Title'` |
-| `departmentField`   | Sub-text line 2 (set `null` to hide)                          | `'Department'`|
-| `statusField`       | Drives card **border** color + the dynamic legend (`null` = off) | `null`     |
-| `headcountField`    | Numeric field summed in the depth histogram (`null` = 1/node) | `null`        |
-| `parentLinkField`   | Linked-record "reports to" field (`null` = auto-detect first link field) | `null` |
+| Config key          | Purpose                                                        | Configured value           |
+| ------------------- | ------------------------------------------------------------- | -------------------------- |
+| `tableName`         | Table to read from (`null` = first table in base)             | `Employees & Positions`    |
+| `primaryNameSource` | Card title. `'name'` = record's primary field, or a field name | `[E] First Name, Last Name` |
+| `jobTitleField`     | Sub-text line 1 (set `null` to hide)                          | `REF Title [F]`            |
+| `departmentField`   | Sub-text line 2 (set `null` to hide)                          | `[F] Supervisory Organization 🔗` |
+| `statusField`       | Drives card **border** color + the dynamic legend (`null` = off) | `null`                 |
+| `headcountField`    | Numeric field summed in the depth histogram (`null` = 1/node) | `null`                     |
+| `parentLinkField`   | Linked-record "reports to" field (`null` = auto-detect first link field) | `Future Manager` |
 
 The reporting hierarchy is read from `parentLinkField`. Set it to your exact
 "Reports To" / manager field name if the table has more than one linked-record
