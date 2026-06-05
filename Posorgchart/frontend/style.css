@@ -518,4 +518,5 @@
 /* During export (PNG/PDF) the small blue drill badges are dropped — they're an
    interactive affordance only. Everything else (incl. avatars) stays. */
 .exporting .person-drill { display: none !important; }
-.board.exporting { background: #f8fafc; }
+/* Plain white background for exports (no grey canvas). */
+.exporting { background: #ffffff !important; }

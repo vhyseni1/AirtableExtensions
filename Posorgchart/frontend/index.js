@@ -266,7 +266,7 @@ async function renderChartCanvas(el, {scale = 2} = {}) {
     try {
         return await html2canvas(el, {
             scale,
-            backgroundColor: '#f8fafc',
+            backgroundColor: '#ffffff',
             useCORS: true,
             logging: false,
             width: el.scrollWidth,
@@ -304,7 +304,7 @@ function sliceToDataUrl(canvas, sy, sh) {
     tile.width = canvas.width;
     tile.height = Math.max(1, Math.round(sh));
     const tctx = tile.getContext('2d');
-    tctx.fillStyle = '#f8fafc';
+    tctx.fillStyle = '#ffffff';
     tctx.fillRect(0, 0, tile.width, tile.height);
     tctx.drawImage(canvas, 0, sy, canvas.width, sh, 0, 0, canvas.width, sh);
     return tile.toDataURL('image/png');
