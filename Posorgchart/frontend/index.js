@@ -62,11 +62,70 @@ function safeGetNumber(record, fieldName) {
     }
 }
 
-function getPrimaryName(record) {
-    if (FIELDS.primaryNameSource && FIELDS.primaryNameSource !== 'name') {
-        return safeGet(record, FIELDS.primaryNameSource) || record.name;
+function getPrimaryName(record, nameField) {
+    if (nameField) {
+        return safeGet(record, nameField) || record.name;
     }
     return record.name;
+}
+
+function normName(s) {
+    return String(s == null ? '' : s).normalize('NFKC').trim().toLowerCase();
+}
+
+// Resolve a configured field NAME to an actual field instance, tolerating
+// trailing/leading whitespace and decorative symbols (e.g. the "🔗" link emoji,
+// which often differs by an invisible variation selector). Returns null if the
+// name is unset or no field matches.
+function findFieldByName(table, name) {
+    if (!name) return null;
+    const exact = typeof table.getFieldByNameIfExists === 'function'
+        ? table.getFieldByNameIfExists(name)
+        : table.fields.find(f => f.name === name);
+    if (exact) return exact;
+    const norm = s => String(s).normalize('NFKC').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const target = norm(name);
+    if (!target) return null;
+    return table.fields.find(f => norm(f.name) === target) || null;
+}
+
+// Extract candidate parent references from a manager cell. Handles linked-record
+// fields (entries with {id}) AND lookup fields, which expose {linkedRecordId,
+// value} entries and/or the looked-up manager name. Returns both record ids and
+// name strings so the caller can match by whichever resolves to a known record.
+function extractParentRef(record, parentField) {
+    const ids = [];
+    const names = [];
+    if (!parentField) return {ids, names};
+
+    let cell;
+    try {
+        cell = record.getCellValue(parentField);
+    } catch {
+        return {ids, names};
+    }
+
+    const visit = item => {
+        if (item == null) return;
+        if (typeof item === 'string') {
+            if (item.trim()) names.push(item.trim());
+        } else if (typeof item === 'object') {
+            if (item.id) ids.push(item.id);
+            if (item.linkedRecordId) ids.push(item.linkedRecordId);
+            if (typeof item.name === 'string' && item.name.trim()) names.push(item.name.trim());
+            if (typeof item.value === 'string' && item.value.trim()) names.push(item.value.trim());
+        }
+    };
+    if (Array.isArray(cell)) cell.forEach(visit);
+    else visit(cell);
+
+    // If nothing structured came back, fall back to the whole string rendering
+    // as a single name candidate (do NOT split — names may contain commas).
+    if (ids.length === 0 && names.length === 0) {
+        const asStr = safeGet(record, parentField).trim();
+        if (asStr) names.push(asStr);
+    }
+    return {ids, names};
 }
 
 // ─── Status → border color (dynamic) ─────────────────────────────────────────
@@ -89,39 +148,53 @@ function buildStatusColorMap(values) {
     return map;
 }
 
-function buildTree(records, parentField) {
+function buildTree(records, cfg) {
+    const {parentField, nameField, jobTitleField, departmentField, statusField, headcountField} = cfg;
     const map = {};
     const parentOf = {}; // childId → parentId
     const conflicts = []; // {node, type, detail}
     const statusValues = new Set();
+    const idByName = {}; // normalized name → record id (for name-based manager links)
 
     records.forEach(r => {
-        const status = safeGet(r, FIELDS.statusField);
+        const status = safeGet(r, statusField);
         if (status) statusValues.add(status);
+        const displayName = getPrimaryName(r, nameField);
         map[r.id] = {
             id: r.id,
             name: r.name,
             record: r,
-            displayName: getPrimaryName(r),
-            jobTitle: safeGet(r, FIELDS.jobTitleField),
-            department: safeGet(r, FIELDS.departmentField),
+            displayName,
+            jobTitle: safeGet(r, jobTitleField),
+            department: safeGet(r, departmentField),
             status,
-            headcount: FIELDS.headcountField ? safeGetNumber(r, FIELDS.headcountField) : 1,
+            headcount: headcountField ? safeGetNumber(r, headcountField) : 1,
             children: [],
         };
+        [displayName, r.name].forEach(n => {
+            const key = normName(n);
+            if (key && !(key in idByName)) idByName[key] = r.id;
+        });
     });
+
+    // Resolve a record's manager to a parent id. The manager field may be a
+    // linked-record field (gives an id) or a lookup (gives a linkedRecordId
+    // and/or the manager's name), so we try id matches first, then name matches.
+    const resolveParentId = r => {
+        const {ids, names} = extractParentRef(r, parentField);
+        for (const id of ids) {
+            if (map[id]) return id;
+        }
+        for (const nm of names) {
+            const id = idByName[normName(nm)];
+            if (id) return id;
+        }
+        return null;
+    };
 
     // Build parent→child edges and detect simple conflicts
     records.forEach(r => {
-        let parentCell = null;
-        if (parentField) {
-            try {
-                parentCell = r.getCellValue(parentField);
-            } catch {
-                /**/
-            }
-        }
-        const parentId = parentCell && parentCell[0] && parentCell[0].id;
+        const parentId = resolveParentId(r);
 
         if (parentId === r.id) {
             // Self-reference
@@ -840,21 +913,34 @@ function OrgChartWithData({table}) {
         centerView();
     }, [defaultExpanded, centerView]);
 
-    // Resolve the parent/manager link field: explicit config wins, else
-    // auto-detect the first linked-record field.
-    const parentField = useMemo(() => {
-        if (FIELDS.parentLinkField) {
-            const named = table.fields.find(f => f.name === FIELDS.parentLinkField);
-            if (named) return named;
-        }
-        return table.fields.find(f => f.type === 'multipleRecordLinks');
+    // Resolve every configured field NAME to a real field instance (tolerant of
+    // emoji/whitespace differences). The manager field is resolved explicitly;
+    // only when parentLinkField is unset do we auto-detect a linked-record field.
+    const cfg = useMemo(() => {
+        const nameField = FIELDS.primaryNameSource && FIELDS.primaryNameSource !== 'name'
+            ? findFieldByName(table, FIELDS.primaryNameSource)
+            : null;
+        const parentField = FIELDS.parentLinkField
+            ? findFieldByName(table, FIELDS.parentLinkField)
+            : (table.fields.find(f => f.type === 'multipleRecordLinks') || null);
+        return {
+            nameField,
+            jobTitleField: findFieldByName(table, FIELDS.jobTitleField),
+            departmentField: findFieldByName(table, FIELDS.departmentField),
+            statusField: findFieldByName(table, FIELDS.statusField),
+            headcountField: findFieldByName(table, FIELDS.headcountField),
+            parentField,
+        };
     }, [table]);
-    const parentFieldId = parentField ? parentField.id : null;
+    const parentField = cfg.parentField;
+    // Stable dependency key so the tree only rebuilds when records or the
+    // resolved field set actually change.
+    const cfgKey = Object.values(cfg).map(f => (f ? f.id : '∅')).join('|');
 
     const {roots, conflicts, nodeMap, statusColors} = useMemo(
-        () => buildTree(records, parentField),
+        () => buildTree(records, cfg),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [records, parentFieldId],
+        [records, cfgKey],
     );
 
     const legendItems = useMemo(
@@ -878,6 +964,17 @@ function OrgChartWithData({table}) {
     const handleDrop = useCallback(async (newParentId, childId) => {
         if (!parentField) {
             setDropError('No manager/parent link field found on this table.');
+            return;
+        }
+        // Reparenting writes to the manager field — only possible if it's an
+        // editable linked-record field. Lookup/computed manager fields are
+        // read-only, so we surface a clear message rather than a write failure.
+        if (parentField.type !== 'multipleRecordLinks') {
+            setDropError(
+                `Can't move records: the manager field "${parentField.name}" is a ` +
+                `${parentField.type} (read-only). Reparenting needs an editable ` +
+                `linked-record field.`,
+            );
             return;
         }
         const childNode = nodeMap[childId];
@@ -1072,8 +1169,12 @@ function OrgChartWithData({table}) {
 
 function OrgChartApp() {
     const base = useBase();
-    const table = (FIELDS.tableName && base.getTableByNameIfExists(FIELDS.tableName))
-        || base.tables[0];
+    const namedTable = FIELDS.tableName
+        ? (typeof base.getTableByNameIfExists === 'function'
+            ? base.getTableByNameIfExists(FIELDS.tableName)
+            : base.tables.find(t => t.name === FIELDS.tableName))
+        : null;
+    const table = namedTable || base.tables[0];
 
     if (!table) {
         return (
