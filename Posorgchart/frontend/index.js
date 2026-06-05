@@ -297,15 +297,57 @@ async function exportPNG(boardEl) {
     downloadDataUrl(canvas.toDataURL('image/png'), `org-chart-${timestamp()}.png`);
 }
 
+const EXPORT_SCALE = 2;
+
 function sliceToDataUrl(canvas, sy, sh) {
     const tile = document.createElement('canvas');
     tile.width = canvas.width;
-    tile.height = sh;
+    tile.height = Math.max(1, Math.round(sh));
     const tctx = tile.getContext('2d');
     tctx.fillStyle = '#f8fafc';
-    tctx.fillRect(0, 0, canvas.width, sh);
+    tctx.fillRect(0, 0, tile.width, tile.height);
     tctx.drawImage(canvas, 0, sy, canvas.width, sh, 0, 0, canvas.width, sh);
     return tile.toDataURL('image/png');
+}
+
+// Measure the vertical band of each card row inside a flex-wrapped grid, in
+// canvas pixels (= CSS px × EXPORT_SCALE). Lets us paginate on row boundaries so
+// cards are never sliced in half.
+function measureRows(gridEl) {
+    const gridTop = gridEl.getBoundingClientRect().top;
+    const cards = gridEl.querySelectorAll(':scope > .person-card');
+    const rows = [];
+    cards.forEach(c => {
+        const r = c.getBoundingClientRect();
+        const top = r.top - gridTop;
+        const bottom = r.bottom - gridTop;
+        let row = rows.find(x => Math.abs(x.top - top) <= 8);
+        if (!row) { row = {top, bottom}; rows.push(row); }
+        row.top = Math.min(row.top, top);
+        row.bottom = Math.max(row.bottom, bottom);
+    });
+    rows.sort((a, b) => a.top - b.top);
+    return rows.map(r => ({top: r.top * EXPORT_SCALE, bottom: r.bottom * EXPORT_SCALE}));
+}
+
+// Greedily pack rows into pages no taller than maxCanvasPx; returns {sy, sh}
+// slices aligned to row boundaries.
+function paginateRows(rows, canvasHeight, maxCanvasPx) {
+    if (rows.length === 0) return [{sy: 0, sh: canvasHeight}];
+    const slices = [];
+    let i = 0;
+    while (i < rows.length) {
+        const start = rows[i].top;
+        let end = rows[i].bottom;
+        let j = i + 1;
+        while (j < rows.length && (rows[j].bottom - start) <= maxCanvasPx) {
+            end = rows[j].bottom;
+            j++;
+        }
+        slices.push({sy: start, sh: end - start});
+        i = Math.max(j, i + 1);
+    }
+    return slices;
 }
 
 // PDF export. The chart fills the page width; if the reports don't fit on one
@@ -344,8 +386,11 @@ async function exportPDF(boardEl) {
         return;
     }
 
-    const headerCanvas = await renderChartCanvas(focusEl, {scale: 2});
-    const reportsCanvas = reportsEl ? await renderChartCanvas(reportsEl, {scale: 2}) : null;
+    // Measure card-row boundaries before capture (CSS layout is intact here).
+    const rows = reportsEl ? measureRows(reportsEl) : [];
+
+    const headerCanvas = await renderChartCanvas(focusEl, {scale: EXPORT_SCALE});
+    const reportsCanvas = reportsEl ? await renderChartCanvas(reportsEl, {scale: EXPORT_SCALE}) : null;
 
     // Scale everything so the wider of (header, reports) fills the page width.
     const baseWidth = Math.max(headerCanvas.width, reportsCanvas ? reportsCanvas.width : 0);
@@ -363,26 +408,25 @@ async function exportPDF(boardEl) {
         return;
     }
 
-    // Remaining vertical space per page for the reports band, in source px.
+    // Remaining vertical space per page for the reports band, then paginate on
+    // card-row boundaries so no card is split across pages.
     const reportsAvailH = fullH - headerDrawH - gap;
-    const pxPerPage = Math.max(1, Math.floor(reportsAvailH / renderScale));
-    const pages = Math.max(1, Math.ceil(reportsCanvas.height / pxPerPage));
+    const maxCanvasPx = reportsAvailH / renderScale;
+    const slices = paginateRows(rows, reportsCanvas.height, maxCanvasPx);
+    const pages = slices.length;
 
-    for (let p = 0; p < pages; p++) {
+    slices.forEach((slice, p) => {
         if (p > 0) pdf.addPage();
         // Manager card on top of every page.
         pdf.addImage(headerCanvas.toDataURL('image/png'), 'PNG', headerX, margin, headerDrawW, headerDrawH);
-        // Reports slice below it.
-        const sy = p * pxPerPage;
-        const sh = Math.min(pxPerPage, reportsCanvas.height - sy);
-        if (sh > 0) {
+        if (slice.sh > 0) {
             const y = margin + headerDrawH + gap;
-            pdf.addImage(sliceToDataUrl(reportsCanvas, sy, sh), 'PNG', margin, y, availW, sh * renderScale);
+            pdf.addImage(sliceToDataUrl(reportsCanvas, slice.sy, slice.sh), 'PNG', margin, y, availW, slice.sh * renderScale);
         }
         pdf.setFontSize(8);
         pdf.setTextColor(150);
         pdf.text(`Page ${p + 1} / ${pages}`, pageW - margin - 60, pageH - margin / 2);
-    }
+    });
     pdf.save(`org-chart-${timestamp()}.pdf`);
 }
 
