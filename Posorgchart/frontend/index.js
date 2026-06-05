@@ -297,153 +297,141 @@ async function exportPNG(boardEl) {
     downloadDataUrl(canvas.toDataURL('image/png'), `org-chart-${timestamp()}.png`);
 }
 
-const TARGET_DPI = 300;
+// ── Vector PDF ────────────────────────────────────────────────────────────
+// Drawn with jsPDF vector primitives (not a screenshot), so text and borders
+// stay razor-sharp at any zoom and every card has a true solid border.
 
-// Capture scale needed so an element that will be drawn `widthPt` points wide
-// lands near TARGET_DPI. Clamped so files/memory stay reasonable.
-function exportScaleFor(widthPx, widthPt) {
-    const targetPx = (widthPt / 72) * TARGET_DPI;
-    const scale = targetPx / Math.max(1, widthPx);
-    return Math.max(2, Math.min(4, scale));
+const PDF_COLORS = {
+    name: [15, 23, 42],
+    title: [71, 85, 105],
+    dept: [148, 163, 184],
+    blue: [37, 99, 235],
+    border: [148, 163, 184],     // solid report-card border
+    borderFocus: [37, 99, 235],  // manager border
+    divider: [226, 232, 240],
+    page: [148, 163, 184],
+};
+
+// Draw centered, wrapped text limited to maxLines; returns the y after the text.
+function drawCenteredLines(pdf, text, cx, y, maxW, lh, maxLines) {
+    if (!text) return y;
+    const lines = pdf.splitTextToSize(String(text), maxW).slice(0, maxLines);
+    lines.forEach((ln, i) => pdf.text(ln, cx, y + i * lh, {align: 'center'}));
+    return y + lines.length * lh;
 }
 
-function sliceToDataUrl(canvas, sy, sh) {
-    const tile = document.createElement('canvas');
-    tile.width = canvas.width;
-    tile.height = Math.max(1, Math.round(sh));
-    const tctx = tile.getContext('2d');
-    tctx.fillStyle = '#ffffff';
-    tctx.fillRect(0, 0, tile.width, tile.height);
-    tctx.drawImage(canvas, 0, sy, canvas.width, sh, 0, 0, canvas.width, sh);
-    return tile.toDataURL('image/png');
-}
+function drawPersonCard(pdf, x, y, w, h, card, isFocus) {
+    const p = 8;
+    const cx = x + w / 2;
+    const innerW = w - p * 2;
 
-// Measure the vertical band of each card row inside a flex-wrapped grid, in
-// canvas pixels (= CSS px × scale). Lets us paginate on row boundaries so cards
-// are never sliced in half.
-function measureRows(gridEl, scale) {
-    const gridTop = gridEl.getBoundingClientRect().top;
-    const cards = gridEl.querySelectorAll(':scope > .person-card');
-    const rows = [];
-    cards.forEach(c => {
-        const r = c.getBoundingClientRect();
-        const top = r.top - gridTop;
-        const bottom = r.bottom - gridTop;
-        let row = rows.find(x => Math.abs(x.top - top) <= 8);
-        if (!row) { row = {top, bottom}; rows.push(row); }
-        row.top = Math.min(row.top, top);
-        row.bottom = Math.max(row.bottom, bottom);
-    });
-    rows.sort((a, b) => a.top - b.top);
-    return rows.map(r => ({top: r.top * scale, bottom: r.bottom * scale}));
-}
-
-// Greedily pack rows into pages no taller than maxCanvasPx; returns {sy, sh}
-// slices aligned to row boundaries.
-function paginateRows(rows, canvasHeight, maxCanvasPx) {
-    if (rows.length === 0) return [{sy: 0, sh: canvasHeight}];
-    const slices = [];
-    let i = 0;
-    while (i < rows.length) {
-        const start = rows[i].top;
-        let end = rows[i].bottom;
-        let j = i + 1;
-        while (j < rows.length && (rows[j].bottom - start) <= maxCanvasPx) {
-            end = rows[j].bottom;
-            j++;
-        }
-        slices.push({sy: start, sh: end - start});
-        i = Math.max(j, i + 1);
+    // White card with a true border (heavier + blue for managers).
+    pdf.setFillColor(255, 255, 255);
+    if (isFocus) {
+        pdf.setDrawColor(...PDF_COLORS.borderFocus);
+        pdf.setLineWidth(1.4);
+    } else {
+        pdf.setDrawColor(...PDF_COLORS.border);
+        pdf.setLineWidth(0.8);
     }
-    return slices;
+    pdf.roundedRect(x, y, w, h, 6, 6, 'FD');
+    if (isFocus) {
+        // Blue accent bar across the top edge.
+        pdf.setFillColor(...PDF_COLORS.borderFocus);
+        pdf.rect(x + 6, y, w - 12, 3, 'F');
+    }
+
+    let cy = y + (isFocus ? 18 : 15);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(isFocus ? 10.5 : 8.8);
+    pdf.setTextColor(...PDF_COLORS.name);
+    cy = drawCenteredLines(pdf, card.name, cx, cy, innerW, isFocus ? 12 : 10, 2);
+
+    if (card.title) {
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(isFocus ? 8.4 : 7.6);
+        pdf.setTextColor(...PDF_COLORS.title);
+        cy = drawCenteredLines(pdf, card.title, cx, cy + 3, innerW, 9, 2);
+    }
+    if (card.dept) {
+        pdf.setFontSize(7.2);
+        pdf.setTextColor(...PDF_COLORS.dept);
+        drawCenteredLines(pdf, card.dept, cx, cy + 2, innerW, 8, 1);
+    }
+
+    // Divider + the parenthesized team line pinned to the bottom.
+    const footY = y + h - 8;
+    pdf.setDrawColor(...PDF_COLORS.divider);
+    pdf.setLineWidth(0.6);
+    pdf.line(x + p, footY - 9, x + w - p, footY - 9);
+    pdf.setFontSize(7.6);
+    if (card.directs > 0) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(...PDF_COLORS.blue);
+        const t = `(${card.directs} direct report${card.directs !== 1 ? 's' : ''} · ${card.total} total)`;
+        pdf.text(pdf.splitTextToSize(t, innerW)[0], cx, footY, {align: 'center'});
+    } else {
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(...PDF_COLORS.dept);
+        pdf.text('(Individual contributor)', cx, footY, {align: 'center'});
+    }
 }
 
-// Lay out one manager for PDF: capture the manager card + reports grid, scale to
-// fill the page width, and split the reports onto pages at card-row boundaries.
-async function layoutManager(focusEl, reportsEl, geom) {
-    const {margin, availW, fullH, gap} = geom;
-    // Capture at ~300 DPI relative to the page width so zooming the PDF stays
-    // sharp (the chart is embedded as a bitmap, not vector text).
-    const widthPx = (reportsEl ? reportsEl.scrollWidth : focusEl.scrollWidth) || 1;
-    const scale = exportScaleFor(widthPx, availW);
-    const rows = reportsEl ? measureRows(reportsEl, scale) : [];
-    const headerCanvas = await renderChartCanvas(focusEl, {scale});
-    const reportsCanvas = reportsEl ? await renderChartCanvas(reportsEl, {scale}) : null;
-
-    const baseWidth = Math.max(headerCanvas.width, reportsCanvas ? reportsCanvas.width : 0) || 1;
-    const renderScale = availW / baseWidth;
-    let headerDrawW = headerCanvas.width * renderScale;
-    let headerDrawH = headerCanvas.height * renderScale;
-    const headerMaxH = fullH * 0.32; // never let the repeated header crowd the reports
-    if (headerDrawH > headerMaxH) {
-        const s = headerMaxH / headerDrawH;
-        headerDrawH = headerMaxH;
-        headerDrawW *= s;
-    }
-    const headerX = margin + (availW - headerDrawW) / 2;
-
-    let slices = [];
-    if (reportsCanvas) {
-        const reportsAvailH = fullH - headerDrawH - gap;
-        slices = paginateRows(rows, reportsCanvas.height, reportsAvailH / renderScale);
-    }
-    return {headerCanvas, headerDrawW, headerDrawH, headerX, renderScale, reportsCanvas, slices};
-}
-
-// PDF export. Fills the page width, repeats the manager card on top of every
-// page, paginates reports on card-row boundaries, and — when several managers
-// are selected — starts each manager on a new page. Footer: "Page x / y".
-async function exportPDF(boardEl) {
+// managers: [{manager: card, reports: [card, ...]}]; each card is
+// {name, title, dept, directs, total}. Each manager starts on a new page; the
+// manager card repeats on top of each of its pages; footer reads "Page x / y".
+function exportVectorPDF(managers) {
     const pdf = new jsPDF({orientation: 'landscape', unit: 'pt', format: 'a4'});
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
-    const margin = 24;
-    const footer = 16;
-    const gap = 12;
-    const geom = {
-        margin, footer, gap,
-        availW: pageW - margin * 2,
-        fullH: pageH - margin * 2 - footer,
+    const margin = 28;
+    const footer = 18;
+    const headerGap = 14;
+    const colGap = 12;
+    const rowGap = 12;
+    const availW = pageW - margin * 2;
+
+    const targetCardW = 150;
+    const cols = Math.max(1, Math.min(6, Math.floor((availW + colGap) / (targetCardW + colGap))));
+    const cardW = (availW - (cols - 1) * colGap) / cols;
+    const cardH = 88;
+    const mgrW = Math.min(340, availW);
+    const mgrH = 104;
+    const gridTop = margin + mgrH + headerGap;
+    const reportsAvailH = pageH - margin - footer - gridTop;
+    const rowsPerPage = Math.max(1, Math.floor((reportsAvailH + rowGap) / (cardH + rowGap)));
+
+    const pagesFor = m => {
+        const rows = Math.ceil(m.reports.length / cols);
+        return Math.max(1, Math.ceil(rows / rowsPerPage) || 1);
     };
+    const totalPages = managers.reduce((s, m) => s + pagesFor(m), 0);
 
-    // One "section" per manager. Filtered view = each .manager-section; otherwise
-    // the single focused manager (its card + reports grid).
-    const sections = boardEl.classList.contains('board-filtered')
-        ? [...boardEl.querySelectorAll(':scope > .manager-section')]
-        : [boardEl];
-
-    const layouts = [];
-    for (const sec of sections) {
-        const focusEl = sec.querySelector('.person-card-focus') || sec;
-        const reportsEl = sec.querySelector('.reports-grid');
-        layouts.push(await layoutManager(focusEl, reportsEl, geom));
-    }
-
-    const totalPages = layouts.reduce((sum, l) => sum + Math.max(1, l.slices.length), 0);
     let pageIndex = 0;
-
-    layouts.forEach(l => {
-        const nPages = Math.max(1, l.slices.length);
-        const reportsAvailH = geom.fullH - l.headerDrawH - gap;
-        for (let p = 0; p < nPages; p++) {
+    managers.forEach(m => {
+        const rowsTotal = Math.ceil(m.reports.length / cols);
+        const nPages = pagesFor(m);
+        for (let pg = 0; pg < nPages; pg++) {
             if (pageIndex > 0) pdf.addPage();
-            pdf.addImage(l.headerCanvas.toDataURL('image/png'), 'PNG', l.headerX, margin, l.headerDrawW, l.headerDrawH);
-            const slice = l.slices[p];
-            if (slice && slice.sh > 0 && l.reportsCanvas) {
-                let drawW = geom.availW;
-                let drawH = slice.sh * l.renderScale;
-                if (drawH > reportsAvailH) {
-                    const s = reportsAvailH / drawH;
-                    drawH = reportsAvailH;
-                    drawW *= s;
+            // Manager card on top of every page for this manager.
+            drawPersonCard(pdf, margin + (availW - mgrW) / 2, margin, mgrW, mgrH, m.manager, true);
+
+            const startRow = pg * rowsPerPage;
+            const endRow = Math.min(rowsTotal, startRow + rowsPerPage);
+            for (let row = startRow; row < endRow; row++) {
+                const y = gridTop + (row - startRow) * (cardH + rowGap);
+                for (let c = 0; c < cols; c++) {
+                    const idx = row * cols + c;
+                    if (idx >= m.reports.length) break;
+                    const x = margin + c * (cardW + colGap);
+                    drawPersonCard(pdf, x, y, cardW, cardH, m.reports[idx], false);
                 }
-                const x = margin + (geom.availW - drawW) / 2;
-                const y = margin + l.headerDrawH + gap;
-                pdf.addImage(sliceToDataUrl(l.reportsCanvas, slice.sy, slice.sh), 'PNG', x, y, drawW, drawH);
             }
+
+            pdf.setFont('helvetica', 'normal');
             pdf.setFontSize(8);
-            pdf.setTextColor(150);
-            pdf.text(`Page ${pageIndex + 1} / ${totalPages}`, pageW - margin - 60, pageH - margin / 2);
+            pdf.setTextColor(...PDF_COLORS.page);
+            pdf.text(`Page ${pageIndex + 1} / ${totalPages}`, pageW - margin - 64, pageH - margin / 2);
             pageIndex++;
         }
     });
@@ -451,7 +439,7 @@ async function exportPDF(boardEl) {
     pdf.save(`org-chart-${timestamp()}.pdf`);
 }
 
-function ExportMenu({targetRef}) {
+function ExportMenu({boardRef, getData}) {
     const [open, setOpen] = useState(false);
     const [busy, setBusy] = useState(false);
     const ref = useRef(null);
@@ -464,17 +452,16 @@ function ExportMenu({targetRef}) {
     }, [open]);
 
     const run = useCallback(async fn => {
-        if (!targetRef.current) return;
         setBusy(true);
         setOpen(false);
         try {
-            await fn(targetRef.current);
+            await fn();
         } catch (err) {
             window.alert('Export failed: ' + (err && err.message ? err.message : err));
         } finally {
             setBusy(false);
         }
-    }, [targetRef]);
+    }, []);
 
     return (
         <div className="export-wrap" ref={ref}>
@@ -483,8 +470,8 @@ function ExportMenu({targetRef}) {
             </button>
             {open && (
                 <div className="menu">
-                    <button onClick={() => run(exportPDF)}>PDF (fills page, manager on top)</button>
-                    <button onClick={() => run(exportPNG)}>PNG image</button>
+                    <button onClick={() => run(() => exportVectorPDF(getData()))}>PDF (crisp vector)</button>
+                    <button onClick={() => run(() => boardRef.current && exportPNG(boardRef.current))}>PNG image</button>
                 </div>
             )}
         </div>
@@ -876,6 +863,26 @@ function WorkdayChart({table}) {
         [managerFilter, nodeMap],
     );
 
+    // Build the data the vector PDF draws from: one entry per manager, each with
+    // its direct reports. Filter view = the selected managers; otherwise the
+    // currently focused person.
+    const buildExportData = useCallback(() => {
+        const toCard = n => ({
+            name: n.displayName,
+            title: n.jobTitle,
+            dept: n.department,
+            directs: n.childIds.length,
+            total: totals[n.id] || 0,
+        });
+        const ids = filterActive
+            ? [...selectedManagers].sort((a, b) => nodeMap[a].displayName.localeCompare(nodeMap[b].displayName))
+            : (focusId ? [focusId] : []);
+        return ids.map(id => ({
+            manager: toCard(nodeMap[id]),
+            reports: nodeMap[id].childIds.map(c => toCard(nodeMap[c])),
+        }));
+    }, [filterActive, selectedManagers, focusId, nodeMap, totals]);
+
     if (!focus) {
         return (
             <div className="org-root">
@@ -935,7 +942,7 @@ function WorkdayChart({table}) {
                     >
                         Avatars
                     </button>
-                    <ExportMenu targetRef={boardRef} />
+                    <ExportMenu boardRef={boardRef} getData={buildExportData} />
                     <button className="tb-btn" onClick={() => setShowFields(true)} title="Field diagnostics">Fields</button>
                     <button className="tb-btn" onClick={() => setShowAbout(true)} title="About">About</button>
                 </div>
