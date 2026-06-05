@@ -147,13 +147,16 @@ function buildOrg(records, cfg) {
     records.forEach(r => {
         const incumbent = incumbentName(r, nameField);
         const vacant = !incumbent;
-        const displayName = vacant ? VACANT_LABEL : incumbent;
+        const jobTitle = readText(r, jobTitleField);
+        // Vacant seats show the role title as the headline (fall back to a
+        // generic label only if there's no title either).
+        const displayName = vacant ? (jobTitle || VACANT_LABEL) : incumbent;
         nodeMap[r.id] = {
             id: r.id,
             record: r,
             displayName,
             vacant,
-            jobTitle: readText(r, jobTitleField),
+            jobTitle,
             department: readText(r, departmentField),
             status: readText(r, statusField),
             childIds: [],
@@ -320,6 +323,7 @@ const PDF_COLORS = {
     borderFocus: [37, 99, 235],  // manager border
     divider: [226, 232, 240],
     page: [148, 163, 184],
+    vacant: [180, 83, 9],        // amber "VACANT" marker
 };
 
 // Draw centered, wrapped text limited to maxLines; returns the y after the text.
@@ -363,7 +367,13 @@ function drawPersonCard(pdf, x, y, w, h, card, isFocus) {
     pdf.setTextColor(...(card.vacant ? PDF_COLORS.title : PDF_COLORS.name));
     cy = drawCenteredLines(pdf, card.name, cx, cy, innerW, isFocus ? 12 : 10, 2);
 
-    if (card.title) {
+    if (card.vacant) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(7.4);
+        pdf.setTextColor(...PDF_COLORS.vacant);
+        pdf.text('VACANT', cx, cy + 4, {align: 'center'});
+        cy += 8;
+    } else if (card.title) {
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(isFocus ? 8.4 : 7.6);
         pdf.setTextColor(...PDF_COLORS.title);
@@ -748,7 +758,9 @@ function PersonCard({node, variant, directs, total, statusColor, showAvatar, onD
             )}
             <div className="person-info">
                 <div className="person-name">{node.displayName}</div>
-                {node.jobTitle && <div className="person-title">{node.jobTitle}</div>}
+                {node.vacant
+                    ? <div className="vacant-badge">Vacant</div>
+                    : (node.jobTitle && <div className="person-title">{node.jobTitle}</div>)}
                 {node.department && <div className="person-dept">{node.department}</div>}
             </div>
             <div className="person-foot">
@@ -889,7 +901,8 @@ function WorkdayChart({table}) {
     const buildExportData = useCallback(() => {
         const toCard = n => ({
             name: n.displayName,
-            title: n.jobTitle,
+            // For vacant seats the title is already the headline, so don't repeat it.
+            title: n.vacant ? '' : n.jobTitle,
             dept: n.department,
             directs: n.childIds.length,
             total: totals[n.id] || 0,

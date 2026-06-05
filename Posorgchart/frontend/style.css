@@ -402,7 +402,21 @@
     background: #f8fafc;
 }
 .person-card.vacant.person-card-focus { border-top-color: #cbd5e1; }
-.person-card.vacant .person-name { color: #64748b; font-style: italic; font-weight: 600; }
+.person-card.vacant .person-name { color: #475569; font-style: italic; font-weight: 700; }
+
+.vacant-badge {
+    display: inline-block;
+    margin-top: 4px;
+    padding: 1px 8px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #b45309;
+    background: #fef3c7;
+    border: 1px solid #fde68a;
+    border-radius: 999px;
+}
 
 .person-drill {
     position: absolute;
