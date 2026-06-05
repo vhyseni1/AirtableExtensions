@@ -515,7 +515,7 @@
 .fields-bad { color: #dc2626; font-weight: 600; }
 .fields-muted { color: #cbd5e1; }
 
-/* During export (PNG/PDF) the avatar circles are dropped — they print as
-   distracting colored balls. They stay in the interactive view. */
-.exporting .person-avatar { display: none !important; }
+/* During export (PNG/PDF) the small blue drill badges are dropped — they're an
+   interactive affordance only. Everything else (incl. avatars) stays. */
+.exporting .person-drill { display: none !important; }
 .board.exporting { background: #f8fafc; }
