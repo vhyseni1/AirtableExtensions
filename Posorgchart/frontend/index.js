@@ -572,10 +572,7 @@ function CheckboxFilter({label, options, selected, onChange}) {
                                     onChange={() => toggle(o.value)}
                                 />
                                 <span className="filter-option-text">
-                                    <span className="filter-option-label">
-                                        {o.label}
-                                        {o.vacant && <span className="filter-vacant">Vacant</span>}
-                                    </span>
+                                    <span className={`filter-option-label${o.vacant ? ' vacant' : ''}`}>{o.label}</span>
                                     {o.sub && <span className="filter-option-sub">{o.sub}</span>}
                                 </span>
                             </label>
@@ -867,9 +864,10 @@ function WorkdayChart({table}) {
             .sort((a, b) => a.displayName.localeCompare(b.displayName))
             .map(n => {
                 const count = `${n.childIds.length} report${n.childIds.length !== 1 ? 's' : ''}`;
-                // For vacant seats the label IS the role title, so don't repeat it.
+                // Vacant seats read "Role title (Vacant)"; the title is already the label.
+                const label = n.vacant ? `${n.displayName} (Vacant)` : n.displayName;
                 const sub = n.vacant ? count : count + (n.jobTitle ? ` · ${n.jobTitle}` : '');
-                return {value: n.id, label: n.displayName, sub, vacant: n.vacant};
+                return {value: n.id, label, sub, vacant: n.vacant};
             });
     }, [nodeMap]);
 
