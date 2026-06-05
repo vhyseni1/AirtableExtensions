@@ -66,9 +66,13 @@ function readText(record, field) {
     return parts.join(', ').trim();
 }
 
-function getPrimaryName(record, nameField) {
-    if (nameField) return readText(record, nameField) || record.name;
-    return record.name;
+const VACANT_LABEL = 'Vacant position';
+
+// The incumbent's name. Unlike the display name, this does NOT fall back to the
+// primary field — an empty result means the position has no incumbent (vacant).
+function incumbentName(record, nameField) {
+    const raw = nameField ? readText(record, nameField) : record.name;
+    return (raw || '').trim();
 }
 
 function normName(s) {
@@ -141,21 +145,27 @@ function buildOrg(records, cfg) {
     const idByEmployeeId = {}; // employee-id value → record id
 
     records.forEach(r => {
-        const displayName = getPrimaryName(r, nameField);
+        const incumbent = incumbentName(r, nameField);
+        const vacant = !incumbent;
+        const displayName = vacant ? VACANT_LABEL : incumbent;
         nodeMap[r.id] = {
             id: r.id,
             record: r,
             displayName,
+            vacant,
             jobTitle: readText(r, jobTitleField),
             department: readText(r, departmentField),
             status: readText(r, statusField),
             childIds: [],
             parentId: null,
         };
-        [displayName, r.name].forEach(n => {
-            const k = normName(n);
-            if (k && !(k in idByName)) idByName[k] = r.id;
-        });
+        // Don't index vacant "names" — they'd collide and mis-match by name.
+        if (!vacant) {
+            [displayName, r.name].forEach(n => {
+                const k = normName(n);
+                if (k && !(k in idByName)) idByName[k] = r.id;
+            });
+        }
         if (employeeIdField) {
             const eid = normName(readText(r, employeeIdField));
             if (eid && !(eid in idByEmployeeId)) idByEmployeeId[eid] = r.id;
@@ -325,9 +335,14 @@ function drawPersonCard(pdf, x, y, w, h, card, isFocus) {
     const cx = x + w / 2;
     const innerW = w - p * 2;
 
-    // White card with a true border (heavier + blue for managers).
+    // White card with a true border (heavier + blue for managers, dashed grey
+    // for vacant positions).
     pdf.setFillColor(255, 255, 255);
-    if (isFocus) {
+    if (card.vacant) {
+        pdf.setDrawColor(...PDF_COLORS.dept);
+        pdf.setLineWidth(isFocus ? 1.2 : 0.9);
+        pdf.setLineDashPattern([3, 2], 0);
+    } else if (isFocus) {
         pdf.setDrawColor(...PDF_COLORS.borderFocus);
         pdf.setLineWidth(1.4);
     } else {
@@ -335,16 +350,17 @@ function drawPersonCard(pdf, x, y, w, h, card, isFocus) {
         pdf.setLineWidth(0.8);
     }
     pdf.roundedRect(x, y, w, h, 6, 6, 'FD');
-    if (isFocus) {
+    pdf.setLineDashPattern([], 0);
+    if (isFocus && !card.vacant) {
         // Blue accent bar across the top edge.
         pdf.setFillColor(...PDF_COLORS.borderFocus);
         pdf.rect(x + 6, y, w - 12, 3, 'F');
     }
 
     let cy = y + (isFocus ? 18 : 15);
-    pdf.setFont('helvetica', 'bold');
+    pdf.setFont('helvetica', card.vacant ? 'bolditalic' : 'bold');
     pdf.setFontSize(isFocus ? 10.5 : 8.8);
-    pdf.setTextColor(...PDF_COLORS.name);
+    pdf.setTextColor(...(card.vacant ? PDF_COLORS.title : PDF_COLORS.name));
     cy = drawCenteredLines(pdf, card.name, cx, cy, innerW, isFocus ? 12 : 10, 2);
 
     if (card.title) {
@@ -710,6 +726,7 @@ function PersonCard({node, variant, directs, total, statusColor, showAvatar, onD
     const drillable = variant === 'report' && directs > 0;
     const cls = ['person-card', `person-card-${variant}`, 'clickable'];
     if (!showAvatar) cls.push('no-avatar');
+    if (node.vacant) cls.push('vacant');
     const onClick = variant === 'report' ? () => onDrill(node.id) : () => onOpen(node);
     const title = variant === 'report'
         ? `Drill into ${node.displayName}`
@@ -722,8 +739,11 @@ function PersonCard({node, variant, directs, total, statusColor, showAvatar, onD
             title={title}
         >
             {showAvatar && (
-                <div className="person-avatar" style={{background: colorFromString(node.displayName)}}>
-                    {initials(node.displayName)}
+                <div
+                    className="person-avatar"
+                    style={{background: node.vacant ? '#cbd5e1' : colorFromString(node.displayName)}}
+                >
+                    {node.vacant ? '—' : initials(node.displayName)}
                 </div>
             )}
             <div className="person-info">
@@ -873,6 +893,7 @@ function WorkdayChart({table}) {
             dept: n.department,
             directs: n.childIds.length,
             total: totals[n.id] || 0,
+            vacant: n.vacant,
         });
         const ids = filterActive
             ? [...selectedManagers].sort((a, b) => nodeMap[a].displayName.localeCompare(nodeMap[b].displayName))

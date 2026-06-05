@@ -395,6 +395,15 @@
 .person-reports { font-size: 11px; font-weight: 600; color: #2563eb; }
 .person-ic { font-size: 11px; color: #94a3b8; }
 
+/* Vacant position (no incumbent): dashed grey border + muted italic name. */
+.person-card.vacant {
+    border-style: dashed;
+    border-color: #cbd5e1;
+    background: #f8fafc;
+}
+.person-card.vacant.person-card-focus { border-top-color: #cbd5e1; }
+.person-card.vacant .person-name { color: #64748b; font-style: italic; font-weight: 600; }
+
 .person-drill {
     position: absolute;
     bottom: -11px;
