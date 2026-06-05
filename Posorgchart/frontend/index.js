@@ -572,7 +572,10 @@ function CheckboxFilter({label, options, selected, onChange}) {
                                     onChange={() => toggle(o.value)}
                                 />
                                 <span className="filter-option-text">
-                                    <span className="filter-option-label">{o.label}</span>
+                                    <span className="filter-option-label">
+                                        {o.label}
+                                        {o.vacant && <span className="filter-vacant">Vacant</span>}
+                                    </span>
                                     {o.sub && <span className="filter-option-sub">{o.sub}</span>}
                                 </span>
                             </label>
@@ -862,12 +865,12 @@ function WorkdayChart({table}) {
         return Object.values(nodeMap)
             .filter(n => n.childIds.length > 0)
             .sort((a, b) => a.displayName.localeCompare(b.displayName))
-            .map(n => ({
-                value: n.id,
-                label: n.displayName,
-                sub: `${n.childIds.length} report${n.childIds.length !== 1 ? 's' : ''}` +
-                    (n.jobTitle ? ` · ${n.jobTitle}` : ''),
-            }));
+            .map(n => {
+                const count = `${n.childIds.length} report${n.childIds.length !== 1 ? 's' : ''}`;
+                // For vacant seats the label IS the role title, so don't repeat it.
+                const sub = n.vacant ? count : count + (n.jobTitle ? ` · ${n.jobTitle}` : '');
+                return {value: n.id, label: n.displayName, sub, vacant: n.vacant};
+            });
     }, [nodeMap]);
 
     const defaultFocusId = useMemo(() => {
