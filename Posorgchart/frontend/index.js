@@ -4,74 +4,49 @@ import {
     useRecords,
     expandRecord,
 } from '@airtable/blocks/interface/ui';
-import {useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo} from 'react';
+import {useState, useRef, useEffect, useMemo, useCallback} from 'react';
 import html2canvas from 'html2canvas';
 import {jsPDF} from 'jspdf';
 import './style.css';
 
 // ─── Data source configuration ───────────────────────────────────────────────
 //
-// All field-name dependencies for the EMPLOYEE org chart live here. Edit these
-// to match the exact field names in your Airtable table — nothing else in the
-// file hardcodes a field name.
+// All field-name dependencies live here. Edit these to match your Airtable
+// table; nothing else hardcodes a field name. Use the in-app "Fields" button to
+// see how each one resolved against the live table.
 //
-//   tableName         : the table to read from. When null, the first table in
-//                       the base is used.
-//   primaryNameSource : 'name'  → use the record's primary field as the card title,
-//                       or a field-name string to use a specific field instead.
-//   jobTitleField     : sub-text line 1 (set to null to hide).
-//   departmentField   : sub-text line 2 (set to null to hide).
-//   statusField       : drives the card BORDER color + the dynamic legend
-//                       (set to null to disable border coloring entirely).
-//   headcountField    : numeric field summed in the depth histogram. When null,
-//                       each node counts as 1 (i.e. people-per-level).
-//   parentLinkField   : the linked-record field that points to the manager /
-//                       parent. When null, the first linked-record field on the
-//                       table is auto-detected.
-//   orgFilterField    : field powering the "Organization" checkbox filter
-//                       (set to null to hide that filter).
-//   managerFilterField: field powering the "Manager" checkbox filter
-//                       (set to null to hide that filter).
+//   tableName         : table to read from (null ⇒ first table in the base).
+//   primaryNameSource : 'name' ⇒ record's primary field as the card title, or a
+//                       field-name string to use a specific field.
+//   jobTitleField     : job title shown on the card (null to hide).
+//   departmentField   : department / org shown on the card (null to hide).
+//   statusField       : optional colored accent + legend (null to disable).
+//   parentLinkField   : the field pointing to a person's manager. May be a
+//                       linked-record field OR a lookup (matched by id or name).
+//                       Null ⇒ auto-detect the first linked-record field.
 //
 const FIELDS = {
     tableName: 'Employees & Positions',
     primaryNameSource: '[E] First Name, Last Name',
     jobTitleField: 'REF Title [F]',
     departmentField: '[F] Supervisory Organization 🔗',
-    statusField: null,            // e.g. 'Employee Status' — set to enable border coloring
-    headcountField: null,         // e.g. 'Headcount' — null ⇒ 1 per node
+    statusField: null,
     parentLinkField: 'Future Manager',
-    orgFilterField: 'Future Organization',
-    managerFilterField: 'Future Manager',
 };
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Field helpers ────────────────────────────────────────────────────────────
 
-function safeGet(record, fieldName) {
-    if (!fieldName) return '';
+function safeGet(record, field) {
+    if (!field) return '';
     try {
-        return record.getCellValueAsString(fieldName);
+        return record.getCellValueAsString(field);
     } catch {
         return '';
     }
 }
 
-function safeGetNumber(record, fieldName) {
-    if (!fieldName) return 0;
-    try {
-        const v = record.getCellValue(fieldName);
-        if (v === null || v === undefined) return 0;
-        const n = typeof v === 'number' ? v : parseFloat(String(v));
-        return isNaN(n) ? 0 : n;
-    } catch {
-        return 0;
-    }
-}
-
 function getPrimaryName(record, nameField) {
-    if (nameField) {
-        return safeGet(record, nameField) || record.name;
-    }
+    if (nameField) return safeGet(record, nameField) || record.name;
     return record.name;
 }
 
@@ -79,10 +54,9 @@ function normName(s) {
     return String(s == null ? '' : s).normalize('NFKC').trim().toLowerCase();
 }
 
-// Resolve a configured field NAME to an actual field instance, tolerating
-// trailing/leading whitespace and decorative symbols (e.g. the "🔗" link emoji,
-// which often differs by an invisible variation selector). Returns null if the
-// name is unset or no field matches.
+// Resolve a configured field NAME to a field instance, tolerating whitespace and
+// decorative symbols (e.g. the "🔗" link emoji, which often differs by an
+// invisible variation selector). Returns null if unset or not found.
 function findFieldByName(table, name) {
     if (!name) return null;
     const exact = typeof table.getFieldByNameIfExists === 'function'
@@ -95,22 +69,18 @@ function findFieldByName(table, name) {
     return table.fields.find(f => norm(f.name) === target) || null;
 }
 
-// Extract candidate parent references from a manager cell. Handles linked-record
-// fields (entries with {id}) AND lookup fields, which expose {linkedRecordId,
-// value} entries and/or the looked-up manager name. Returns both record ids and
-// name strings so the caller can match by whichever resolves to a known record.
+// Candidate manager references from a cell. Handles linked-record fields (ids)
+// and lookups (linkedRecordId and/or the looked-up manager name).
 function extractParentRef(record, parentField) {
     const ids = [];
     const names = [];
     if (!parentField) return {ids, names};
-
     let cell;
     try {
         cell = record.getCellValue(parentField);
     } catch {
         return {ids, names};
     }
-
     const visit = item => {
         if (item == null) return;
         if (typeof item === 'string') {
@@ -124,9 +94,6 @@ function extractParentRef(record, parentField) {
     };
     if (Array.isArray(cell)) cell.forEach(visit);
     else visit(cell);
-
-    // If nothing structured came back, fall back to the whole string rendering
-    // as a single name candidate (do NOT split — names may contain commas).
     if (ids.length === 0 && names.length === 0) {
         const asStr = safeGet(record, parentField).trim();
         if (asStr) names.push(asStr);
@@ -134,567 +101,299 @@ function extractParentRef(record, parentField) {
     return {ids, names};
 }
 
-// Distinct, sorted, non-empty string values of a field across all records —
-// used to populate the checkbox filter dropdowns.
-function distinctValues(records, field) {
-    if (!field) return [];
-    const set = new Set();
+// ─── Org model ────────────────────────────────────────────────────────────────
+
+function buildOrg(records, cfg) {
+    const {parentField, nameField, jobTitleField, departmentField, statusField} = cfg;
+    const nodeMap = {};
+    const idByName = {};
+
     records.forEach(r => {
-        const v = safeGet(r, field).trim();
-        if (v) set.add(v);
+        const displayName = getPrimaryName(r, nameField);
+        nodeMap[r.id] = {
+            id: r.id,
+            record: r,
+            displayName,
+            jobTitle: safeGet(r, jobTitleField),
+            department: safeGet(r, departmentField),
+            status: safeGet(r, statusField),
+            childIds: [],
+            parentId: null,
+        };
+        [displayName, r.name].forEach(n => {
+            const k = normName(n);
+            if (k && !(k in idByName)) idByName[k] = r.id;
+        });
     });
-    return [...set].sort((a, b) => a.localeCompare(b));
+
+    const resolveParentId = r => {
+        const {ids, names} = extractParentRef(r, parentField);
+        for (const id of ids) {
+            if (nodeMap[id] && id !== r.id) return id;
+        }
+        for (const nm of names) {
+            const id = idByName[normName(nm)];
+            if (id && id !== r.id) return id;
+        }
+        return null;
+    };
+
+    records.forEach(r => {
+        const pid = resolveParentId(r);
+        if (pid && nodeMap[pid]) {
+            nodeMap[r.id].parentId = pid;
+            nodeMap[pid].childIds.push(r.id);
+        }
+    });
+
+    const byName = (a, b) => nodeMap[a].displayName.localeCompare(nodeMap[b].displayName);
+    Object.values(nodeMap).forEach(n => n.childIds.sort(byName));
+
+    const rootIds = Object.keys(nodeMap).filter(id => !nodeMap[id].parentId).sort(byName);
+
+    // Total descendants per node (cycle-guarded).
+    const totals = {};
+    const computeTotal = (id, stack) => {
+        if (totals[id] != null) return totals[id];
+        if (stack.has(id)) return 0;
+        stack.add(id);
+        let sum = 0;
+        nodeMap[id].childIds.forEach(c => { sum += 1 + computeTotal(c, stack); });
+        stack.delete(id);
+        totals[id] = sum;
+        return sum;
+    };
+    Object.keys(nodeMap).forEach(id => computeTotal(id, new Set()));
+
+    return {nodeMap, rootIds, totals};
 }
 
-// ─── Status → border color (dynamic) ─────────────────────────────────────────
-//
-// We don't hardcode the possible status values. Instead we assign each distinct
-// value a stable color from a palette, so the chart + legend work for whatever
-// values the configured statusField contains.
+// Management chain (top → focus's manager), cycle-guarded.
+function ancestorChain(nodeMap, id) {
+    const chain = [];
+    let cur = nodeMap[id] ? nodeMap[id].parentId : null;
+    let guard = 0;
+    const seen = new Set([id]);
+    while (cur && nodeMap[cur] && !seen.has(cur) && guard < 200) {
+        chain.push(cur);
+        seen.add(cur);
+        cur = nodeMap[cur].parentId;
+        guard++;
+    }
+    return chain.reverse();
+}
+
+// ─── Avatars & status colors ──────────────────────────────────────────────────
+
+const AVATAR_COLORS = [
+    '#2563eb', '#7c3aed', '#db2777', '#dc2626', '#ea580c',
+    '#d97706', '#16a34a', '#0891b2', '#4f46e5', '#0d9488',
+];
+
+function colorFromString(s) {
+    let h = 0;
+    const str = String(s || '');
+    for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+    return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+
+function initials(name) {
+    const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '?';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
 const STATUS_PALETTE = [
     '#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6',
     '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#14b8a6',
 ];
-const NEUTRAL_BORDER = '#e2e8f0';
 
-function buildStatusColorMap(values) {
-    const map = {};
-    values.forEach((val, i) => {
-        map[val] = STATUS_PALETTE[i % STATUS_PALETTE.length];
-    });
-    return map;
+function buildStatusColors(nodeMap) {
+    const vals = new Set();
+    Object.values(nodeMap).forEach(n => { if (n.status) vals.add(n.status); });
+    const arr = [...vals].sort();
+    const m = {};
+    arr.forEach((v, i) => { m[v] = STATUS_PALETTE[i % STATUS_PALETTE.length]; });
+    return m;
 }
 
-function buildTree(records, cfg) {
-    const {parentField, nameField, jobTitleField, departmentField, statusField, headcountField} = cfg;
-    const map = {};
-    const parentOf = {}; // childId → parentId
-    const conflicts = []; // {node, type, detail}
-    const statusValues = new Set();
-    const idByName = {}; // normalized name → record id (for name-based manager links)
+// ─── Export (PNG / PDF / paginated PDF) ──────────────────────────────────────
 
-    records.forEach(r => {
-        const status = safeGet(r, statusField);
-        if (status) statusValues.add(status);
-        const displayName = getPrimaryName(r, nameField);
-        map[r.id] = {
-            id: r.id,
-            name: r.name,
-            record: r,
-            displayName,
-            jobTitle: safeGet(r, jobTitleField),
-            department: safeGet(r, departmentField),
-            status,
-            headcount: headcountField ? safeGetNumber(r, headcountField) : 1,
-            children: [],
-        };
-        [displayName, r.name].forEach(n => {
-            const key = normName(n);
-            if (key && !(key in idByName)) idByName[key] = r.id;
+async function renderChartCanvas(el, {scale = 2} = {}) {
+    el.classList.add('exporting');
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    try {
+        return await html2canvas(el, {
+            scale,
+            backgroundColor: '#f8fafc',
+            useCORS: true,
+            logging: false,
+            width: el.scrollWidth,
+            height: el.scrollHeight,
+            windowWidth: el.scrollWidth,
+            windowHeight: el.scrollHeight,
         });
-    });
-
-    // Resolve a record's manager to a parent id. The manager field may be a
-    // linked-record field (gives an id) or a lookup (gives a linkedRecordId
-    // and/or the manager's name), so we try id matches first, then name matches.
-    const resolveParentId = r => {
-        const {ids, names} = extractParentRef(r, parentField);
-        for (const id of ids) {
-            if (map[id]) return id;
-        }
-        for (const nm of names) {
-            const id = idByName[normName(nm)];
-            if (id) return id;
-        }
-        return null;
-    };
-
-    // Build parent→child edges and detect simple conflicts
-    records.forEach(r => {
-        const parentId = resolveParentId(r);
-
-        if (parentId === r.id) {
-            // Self-reference
-            conflicts.push({
-                node: map[r.id],
-                type: 'Self-reference',
-                detail: `"${map[r.id].displayName}" reports to itself`,
-            });
-            return;
-        }
-
-        if (parentId && map[parentId]) {
-            parentOf[r.id] = parentId;
-        }
-    });
-
-    // Detect cycles: walk up from each node — if we revisit, it's a cycle
-    const inCycle = new Set();
-    Object.keys(parentOf).forEach(startId => {
-        const visited = new Set();
-        let cur = startId;
-        while (cur && parentOf[cur]) {
-            if (visited.has(cur)) {
-                // Found a cycle — mark all in the loop
-                let loopId = cur;
-                do {
-                    inCycle.add(loopId);
-                    loopId = parentOf[loopId];
-                } while (loopId && loopId !== cur);
-                inCycle.add(cur);
-                break;
-            }
-            visited.add(cur);
-            cur = parentOf[cur];
-        }
-    });
-
-    // Report cycle conflicts
-    const reportedCycles = new Set();
-    inCycle.forEach(id => {
-        if (!reportedCycles.has(id) && map[id]) {
-            // Find the full loop for the detail message
-            const loop = [id];
-            let next = parentOf[id];
-            while (next && next !== id) {
-                loop.push(next);
-                next = parentOf[next];
-            }
-            const names = loop.map(lid => map[lid] ? map[lid].displayName : lid);
-            conflicts.push({
-                node: map[id],
-                type: 'Circular reference',
-                detail: names.join(' → ') + ' → ' + (map[id] ? map[id].displayName : id),
-            });
-            loop.forEach(lid => reportedCycles.add(lid));
-        }
-    });
-
-    // Build the tree, skipping cycle nodes
-    Object.keys(parentOf).forEach(childId => {
-        if (inCycle.has(childId)) return;
-        const pid = parentOf[childId];
-        if (map[pid] && !inCycle.has(pid)) {
-            map[pid].children.push(map[childId]);
-        }
-    });
-
-    // Roots: nodes with no parent (or parent not in map), excluding cycle nodes
-    const roots = [];
-    records.forEach(r => {
-        if (inCycle.has(r.id)) return;
-        if (!parentOf[r.id]) {
-            roots.push(map[r.id]);
-        }
-    });
-
-    const statusColors = buildStatusColorMap([...statusValues].sort());
-
-    return {roots, conflicts, nodeMap: map, statusColors};
+    } finally {
+        el.classList.remove('exporting');
+    }
 }
 
-function collectSubtreeIds(node, set = new Set()) {
-    set.add(node.id);
-    node.children.forEach(c => collectSubtreeIds(c, set));
-    return set;
+function downloadDataUrl(dataUrl, filename) {
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 }
 
-// ─── SVG Connector Layer ────────────────────────────────────────────────────
+function timestamp() {
+    return new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+}
 
-function ConnectorLines({wrapperRef, version}) {
-    const [paths, setPaths] = useState([]);
+async function exportPNG(el) {
+    const canvas = await renderChartCanvas(el, {scale: 2});
+    downloadDataUrl(canvas.toDataURL('image/png'), `org-chart-${timestamp()}.png`);
+}
+
+async function exportPDF(el) {
+    const canvas = await renderChartCanvas(el, {scale: 2});
+    const pdf = new jsPDF({orientation: 'landscape', unit: 'pt', format: 'a4'});
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const margin = 24;
+    const ratio = Math.min((pageW - margin * 2) / canvas.width, (pageH - margin * 2) / canvas.height);
+    const imgW = canvas.width * ratio;
+    const imgH = canvas.height * ratio;
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', (pageW - imgW) / 2, (pageH - imgH) / 2, imgW, imgH);
+    pdf.save(`org-chart-${timestamp()}.pdf`);
+}
+
+async function exportPaginatedPDF(el) {
+    const canvas = await renderChartCanvas(el, {scale: 2});
+    const pdf = new jsPDF({orientation: 'landscape', unit: 'pt', format: 'a4'});
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const margin = 24;
+    const footer = 16;
+    const availW = pageW - margin * 2;
+    const availH = pageH - margin * 2 - footer;
+    const renderScale = availW / canvas.width;
+    const pxPerPageH = Math.max(1, Math.floor(availH / renderScale));
+    const rows = Math.max(1, Math.ceil(canvas.height / pxPerPageH));
+    const tile = document.createElement('canvas');
+    const tctx = tile.getContext('2d');
+
+    for (let r = 0; r < rows; r++) {
+        const sy = r * pxPerPageH;
+        const sh = Math.min(pxPerPageH, canvas.height - sy);
+        if (sh <= 0) continue;
+        tile.width = canvas.width;
+        tile.height = sh;
+        tctx.fillStyle = '#f8fafc';
+        tctx.fillRect(0, 0, canvas.width, sh);
+        tctx.drawImage(canvas, 0, sy, canvas.width, sh, 0, 0, canvas.width, sh);
+        if (r > 0) pdf.addPage();
+        pdf.addImage(tile.toDataURL('image/png'), 'PNG', margin, margin, availW, sh * renderScale);
+        pdf.setFontSize(8);
+        pdf.setTextColor(150);
+        pdf.text(`Page ${r + 1} of ${rows}`, margin, pageH - margin / 2);
+    }
+    pdf.save(`org-chart-paginated-${timestamp()}.pdf`);
+}
+
+function ExportMenu({targetRef}) {
+    const [open, setOpen] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const ref = useRef(null);
 
     useEffect(() => {
-        if (!wrapperRef.current) return;
+        if (!open) return;
+        const onDoc = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+        document.addEventListener('mousedown', onDoc);
+        return () => document.removeEventListener('mousedown', onDoc);
+    }, [open]);
 
-        const wrapper = wrapperRef.current;
-        const wrapperRect = wrapper.getBoundingClientRect();
-        const scale = wrapperRect.width / wrapper.offsetWidth || 1;
-        const newPaths = [];
-
-        const parentCards = wrapper.querySelectorAll('[data-node-id]');
-
-        parentCards.forEach(parentEl => {
-            const parentId = parentEl.getAttribute('data-node-id');
-            const li = parentEl.closest('li');
-            if (!li) return;
-            const childUl = li.querySelector(':scope > ul');
-            if (!childUl) return;
-
-            const childCards = childUl.querySelectorAll(':scope > li > [data-node-id]');
-            if (childCards.length === 0) return;
-
-            const parentRect = parentEl.getBoundingClientRect();
-            const px = (parentRect.left + parentRect.width / 2 - wrapperRect.left) / scale;
-            const py = (parentRect.bottom - wrapperRect.top) / scale;
-
-            childCards.forEach(childEl => {
-                const childRect = childEl.getBoundingClientRect();
-                const cx = (childRect.left + childRect.width / 2 - wrapperRect.left) / scale;
-                const cy = (childRect.top - wrapperRect.top) / scale;
-
-                const midY = py + (cy - py) * 0.5;
-                const d = `M ${px} ${py} C ${px} ${midY}, ${cx} ${midY}, ${cx} ${cy}`;
-
-                newPaths.push({key: `${parentId}-${childEl.getAttribute('data-node-id')}`, d});
-            });
-        });
-
-        setPaths(newPaths);
-    }, [wrapperRef, version]);
-
-    return (
-        <svg className="connector-svg">
-            {paths.map(p => (
-                <path key={p.key} d={p.d} />
-            ))}
-        </svg>
-    );
-}
-
-// ─── Depth Histogram (background bars per level) ────────────────────────────
-
-function DepthHistogram({wrapperRef, version, visible}) {
-    const [bars, setBars] = useState([]);
-
-    useEffect(() => {
-        if (!visible) {
-            setBars([]);
-            return;
+    const run = useCallback(async fn => {
+        if (!targetRef.current) return;
+        setBusy(true);
+        setOpen(false);
+        try {
+            await fn(targetRef.current);
+        } catch (err) {
+            window.alert('Export failed: ' + (err && err.message ? err.message : err));
+        } finally {
+            setBusy(false);
         }
-        if (!wrapperRef.current) return;
-
-        const wrapper = wrapperRef.current;
-        const wrapperRect = wrapper.getBoundingClientRect();
-        const scale = wrapperRect.width / wrapper.offsetWidth || 1;
-
-        // Group cards by depth and measure their vertical band
-        const cards = wrapper.querySelectorAll('[data-depth]');
-        const depthMap = {};
-
-        cards.forEach(el => {
-            const depth = parseInt(el.getAttribute('data-depth'), 10);
-            const hc = parseFloat(el.getAttribute('data-headcount')) || 0;
-            const rect = el.getBoundingClientRect();
-            const top = (rect.top - wrapperRect.top) / scale;
-            const bottom = (rect.bottom - wrapperRect.top) / scale;
-
-            if (!depthMap[depth]) {
-                depthMap[depth] = {sum: 0, minTop: top, maxBottom: bottom};
-            }
-            depthMap[depth].sum += hc;
-            depthMap[depth].minTop = Math.min(depthMap[depth].minTop, top);
-            depthMap[depth].maxBottom = Math.max(depthMap[depth].maxBottom, bottom);
-        });
-
-        const levels = Object.entries(depthMap).map(([d, v]) => ({
-            depth: parseInt(d, 10),
-            sum: Math.round(v.sum),
-            top: v.minTop,
-            bottom: v.maxBottom,
-        }));
-
-        const maxSum = Math.max(...levels.map(l => l.sum), 1);
-        const maxBarWidth = wrapper.offsetWidth * 0.3;
-
-        setBars(levels.map(l => ({
-            depth: l.depth,
-            sum: l.sum,
-            top: l.top - 8,
-            height: l.bottom - l.top + 16,
-            width: maxBarWidth * (l.sum / maxSum),
-        })));
-    }, [wrapperRef, version, visible]);
-
-    if (!visible || bars.length === 0) return null;
+    }, [targetRef]);
 
     return (
-        <div className="depth-histogram">
-            {bars.map(b => (
-                <div
-                    key={b.depth}
-                    className="depth-bar"
-                    style={{
-                        top: b.top,
-                        height: b.height,
-                        width: b.width,
-                    }}
-                >
-                    <span className="depth-bar-label">{b.sum}</span>
-                </div>
-            ))}
-        </div>
-    );
-}
-
-// ─── Pan & Zoom hook ────────────────────────────────────────────────────────
-
-function usePanZoom(viewportRef) {
-    const [pan, setPan] = useState({x: 0, y: 0});
-    const [zoom, setZoom] = useState(1);
-    const isDragging = useRef(false);
-    const dragStart = useRef({x: 0, y: 0});
-    const panStart = useRef({x: 0, y: 0});
-
-    const onMouseDown = useCallback(e => {
-        // Only pan on left-click on the background, not on cards/buttons
-        if (e.button !== 0) return;
-        if (e.target.closest('.org-card, .toggle-btn')) return;
-        isDragging.current = true;
-        dragStart.current = {x: e.clientX, y: e.clientY};
-        panStart.current = {x: pan.x, y: pan.y};
-        e.preventDefault();
-    }, [pan]);
-
-    const onMouseMove = useCallback(e => {
-        if (!isDragging.current) return;
-        const dx = e.clientX - dragStart.current.x;
-        const dy = e.clientY - dragStart.current.y;
-        setPan({x: panStart.current.x + dx, y: panStart.current.y + dy});
-    }, []);
-
-    const onMouseUp = useCallback(() => {
-        isDragging.current = false;
-    }, []);
-
-    // Anchor a zoom change at a screen point inside the viewport, so the
-    // content under that point stays fixed (viewport center by default).
-    // Transform is: screen = pan + origin + scale * (p - origin),
-    // where origin = (wrapperW/2, 0) because transformOrigin is "top center".
-    // To keep a screen-space anchor (ax, ay) stationary across a zoom change:
-    //   pan_new = pan + (1 - ratio) * (ax - origin - pan)
-    const applyZoomAt = useCallback((compute, anchorX, anchorY) => {
-        setZoom(prevZoom => {
-            const nextZoom = Math.min(2, Math.max(0.2, compute(prevZoom)));
-            if (nextZoom === prevZoom) return prevZoom;
-            const ratio = nextZoom / prevZoom;
-            const el = viewportRef.current;
-            if (el) {
-                const rect = el.getBoundingClientRect();
-                const ax = anchorX != null ? anchorX - rect.left : rect.width / 2;
-                const ay = anchorY != null ? anchorY - rect.top : rect.height / 2;
-                // wrapper's transformOrigin sits at (wrapperW/2, 0) in local coords;
-                // the wrapper's left edge is at viewport x = pan.x, so origin in
-                // viewport coords is (pan.x + wrapperW/2, pan.y + 0).
-                const wrapper = el.querySelector('.transform-wrapper');
-                const wrapperW = wrapper ? wrapper.offsetWidth : rect.width;
-                setPan(prev => {
-                    const ox = prev.x + wrapperW / 2;
-                    const oy = prev.y;
-                    return {
-                        x: prev.x + (1 - ratio) * (ax - ox),
-                        y: prev.y + (1 - ratio) * (ay - oy),
-                    };
-                });
-            }
-            return nextZoom;
-        });
-    }, [viewportRef]);
-
-    const onWheel = useCallback(e => {
-        if (!viewportRef.current) return;
-        e.preventDefault();
-        const delta = e.deltaY > 0 ? -0.05 : 0.05;
-        applyZoomAt(z => z + delta, e.clientX, e.clientY);
-    }, [viewportRef, applyZoomAt]);
-
-    useEffect(() => {
-        const el = viewportRef.current;
-        if (!el) return;
-        el.addEventListener('wheel', onWheel, {passive: false});
-        return () => el.removeEventListener('wheel', onWheel);
-    }, [viewportRef, onWheel]);
-
-    // Center the wrapper inside the viewport at zoom=1. With
-    // transform-origin "top center", pan.x = (viewportW - wrapperW) / 2
-    // puts the wrapper's own center at the viewport's horizontal center,
-    // regardless of how wide the tree currently is.
-    const centerView = useCallback(() => {
-        const vp = viewportRef.current;
-        if (!vp) return;
-        const wrapper = vp.querySelector('.transform-wrapper');
-        const vw = vp.offsetWidth;
-        const ww = wrapper ? wrapper.offsetWidth : vw;
-        setPan({x: (vw - ww) / 2, y: 0});
-        setZoom(1);
-    }, [viewportRef]);
-
-    const zoomIn = useCallback(() => applyZoomAt(z => z + 0.15), [applyZoomAt]);
-    const zoomOut = useCallback(() => applyZoomAt(z => z - 0.15), [applyZoomAt]);
-
-    return {pan, zoom, onMouseDown, onMouseMove, onMouseUp, resetView: centerView, zoomIn, zoomOut, centerView};
-}
-
-// ─── Org Card ───────────────────────────────────────────────────────────────
-
-function OrgCard({node, depth, statusColors, dragState, onDragStart, onDragEnd, onDrop}) {
-    const borderColor = node.status && statusColors[node.status]
-        ? statusColors[node.status]
-        : NEUTRAL_BORDER;
-
-    const isDragging = dragState.draggingId === node.id;
-    const dragActive = dragState.draggingId !== null;
-    const isForbidden = dragActive && dragState.forbiddenIds.has(node.id);
-    const isValidTarget = dragActive && !isForbidden;
-
-    const classNames = ['org-card'];
-    if (isDragging) classNames.push('dragging');
-    if (isValidTarget) classNames.push('drop-target');
-    if (isForbidden) classNames.push('drop-forbidden');
-
-    return (
-        <div
-            className={classNames.join(' ')}
-            data-node-id={node.id}
-            data-depth={depth}
-            data-headcount={node.headcount}
-            draggable="true"
-            style={{
-                borderColor: borderColor,
-                borderWidth: '2px',
-            }}
-            onDragStart={e => {
-                e.stopPropagation();
-                e.dataTransfer.setData('text/plain', node.id);
-                e.dataTransfer.effectAllowed = 'move';
-                onDragStart(node.id);
-            }}
-            onDragEnd={e => {
-                e.stopPropagation();
-                onDragEnd();
-            }}
-            onDragOver={e => {
-                if (!dragActive || isForbidden) return;
-                e.preventDefault();
-                e.stopPropagation();
-                e.dataTransfer.dropEffect = 'move';
-            }}
-            onDrop={e => {
-                e.preventDefault();
-                e.stopPropagation();
-                const childId = e.dataTransfer.getData('text/plain');
-                if (childId && childId !== node.id && !isForbidden) {
-                    onDrop(node.id, childId);
-                }
-                onDragEnd();
-            }}
-            onClick={e => {
-                if (dragActive) return;
-                e.stopPropagation();
-                expandRecord(node.record);
-            }}
-        >
-            <div className="org-card-name">{node.displayName}</div>
-            {node.jobTitle && (
-                <div className="org-card-meta">{node.jobTitle}</div>
-            )}
-            {node.department && (
-                <div className="org-card-meta">{node.department}</div>
-            )}
-            {node.children.length > 0 && (
-                <div className="org-card-children-count">
-                    {node.children.length} direct report{node.children.length !== 1 ? 's' : ''}
+        <div className="export-wrap" ref={ref}>
+            <button className="tb-btn" onClick={() => setOpen(o => !o)} disabled={busy} title="Export">
+                {busy ? 'Exporting…' : 'Export ▾'}
+            </button>
+            {open && (
+                <div className="menu">
+                    <button onClick={() => run(exportPNG)}>PNG image</button>
+                    <button onClick={() => run(exportPDF)}>PDF (single page)</button>
+                    <button onClick={() => run(exportPaginatedPDF)}>PDF (multi-page)</button>
                 </div>
             )}
         </div>
     );
 }
 
-// ─── Org Node (recursive, collapsible) ──────────────────────────────────────
+// ─── Search (jump to anyone) ──────────────────────────────────────────────────
 
-function OrgNode({node, defaultExpanded, depth, onToggle, statusColors, dragState, onDragStart, onDragEnd, onDrop, autoExpandIds, onAutoExpanded}) {
-    const [expanded, setExpanded] = useState(depth < defaultExpanded);
-    const hasChildren = node.children.length > 0;
+function SearchBox({nodeMap, onJump}) {
+    const [q, setQ] = useState('');
+    const [open, setOpen] = useState(false);
+    const ref = useRef(null);
 
     useEffect(() => {
-        if (autoExpandIds && autoExpandIds.has(node.id)) {
-            setExpanded(true);
-            onAutoExpanded(node.id);
-            setTimeout(() => onToggle(), 0);
-        }
-    }, [autoExpandIds, node.id, onAutoExpanded, onToggle]);
+        const onDoc = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+        document.addEventListener('mousedown', onDoc);
+        return () => document.removeEventListener('mousedown', onDoc);
+    }, []);
 
-    const handleToggle = useCallback(() => {
-        setExpanded(prev => !prev);
-        setTimeout(() => onToggle(), 0);
-    }, [onToggle]);
+    const matches = useMemo(() => {
+        const needle = q.trim().toLowerCase();
+        if (!needle) return [];
+        const out = [];
+        for (const n of Object.values(nodeMap)) {
+            if (
+                n.displayName.toLowerCase().includes(needle) ||
+                (n.jobTitle && n.jobTitle.toLowerCase().includes(needle)) ||
+                (n.department && n.department.toLowerCase().includes(needle))
+            ) {
+                out.push(n);
+                if (out.length >= 30) break;
+            }
+        }
+        return out.sort((a, b) => a.displayName.localeCompare(b.displayName));
+    }, [q, nodeMap]);
 
     return (
-        <li>
-            <OrgCard
-                node={node}
-                depth={depth}
-                statusColors={statusColors}
-                dragState={dragState}
-                onDragStart={onDragStart}
-                onDragEnd={onDragEnd}
-                onDrop={onDrop}
+        <div className="search-wrap" ref={ref}>
+            <input
+                className="search-input"
+                value={q}
+                placeholder="Search people…"
+                onChange={e => { setQ(e.target.value); setOpen(true); }}
+                onFocus={() => setOpen(true)}
             />
-            {hasChildren && (
-                <button
-                    className="toggle-btn"
-                    onClick={e => {
-                        e.stopPropagation();
-                        handleToggle();
-                    }}
-                    title={expanded ? 'Collapse' : 'Expand'}
-                >
-                    {expanded ? '−' : `+${node.children.length}`}
-                </button>
-            )}
-            {hasChildren && expanded && (
-                <ul>
-                    {node.children.map(child => (
-                        <OrgNode
-                            key={child.id}
-                            node={child}
-                            defaultExpanded={defaultExpanded}
-                            depth={depth + 1}
-                            onToggle={onToggle}
-                            statusColors={statusColors}
-                            dragState={dragState}
-                            onDragStart={onDragStart}
-                            onDragEnd={onDragEnd}
-                            onDrop={onDrop}
-                            autoExpandIds={autoExpandIds}
-                            onAutoExpanded={onAutoExpanded}
-                        />
-                    ))}
-                </ul>
-            )}
-        </li>
-    );
-}
-
-// ─── Conflict Banner ────────────────────────────────────────────────────────
-
-function ConflictBanner({conflicts}) {
-    const [expanded, setExpanded] = useState(false);
-
-    if (conflicts.length === 0) return null;
-
-    return (
-        <div className="conflict-banner">
-            <div className="conflict-header" onClick={() => setExpanded(prev => !prev)}>
-                <span className="conflict-icon">!</span>
-                <span className="conflict-summary">
-                    {conflicts.length} conflict{conflicts.length !== 1 ? 's' : ''} detected
-                </span>
-                <span className="conflict-toggle">{expanded ? 'Hide' : 'Show'}</span>
-            </div>
-            {expanded && (
-                <div className="conflict-list">
-                    {conflicts.map((c, i) => (
-                        <div
-                            key={i}
-                            className="conflict-item"
-                            onClick={() => c.node && c.node.record && expandRecord(c.node.record)}
+            {open && q.trim() && (
+                <div className="menu search-menu">
+                    {matches.length === 0 && <div className="search-empty">No matches</div>}
+                    {matches.map(n => (
+                        <button
+                            key={n.id}
+                            onClick={() => { onJump(n.id); setOpen(false); setQ(''); }}
                         >
-                            <span className="conflict-type">{c.type}</span>
-                            <span className="conflict-detail">{c.detail}</span>
-                            <span className="conflict-fix">Click to edit</span>
-                        </div>
+                            <span className="search-name">{n.displayName}</span>
+                            {n.jobTitle && <span className="search-meta">{n.jobTitle}</span>}
+                        </button>
                     ))}
                 </div>
             )}
@@ -702,142 +401,60 @@ function ConflictBanner({conflicts}) {
     );
 }
 
-// ─── About Modal ────────────────────────────────────────────────────────────
+// ─── Modals ───────────────────────────────────────────────────────────────────
 
 function AboutModal({onClose}) {
     useEffect(() => {
-        const onKey = e => {
-            if (e.key === 'Escape') onClose();
-        };
+        const onKey = e => { if (e.key === 'Escape') onClose(); };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
     }, [onClose]);
 
     return (
-        <div className="about-overlay" onClick={onClose}>
-            <div className="about-modal" onClick={e => e.stopPropagation()}>
-                <button className="about-close" onClick={onClose} title="Close">×</button>
-                <h2 className="about-title">About this Org Chart</h2>
-                <p className="about-body">
-                    This employee org chart was built by PwC as a token of
-                    appreciation for the trust and partnership Roche has placed in
-                    us — and for the results we&rsquo;ve delivered together.
+        <div className="overlay" onClick={onClose}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+                <button className="modal-close" onClick={onClose} title="Close">×</button>
+                <h2 className="modal-title">About this Org Chart</h2>
+                <p className="modal-body">
+                    A Workday-style org explorer built by PwC as a token of appreciation
+                    for the trust and partnership Roche has placed in us — and for the
+                    results we&rsquo;ve delivered together.
                 </p>
-                <p className="about-body">
-                    We hope this tool continues to serve your organisation well.
-                </p>
-                <p className="about-contact">
+                <p className="modal-contact">
                     Developed by the PwC team. Primary contact:{' '}
-                    <strong>Valon Hyseni (PwC P&amp;O)</strong>. For questions,
-                    please reach out.
+                    <strong>Valon Hyseni (PwC P&amp;O)</strong>.
                 </p>
-                <div className="about-signoff">— PwC</div>
+                <div className="modal-signoff">— PwC</div>
             </div>
         </div>
     );
 }
 
-// ─── Checkbox filter dropdown ────────────────────────────────────────────────
-
-function CheckboxFilter({label, options, selected, onChange}) {
-    const [open, setOpen] = useState(false);
-    const ref = useRef(null);
-
-    useEffect(() => {
-        if (!open) return;
-        const onDocClick = e => {
-            if (ref.current && !ref.current.contains(e.target)) setOpen(false);
-        };
-        document.addEventListener('mousedown', onDocClick);
-        return () => document.removeEventListener('mousedown', onDocClick);
-    }, [open]);
-
-    const toggle = useCallback(value => {
-        const next = new Set(selected);
-        if (next.has(value)) next.delete(value);
-        else next.add(value);
-        onChange(next);
-    }, [selected, onChange]);
-
-    const selectAll = useCallback(() => onChange(new Set(options)), [options, onChange]);
-    const clear = useCallback(() => onChange(new Set()), [onChange]);
-
-    const count = selected.size;
-
-    return (
-        <div className="filter-wrap" ref={ref}>
-            <button
-                className={`filter-btn ${count > 0 ? 'active' : ''}`}
-                onClick={() => setOpen(o => !o)}
-                title={`Filter by ${label}`}
-            >
-                {label}{count > 0 ? ` (${count})` : ''} ▾
-            </button>
-            {open && (
-                <div className="filter-menu">
-                    <div className="filter-menu-actions">
-                        <button onClick={selectAll}>All</button>
-                        <button onClick={clear}>Clear</button>
-                    </div>
-                    <div className="filter-menu-list">
-                        {options.length === 0 && (
-                            <div className="filter-empty">No values</div>
-                        )}
-                        {options.map(opt => (
-                            <label key={opt} className="filter-option">
-                                <input
-                                    type="checkbox"
-                                    checked={selected.has(opt)}
-                                    onChange={() => toggle(opt)}
-                                />
-                                <span className="filter-option-label">{opt}</span>
-                            </label>
-                        ))}
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-}
-
-// ─── Fields diagnostics modal ────────────────────────────────────────────────
-//
-// Shows how each configured FIELDS entry resolved against the live table, plus
-// the full list of actual field names — so a mismatch (e.g. an emoji that
-// doesn't match) is obvious and easy to copy the correct name from.
-
 function FieldsModal({table, cfg, onClose}) {
     useEffect(() => {
-        const onKey = e => {
-            if (e.key === 'Escape') onClose();
-        };
+        const onKey = e => { if (e.key === 'Escape') onClose(); };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
     }, [onClose]);
 
     const mappings = [
         ['Name', FIELDS.primaryNameSource === 'name' ? '(primary field)' : FIELDS.primaryNameSource,
-            FIELDS.primaryNameSource === 'name' ? {name: 'primary field', type: '—'} : cfg.nameField],
+            FIELDS.primaryNameSource === 'name' ? {type: 'primary'} : cfg.nameField],
         ['Job title', FIELDS.jobTitleField, cfg.jobTitleField],
         ['Department', FIELDS.departmentField, cfg.departmentField],
         ['Status', FIELDS.statusField, cfg.statusField],
-        ['Headcount', FIELDS.headcountField, cfg.headcountField],
         ['Manager link', FIELDS.parentLinkField, cfg.parentField],
-        ['Org filter', FIELDS.orgFilterField, cfg.orgFilterField],
-        ['Manager filter', FIELDS.managerFilterField, cfg.managerFilterField],
     ];
 
     return (
-        <div className="about-overlay" onClick={onClose}>
-            <div className="about-modal fields-modal" onClick={e => e.stopPropagation()}>
-                <button className="about-close" onClick={onClose} title="Close">×</button>
-                <h2 className="about-title">Field diagnostics</h2>
+        <div className="overlay" onClick={onClose}>
+            <div className="modal fields-modal" onClick={e => e.stopPropagation()}>
+                <button className="modal-close" onClick={onClose} title="Close">×</button>
+                <h2 className="modal-title">Field diagnostics</h2>
 
                 <h3 className="fields-subtitle">Configured mappings</h3>
                 <table className="fields-table">
-                    <thead>
-                        <tr><th>Role</th><th>Configured name</th><th>Resolved</th></tr>
-                    </thead>
+                    <thead><tr><th>Role</th><th>Configured name</th><th>Resolved</th></tr></thead>
                     <tbody>
                         {mappings.map(([role, configured, field]) => (
                             <tr key={role}>
@@ -872,206 +489,57 @@ function FieldsModal({table, cfg, onClose}) {
     );
 }
 
-// ─── Export (PNG / PDF / paginated PDF) ──────────────────────────────────────
+// ─── Person card ──────────────────────────────────────────────────────────────
 
-// Render the org tree to a high-resolution canvas. We temporarily strip the
-// pan/zoom transform so html2canvas captures the whole tree at its natural
-// size, then restore it. The `exporting` class hides UI-only chrome (toggle
-// buttons) from the captured image.
-async function renderChartCanvas(wrapperEl, {scale = 2} = {}) {
-    const prevTransform = wrapperEl.style.transform;
-    const prevOrigin = wrapperEl.style.transformOrigin;
-    wrapperEl.style.transform = 'none';
-    wrapperEl.style.transformOrigin = 'top left';
-    wrapperEl.classList.add('exporting');
-    // Let layout settle before capture.
-    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-
-    try {
-        const canvas = await html2canvas(wrapperEl, {
-            scale,
-            backgroundColor: '#f8fafc',
-            useCORS: true,
-            logging: false,
-            width: wrapperEl.scrollWidth,
-            height: wrapperEl.scrollHeight,
-            windowWidth: wrapperEl.scrollWidth,
-            windowHeight: wrapperEl.scrollHeight,
-        });
-        return canvas;
-    } finally {
-        wrapperEl.classList.remove('exporting');
-        wrapperEl.style.transform = prevTransform;
-        wrapperEl.style.transformOrigin = prevOrigin;
-    }
-}
-
-function downloadDataUrl(dataUrl, filename) {
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-}
-
-function timestamp() {
-    return new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-}
-
-async function exportPNG(wrapperEl) {
-    const canvas = await renderChartCanvas(wrapperEl, {scale: 2});
-    downloadDataUrl(canvas.toDataURL('image/png'), `org-chart-${timestamp()}.png`);
-}
-
-// Single-page PDF: the whole chart scaled to fit one landscape A4 page.
-async function exportPDF(wrapperEl) {
-    const canvas = await renderChartCanvas(wrapperEl, {scale: 2});
-    const pdf = new jsPDF({orientation: 'landscape', unit: 'pt', format: 'a4'});
-    const pageW = pdf.internal.pageSize.getWidth();
-    const pageH = pdf.internal.pageSize.getHeight();
-    const margin = 24;
-    const availW = pageW - margin * 2;
-    const availH = pageH - margin * 2;
-    const ratio = Math.min(availW / canvas.width, availH / canvas.height);
-    const imgW = canvas.width * ratio;
-    const imgH = canvas.height * ratio;
-    pdf.addImage(
-        canvas.toDataURL('image/png'), 'PNG',
-        (pageW - imgW) / 2, (pageH - imgH) / 2, imgW, imgH,
-    );
-    pdf.save(`org-chart-${timestamp()}.pdf`);
-}
-
-// Multi-page (paginated) PDF: the chart is rendered at full resolution and then
-// sliced into page-sized tiles, so a large chart prints legibly across several
-// pages instead of being shrunk to fit one. The chart width is fit to the page
-// width and the height is paginated top→bottom; each page is numbered.
-async function exportPaginatedPDF(wrapperEl) {
-    const canvas = await renderChartCanvas(wrapperEl, {scale: 2});
-    const pdf = new jsPDF({orientation: 'landscape', unit: 'pt', format: 'a4'});
-    const pageW = pdf.internal.pageSize.getWidth();
-    const pageH = pdf.internal.pageSize.getHeight();
-    const margin = 24;
-    const footer = 16;
-    const availW = pageW - margin * 2;
-    const availH = pageH - margin * 2 - footer;
-
-    // Fit the chart's WIDTH to the page width (a readable target) and let the
-    // height paginate. renderScale converts source pixels → PDF points.
-    const renderScale = availW / canvas.width;
-    const pxPerPageH = Math.max(1, Math.floor(availH / renderScale)); // source px per page tall
-    const rows = Math.max(1, Math.ceil(canvas.height / pxPerPageH));
-
-    const tileCanvas = document.createElement('canvas');
-    const tctx = tileCanvas.getContext('2d');
-
-    for (let r = 0; r < rows; r++) {
-        const sy = r * pxPerPageH;
-        const sh = Math.min(pxPerPageH, canvas.height - sy);
-        if (sh <= 0) continue;
-
-        tileCanvas.width = canvas.width;
-        tileCanvas.height = sh;
-        tctx.fillStyle = '#f8fafc';
-        tctx.fillRect(0, 0, canvas.width, sh);
-        tctx.drawImage(canvas, 0, sy, canvas.width, sh, 0, 0, canvas.width, sh);
-
-        if (r > 0) pdf.addPage();
-
-        pdf.addImage(
-            tileCanvas.toDataURL('image/png'), 'PNG',
-            margin, margin, availW, sh * renderScale,
-        );
-        pdf.setFontSize(8);
-        pdf.setTextColor(150);
-        pdf.text(`Page ${r + 1} of ${rows}`, margin, pageH - margin / 2);
-    }
-
-    pdf.save(`org-chart-paginated-${timestamp()}.pdf`);
-}
-
-function ExportMenu({wrapperRef}) {
-    const [open, setOpen] = useState(false);
-    const [busy, setBusy] = useState(null); // 'png' | 'pdf' | 'paginated'
-    const menuRef = useRef(null);
-
-    useEffect(() => {
-        if (!open) return;
-        const onDocClick = e => {
-            if (menuRef.current && !menuRef.current.contains(e.target)) setOpen(false);
-        };
-        document.addEventListener('mousedown', onDocClick);
-        return () => document.removeEventListener('mousedown', onDocClick);
-    }, [open]);
-
-    const run = useCallback(async (kind, fn) => {
-        if (!wrapperRef.current) return;
-        setBusy(kind);
-        setOpen(false);
-        try {
-            await fn(wrapperRef.current);
-        } catch (err) {
-            window.alert('Export failed: ' + (err && err.message ? err.message : err));
-        } finally {
-            setBusy(null);
-        }
-    }, [wrapperRef]);
-
+function PersonCard({node, variant, directs, total, statusColor, onDrill, onOpen}) {
+    const drillable = variant === 'report' && directs > 0;
+    const cls = ['person-card', `person-card-${variant}`];
+    if (variant === 'report') cls.push('clickable');
     return (
-        <div className="export-wrap" ref={menuRef}>
-            <button
-                className="export-btn"
-                onClick={() => setOpen(o => !o)}
-                disabled={busy !== null}
-                title="Export the org chart"
-            >
-                {busy ? 'Exporting…' : 'Export ▾'}
-            </button>
-            {open && (
-                <div className="export-menu">
-                    <button onClick={() => run('png', exportPNG)}>PNG image</button>
-                    <button onClick={() => run('pdf', exportPDF)}>PDF (single page)</button>
-                    <button onClick={() => run('paginated', exportPaginatedPDF)}>PDF (multi-page)</button>
-                </div>
-            )}
+        <div
+            className={cls.join(' ')}
+            style={statusColor ? {borderLeftColor: statusColor, borderLeftWidth: 4} : undefined}
+            onClick={variant === 'report' ? () => onDrill(node.id) : undefined}
+            title={variant === 'report' ? `Open ${node.displayName}` : undefined}
+        >
+            <div className="person-avatar" style={{background: colorFromString(node.displayName)}}>
+                {initials(node.displayName)}
+            </div>
+            <div className="person-info">
+                <div className="person-name">{node.displayName}</div>
+                {node.jobTitle && <div className="person-title">{node.jobTitle}</div>}
+                {node.department && <div className="person-dept">{node.department}</div>}
+            </div>
+            <div className="person-footer">
+                {directs > 0 ? (
+                    <span className="person-stat">
+                        {directs} direct{directs !== 1 ? 's' : ''} · {total} total
+                    </span>
+                ) : (
+                    <span className="person-stat person-stat-leaf">Individual contributor</span>
+                )}
+                <button
+                    className="person-open"
+                    onClick={e => { e.stopPropagation(); onOpen(node); }}
+                    title="Open record in Airtable"
+                >
+                    Open ↗
+                </button>
+            </div>
+            {drillable && <div className="person-drill">▾</div>}
         </div>
     );
 }
 
-// ─── Main Chart ─────────────────────────────────────────────────────────────
+// ─── Main Workday-style chart ─────────────────────────────────────────────────
 
-function OrgChartWithData({table}) {
+function WorkdayChart({table}) {
     const records = useRecords(table);
-    const [defaultExpanded, setDefaultExpanded] = useState(2);
-    const [lineVersion, setLineVersion] = useState(0);
-    const [draggingId, setDraggingId] = useState(null);
-    const [forbiddenIds, setForbiddenIds] = useState(() => new Set());
-    const [dropError, setDropError] = useState(null);
-    const [autoExpandIds, setAutoExpandIds] = useState(() => new Set());
-    const [showHistogram, setShowHistogram] = useState(true);
-    const [showLegend, setShowLegend] = useState(true);
+    const [focusIdState, setFocusIdState] = useState(null);
     const [showAbout, setShowAbout] = useState(false);
     const [showFields, setShowFields] = useState(false);
-    const [orgFilter, setOrgFilter] = useState(() => new Set());
-    const [managerFilter, setManagerFilter] = useState(() => new Set());
-    const viewportRef = useRef(null);
-    const wrapperRef = useRef(null);
+    const boardRef = useRef(null);
 
-    const {pan, zoom, onMouseDown, onMouseMove, onMouseUp, resetView, zoomIn, zoomOut, centerView} =
-        usePanZoom(viewportRef);
-
-    // Re-center + reset zoom whenever the depth selector changes (the tree
-    // collapses/expands dramatically, so the old pan/zoom would leave the
-    // smaller tree off-screen). Also fires on initial mount, which centers
-    // wide trees that would otherwise load left-aligned.
-    useLayoutEffect(() => {
-        centerView();
-    }, [defaultExpanded, centerView]);
-
-    // Resolve every configured field NAME to a real field instance (tolerant of
-    // emoji/whitespace differences). The manager field is resolved explicitly;
-    // only when parentLinkField is unset do we auto-detect a linked-record field.
     const cfg = useMemo(() => {
         const nameField = FIELDS.primaryNameSource && FIELDS.primaryNameSource !== 'name'
             ? findFieldByName(table, FIELDS.primaryNameSource)
@@ -1084,306 +552,154 @@ function OrgChartWithData({table}) {
             jobTitleField: findFieldByName(table, FIELDS.jobTitleField),
             departmentField: findFieldByName(table, FIELDS.departmentField),
             statusField: findFieldByName(table, FIELDS.statusField),
-            headcountField: findFieldByName(table, FIELDS.headcountField),
             parentField,
-            orgFilterField: findFieldByName(table, FIELDS.orgFilterField),
-            managerFilterField: findFieldByName(table, FIELDS.managerFilterField),
         };
     }, [table]);
-    const parentField = cfg.parentField;
-    // Stable dependency key so the tree only rebuilds when records or the
-    // resolved field set actually change.
     const cfgKey = Object.values(cfg).map(f => (f ? f.id : '∅')).join('|');
 
-    // Distinct values for the two checkbox filters (computed over ALL records so
-    // the option list stays stable while filtering).
-    const orgOptions = useMemo(
-        () => distinctValues(records, cfg.orgFilterField),
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [records, cfgKey],
-    );
-    const managerOptions = useMemo(
-        () => distinctValues(records, cfg.managerFilterField),
+    const {nodeMap, rootIds, totals} = useMemo(
+        () => buildOrg(records, cfg),
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [records, cfgKey],
     );
 
-    // Apply the active filters. An empty selection means "no constraint". A
-    // record is kept only if it satisfies every active filter.
-    const filteredRecords = useMemo(() => {
-        if (orgFilter.size === 0 && managerFilter.size === 0) return records;
-        return records.filter(r => {
-            if (orgFilter.size && !orgFilter.has(safeGet(r, cfg.orgFilterField).trim())) return false;
-            if (managerFilter.size && !managerFilter.has(safeGet(r, cfg.managerFilterField).trim())) return false;
-            return true;
-        });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [records, cfgKey, orgFilter, managerFilter]);
+    const statusColors = useMemo(() => buildStatusColors(nodeMap), [nodeMap]);
+    const hasStatus = Object.keys(statusColors).length > 0;
 
-    const {roots, conflicts, nodeMap, statusColors} = useMemo(
-        () => buildTree(filteredRecords, cfg),
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [filteredRecords, cfgKey],
+    // Default focus = the root that heads the largest tree.
+    const defaultFocusId = useMemo(() => {
+        if (rootIds.length === 0) return null;
+        return [...rootIds].sort((a, b) => (totals[b] || 0) - (totals[a] || 0))[0];
+    }, [rootIds, totals]);
+
+    const focusId = (focusIdState && nodeMap[focusIdState]) ? focusIdState : defaultFocusId;
+    const focus = focusId ? nodeMap[focusId] : null;
+
+    const chain = useMemo(
+        () => (focusId ? ancestorChain(nodeMap, focusId) : []),
+        [nodeMap, focusId],
     );
 
-    const legendItems = useMemo(
-        () => Object.entries(statusColors).map(([label, color]) => ({label, color})),
-        [statusColors],
-    );
+    const drill = useCallback(id => setFocusIdState(id), []);
+    const openRecord = useCallback(node => { if (node && node.record) expandRecord(node.record); }, []);
 
-    const handleDragStart = useCallback(nodeId => {
-        const node = nodeMap[nodeId];
-        if (!node) return;
-        setDraggingId(nodeId);
-        setForbiddenIds(collectSubtreeIds(node));
-        setDropError(null);
-    }, [nodeMap]);
+    if (!focus) {
+        return (
+            <div className="org-root">
+                <div className="empty-state">
+                    No people to display. Open <strong>Fields</strong> to check that the
+                    name and manager fields resolved, or configure a table in the Data panel.
+                </div>
+            </div>
+        );
+    }
 
-    const handleDragEnd = useCallback(() => {
-        setDraggingId(null);
-        setForbiddenIds(new Set());
-    }, []);
-
-    const handleDrop = useCallback(async (newParentId, childId) => {
-        if (!parentField) {
-            setDropError('No manager/parent link field found on this table.');
-            return;
-        }
-        // Reparenting writes to the manager field — only possible if it's an
-        // editable linked-record field. Lookup/computed manager fields are
-        // read-only, so we surface a clear message rather than a write failure.
-        if (parentField.type !== 'multipleRecordLinks') {
-            setDropError(
-                `Can't move records: the manager field "${parentField.name}" is a ` +
-                `${parentField.type} (read-only). Reparenting needs an editable ` +
-                `linked-record field.`,
-            );
-            return;
-        }
-        const childNode = nodeMap[childId];
-        if (!childNode || !childNode.record) return;
-        const updateFields = {[parentField.id]: [{id: newParentId}]};
-        try {
-            await table.updateRecordAsync(childNode.record, updateFields);
-            setAutoExpandIds(prev => {
-                const next = new Set(prev);
-                next.add(newParentId);
-                return next;
-            });
-        } catch (err) {
-            const check = table.checkPermissionsForUpdateRecord(childNode.record, updateFields);
-            const reason = check && !check.hasPermission && check.reasonDisplayString
-                ? check.reasonDisplayString
-                : (err && err.message ? err.message : String(err));
-            setDropError(`Update failed: ${reason}`);
-        }
-    }, [parentField, nodeMap, table]);
-
-    const dragState = {draggingId, forbiddenIds};
-
-    const handleAutoExpanded = useCallback(id => {
-        setAutoExpandIds(prev => {
-            if (!prev.has(id)) return prev;
-            const next = new Set(prev);
-            next.delete(id);
-            return next;
-        });
-    }, []);
-
-    const redrawRafRef = useRef(0);
-    const redrawLines = useCallback(() => {
-        if (redrawRafRef.current) return;
-        redrawRafRef.current = requestAnimationFrame(() => {
-            redrawRafRef.current = 0;
-            setLineVersion(v => v + 1);
-        });
-    }, []);
-
-    useEffect(() => () => {
-        if (redrawRafRef.current) cancelAnimationFrame(redrawRafRef.current);
-    }, []);
-
-    useEffect(() => {
-        redrawLines();
-    }, [filteredRecords, defaultExpanded, redrawLines]);
-
-    // Re-center when the filter selection changes — the visible tree can shrink
-    // or grow a lot, so the old pan/zoom would leave it off-screen.
-    useLayoutEffect(() => {
-        centerView();
-    }, [orgFilter, managerFilter, centerView]);
-
-    // Note: no redraw on pan/zoom — SVG + histogram live inside transform-wrapper
-    // and scale with it for free, so recomputing paths would be pure waste.
-
-    const zoomPct = Math.round(zoom * 100);
-    const hasLegend = legendItems.length > 0;
-    const anyFilterActive = orgFilter.size > 0 || managerFilter.size > 0;
+    const children = focus.childIds.map(id => nodeMap[id]);
 
     return (
-        <div className="org-chart-root">
-            {/* Header: legend left, controls right */}
-            <div className="header-bar">
-                <div className="header-legends">
-                    {cfg.orgFilterField && (
-                        <CheckboxFilter
-                            label="Organization"
-                            options={orgOptions}
-                            selected={orgFilter}
-                            onChange={setOrgFilter}
-                        />
-                    )}
-                    {cfg.managerFilterField && (
-                        <CheckboxFilter
-                            label="Manager"
-                            options={managerOptions}
-                            selected={managerFilter}
-                            onChange={setManagerFilter}
-                        />
-                    )}
-                    {anyFilterActive && (
-                        <button
-                            className="filter-clear-all"
-                            onClick={() => { setOrgFilter(new Set()); setManagerFilter(new Set()); }}
-                            title="Clear all filters"
+        <div className="org-root">
+            {/* Toolbar */}
+            <div className="toolbar">
+                <div className="toolbar-left">
+                    <span className="app-title">Org Chart</span>
+                    {rootIds.length > 1 && (
+                        <select
+                            className="root-select"
+                            value=""
+                            onChange={e => { if (e.target.value) drill(e.target.value); }}
+                            title="Jump to a top-of-org"
                         >
-                            Clear filters · {filteredRecords.length}/{records.length}
-                        </button>
+                            <option value="">Top of org…</option>
+                            {rootIds.map(id => (
+                                <option key={id} value={id}>{nodeMap[id].displayName}</option>
+                            ))}
+                        </select>
                     )}
-                    {hasLegend && showLegend && (
-                        <div className="legend-group">
-                            <span className="legend-title">Status:</span>
-                            {legendItems.map(c => (
-                                <span key={c.label} className="legend-item">
-                                    <span className="legend-dot-border" style={{borderColor: c.color}} />
-                                    <span>{c.label}</span>
+                </div>
+                <div className="toolbar-right">
+                    {hasStatus && (
+                        <div className="legend">
+                            {Object.entries(statusColors).map(([label, color]) => (
+                                <span key={label} className="legend-item">
+                                    <span className="legend-dot" style={{background: color}} />
+                                    {label}
                                 </span>
                             ))}
                         </div>
                     )}
+                    <SearchBox nodeMap={nodeMap} onJump={drill} />
+                    <ExportMenu targetRef={boardRef} />
+                    <button className="tb-btn" onClick={() => setShowFields(true)} title="Field diagnostics">Fields</button>
+                    <button className="tb-btn" onClick={() => setShowAbout(true)} title="About">About</button>
                 </div>
-                <div className="header-depth">
-                    <span className="toolbar-label">Depth:</span>
-                    {[1, 2, 3, 99].map(d => (
+            </div>
+
+            {/* Breadcrumb of the management chain */}
+            <div className="breadcrumb">
+                {chain.length === 0 && <span className="crumb crumb-current">Top of organization</span>}
+                {chain.map(id => (
+                    <span key={id} className="crumb-wrap">
+                        <button className="crumb" onClick={() => drill(id)}>{nodeMap[id].displayName}</button>
+                        <span className="crumb-sep">›</span>
+                    </span>
+                ))}
+                {chain.length > 0 && <span className="crumb crumb-current">{focus.displayName}</span>}
+            </div>
+
+            {/* Board (focus + direct reports) — the export target */}
+            <div className="board-scroll">
+                <div className="board" ref={boardRef}>
+                    {focus.parentId && nodeMap[focus.parentId] && (
                         <button
-                            key={d}
-                            className={`toolbar-depth-btn ${defaultExpanded === d ? 'active' : ''}`}
-                            onClick={() => setDefaultExpanded(d)}
+                            className="up-btn"
+                            onClick={() => drill(focus.parentId)}
+                            title={`Up to ${nodeMap[focus.parentId].displayName}`}
                         >
-                            {d === 99 ? 'All' : d}
+                            ↑ {nodeMap[focus.parentId].displayName}
                         </button>
-                    ))}
-                    <label className="histogram-toggle-wrap" title={showHistogram ? 'Hide histogram' : 'Show histogram'}>
-                        <span className="toolbar-label histogram-toggle-label">Histogram</span>
-                        <button
-                            type="button"
-                            role="switch"
-                            aria-checked={showHistogram}
-                            className={`toggle-switch ${showHistogram ? 'on' : 'off'}`}
-                            onClick={() => setShowHistogram(v => !v)}
-                        >
-                            <span className="toggle-switch-knob" />
-                        </button>
-                    </label>
-                    {hasLegend && (
-                        <label className="histogram-toggle-wrap" title={showLegend ? 'Hide legend' : 'Show legend'}>
-                            <span className="toolbar-label histogram-toggle-label">Legend</span>
-                            <button
-                                type="button"
-                                role="switch"
-                                aria-checked={showLegend}
-                                className={`toggle-switch ${showLegend ? 'on' : 'off'}`}
-                                onClick={() => setShowLegend(v => !v)}
-                            >
-                                <span className="toggle-switch-knob" />
-                            </button>
-                        </label>
                     )}
-                    <div className="zoom-controls">
-                        <button className="zoom-btn" onClick={zoomIn} title="Zoom in">+</button>
-                        <span className="zoom-level">{zoomPct}%</span>
-                        <button className="zoom-btn" onClick={zoomOut} title="Zoom out">−</button>
-                        <button className="zoom-btn zoom-btn-reset" onClick={resetView} title="Reset view">Reset</button>
+
+                    <div className="focus-row">
+                        <PersonCard
+                            node={focus}
+                            variant="focus"
+                            directs={focus.childIds.length}
+                            total={totals[focus.id] || 0}
+                            statusColor={focus.status ? statusColors[focus.status] : null}
+                            onDrill={drill}
+                            onOpen={openRecord}
+                        />
                     </div>
-                    <ExportMenu wrapperRef={wrapperRef} />
-                    <button
-                        className="about-btn"
-                        onClick={() => setShowFields(true)}
-                        title="Show field diagnostics (which fields resolved)"
-                    >
-                        Fields
-                    </button>
-                    <button
-                        className="about-btn"
-                        onClick={() => setShowAbout(true)}
-                        title="About this org chart"
-                    >
-                        About
-                    </button>
+
+                    {children.length > 0 ? (
+                        <>
+                            <div className="connector-vertical" />
+                            <div className="reports-label">
+                                {children.length} direct report{children.length !== 1 ? 's' : ''}
+                            </div>
+                            <div className="reports-grid">
+                                {children.map(child => (
+                                    <PersonCard
+                                        key={child.id}
+                                        node={child}
+                                        variant="report"
+                                        directs={child.childIds.length}
+                                        total={totals[child.id] || 0}
+                                        statusColor={child.status ? statusColors[child.status] : null}
+                                        onDrill={drill}
+                                        onOpen={openRecord}
+                                    />
+                                ))}
+                            </div>
+                        </>
+                    ) : (
+                        <div className="no-reports">No direct reports</div>
+                    )}
                 </div>
             </div>
 
             {showAbout && <AboutModal onClose={() => setShowAbout(false)} />}
             {showFields && <FieldsModal table={table} cfg={cfg} onClose={() => setShowFields(false)} />}
-
-            {/* Conflict banner */}
-            <ConflictBanner conflicts={conflicts} />
-
-            {/* Drop error toast */}
-            {dropError && (
-                <div className="drop-error" onClick={() => setDropError(null)}>
-                    <span className="drop-error-icon">!</span>
-                    <span className="drop-error-msg">{dropError}</span>
-                    <span className="drop-error-close">×</span>
-                </div>
-            )}
-
-            {/* Pannable / zoomable viewport */}
-            <div
-                className="viewport"
-                ref={viewportRef}
-                onMouseDown={onMouseDown}
-                onMouseMove={onMouseMove}
-                onMouseUp={onMouseUp}
-                onMouseLeave={onMouseUp}
-            >
-                <div
-                    className="transform-wrapper"
-                    ref={wrapperRef}
-                    style={{
-                        transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-                        transformOrigin: 'top center',
-                    }}
-                >
-                    {/* Background histogram bars per depth level */}
-                    <DepthHistogram wrapperRef={wrapperRef} version={lineVersion} visible={showHistogram} />
-
-                    {/* SVG connector lines (inside transform so they scale with tree) */}
-                    <ConnectorLines wrapperRef={wrapperRef} version={lineVersion} />
-
-                    {/* Tree */}
-                    <div className="tree" key={defaultExpanded}>
-                        <ul>
-                            {roots.map(root => (
-                                <OrgNode
-                                    key={root.id}
-                                    node={root}
-                                    defaultExpanded={defaultExpanded}
-                                    depth={0}
-                                    onToggle={redrawLines}
-                                    statusColors={statusColors}
-                                    dragState={dragState}
-                                    onDragStart={handleDragStart}
-                                    onDragEnd={handleDragEnd}
-                                    onDrop={handleDrop}
-                                    autoExpandIds={autoExpandIds}
-                                    onAutoExpanded={handleAutoExpanded}
-                                />
-                            ))}
-                        </ul>
-                    </div>
-                </div>
-            </div>
         </div>
     );
 }
@@ -1403,13 +719,13 @@ function OrgChartApp() {
         return (
             <div style={{padding: 16, color: '#dc2626'}}>
                 {FIELDS.tableName
-                    ? `Table "${FIELDS.tableName}" not found. Check the tableName in the FIELDS config, or configure a table in the Data panel.`
+                    ? `Table "${FIELDS.tableName}" not found. Check tableName in the FIELDS config, or configure a table in the Data panel.`
                     : 'No table found. Please configure a table in the Data panel.'}
             </div>
         );
     }
 
-    return <OrgChartWithData table={table} />;
+    return <WorkdayChart table={table} />;
 }
 
 initializeBlock({interface: () => <OrgChartApp />});
