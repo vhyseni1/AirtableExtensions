@@ -361,11 +361,11 @@ function drawPersonCard(pdf, x, y, w, h, card, isFocus) {
         pdf.rect(x + 6, y, w - 12, 3, 'F');
     }
 
-    let cy = y + (isFocus ? 18 : 15);
+    let cy = y + 15;
     pdf.setFont('helvetica', card.vacant ? 'bolditalic' : 'bold');
-    pdf.setFontSize(isFocus ? 10.5 : 8.8);
+    pdf.setFontSize(isFocus ? 9.6 : 8.8);
     pdf.setTextColor(...(card.vacant ? PDF_COLORS.title : PDF_COLORS.name));
-    cy = drawCenteredLines(pdf, card.name, cx, cy, innerW, isFocus ? 12 : 10, 2);
+    cy = drawCenteredLines(pdf, card.name, cx, cy, innerW, isFocus ? 11 : 10, 2);
 
     if (card.vacant) {
         pdf.setFont('helvetica', 'bold');
@@ -375,7 +375,7 @@ function drawPersonCard(pdf, x, y, w, h, card, isFocus) {
         cy += 8;
     } else if (card.title) {
         pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(isFocus ? 8.4 : 7.6);
+        pdf.setFontSize(isFocus ? 7.8 : 7.6);
         pdf.setTextColor(...PDF_COLORS.title);
         cy = drawCenteredLines(pdf, card.title, cx, cy + 3, innerW, 9, 2);
     }
@@ -421,8 +421,10 @@ function exportVectorPDF(managers) {
     const cols = Math.max(1, Math.min(6, Math.floor((availW + colGap) / (targetCardW + colGap))));
     const cardW = (availW - (cols - 1) * colGap) / cols;
     const cardH = 88;
-    const mgrW = Math.min(340, availW);
-    const mgrH = 104;
+    // Manager header: spans two report columns, same height as a report card —
+    // emphasized by the blue border/accent rather than by being oversized.
+    const mgrW = Math.min(2 * cardW + colGap, availW);
+    const mgrH = cardH;
     const gridTop = margin + mgrH + headerGap;
     const reportsAvailH = pageH - margin - footer - gridTop;
     const rowsPerPage = Math.max(1, Math.floor((reportsAvailH + rowGap) / (cardH + rowGap)));
