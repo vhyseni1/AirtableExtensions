@@ -1,7 +1,8 @@
-# Employee Org Chart (Airtable Interface Extension)
+# Posorgchart (Airtable Interface Extension)
 
-A copy of the `org_chart` extension, re-pointed at an **employee** table and
-extended with image/PDF export.
+A copy of the `org_chart` extension, re-pointed at the **Employees & Positions**
+table and extended with image/PDF export. Deploys to Airtable block
+`blkaireIrJ5AuwUof`.
 
 ## Data sources
 
