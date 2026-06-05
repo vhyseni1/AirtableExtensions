@@ -34,8 +34,8 @@ const FIELDS = {
     departmentField: '[F] Supervisory Organization 🔗',
     statusField: null,
     parentLinkField: 'Future Manager',
-    employeeIdField: null,
-    managerIdField: null,
+    employeeIdField: '[E] Employee ID',
+    managerIdField: '[F] Manager ID',
 };
 
 // ─── Field helpers ────────────────────────────────────────────────────────────
@@ -162,16 +162,18 @@ function buildOrg(records, cfg) {
         }
     });
 
-    // Prefer a true id (linked record id, then explicit manager-id field), and
-    // only fall back to name matching — which is ambiguous for duplicate names.
+    // Prefer a true id over name matching (names are ambiguous for duplicates):
+    //   1. explicit manager-id → employee-id mapping (most reliable),
+    //   2. linked-record id from the manager lookup/link,
+    //   3. name match as a last resort.
     const resolveParentId = r => {
-        const {ids, names} = extractParentRef(r, parentField);
-        for (const id of ids) {
-            if (nodeMap[id] && id !== r.id) return id;
-        }
         if (managerIdField) {
             const mid = normName(readText(r, managerIdField));
             if (mid && idByEmployeeId[mid] && idByEmployeeId[mid] !== r.id) return idByEmployeeId[mid];
+        }
+        const {ids, names} = extractParentRef(r, parentField);
+        for (const id of ids) {
+            if (nodeMap[id] && id !== r.id) return id;
         }
         for (const nm of names) {
             const id = idByName[normName(nm)];
@@ -290,55 +292,98 @@ function timestamp() {
     return new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
 }
 
-async function exportPNG(el) {
-    const canvas = await renderChartCanvas(el, {scale: 2});
+async function exportPNG(boardEl) {
+    const canvas = await renderChartCanvas(boardEl, {scale: 2});
     downloadDataUrl(canvas.toDataURL('image/png'), `org-chart-${timestamp()}.png`);
 }
 
-async function exportPDF(el) {
-    const canvas = await renderChartCanvas(el, {scale: 2});
-    const pdf = new jsPDF({orientation: 'landscape', unit: 'pt', format: 'a4'});
-    const pageW = pdf.internal.pageSize.getWidth();
-    const pageH = pdf.internal.pageSize.getHeight();
-    const margin = 24;
-    const ratio = Math.min((pageW - margin * 2) / canvas.width, (pageH - margin * 2) / canvas.height);
-    const imgW = canvas.width * ratio;
-    const imgH = canvas.height * ratio;
-    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', (pageW - imgW) / 2, (pageH - imgH) / 2, imgW, imgH);
-    pdf.save(`org-chart-${timestamp()}.pdf`);
+function sliceToDataUrl(canvas, sy, sh) {
+    const tile = document.createElement('canvas');
+    tile.width = canvas.width;
+    tile.height = sh;
+    const tctx = tile.getContext('2d');
+    tctx.fillStyle = '#f8fafc';
+    tctx.fillRect(0, 0, canvas.width, sh);
+    tctx.drawImage(canvas, 0, sy, canvas.width, sh, 0, 0, canvas.width, sh);
+    return tile.toDataURL('image/png');
 }
 
-async function exportPaginatedPDF(el) {
-    const canvas = await renderChartCanvas(el, {scale: 2});
+// PDF export. The chart fills the page width; if the reports don't fit on one
+// page they paginate, the manager (focus) card is repeated at the top of every
+// page, and each page is footed "Page x / y".
+async function exportPDF(boardEl) {
     const pdf = new jsPDF({orientation: 'landscape', unit: 'pt', format: 'a4'});
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
     const margin = 24;
     const footer = 16;
+    const gap = 12;
     const availW = pageW - margin * 2;
-    const availH = pageH - margin * 2 - footer;
-    const renderScale = availW / canvas.width;
-    const pxPerPageH = Math.max(1, Math.floor(availH / renderScale));
-    const rows = Math.max(1, Math.ceil(canvas.height / pxPerPageH));
-    const tile = document.createElement('canvas');
-    const tctx = tile.getContext('2d');
+    const fullH = pageH - margin * 2 - footer;
 
-    for (let r = 0; r < rows; r++) {
-        const sy = r * pxPerPageH;
-        const sh = Math.min(pxPerPageH, canvas.height - sy);
-        if (sh <= 0) continue;
-        tile.width = canvas.width;
-        tile.height = sh;
-        tctx.fillStyle = '#f8fafc';
-        tctx.fillRect(0, 0, canvas.width, sh);
-        tctx.drawImage(canvas, 0, sy, canvas.width, sh, 0, 0, canvas.width, sh);
-        if (r > 0) pdf.addPage();
-        pdf.addImage(tile.toDataURL('image/png'), 'PNG', margin, margin, availW, sh * renderScale);
+    const focusEl = boardEl.querySelector('.focus-row');
+    const reportsEl = boardEl.querySelector('.reports-grid');
+
+    // Filtered (multi-manager) view, or no separable header → simple paginate.
+    if (!focusEl || boardEl.classList.contains('board-filtered')) {
+        const canvas = await renderChartCanvas(boardEl, {scale: 2});
+        const renderScale = availW / canvas.width;
+        const pxPerPage = Math.max(1, Math.floor(fullH / renderScale));
+        const pages = Math.max(1, Math.ceil(canvas.height / pxPerPage));
+        for (let p = 0; p < pages; p++) {
+            const sy = p * pxPerPage;
+            const sh = Math.min(pxPerPage, canvas.height - sy);
+            if (sh <= 0) continue;
+            if (p > 0) pdf.addPage();
+            pdf.addImage(sliceToDataUrl(canvas, sy, sh), 'PNG', margin, margin, availW, sh * renderScale);
+            pdf.setFontSize(8);
+            pdf.setTextColor(150);
+            pdf.text(`Page ${p + 1} / ${pages}`, pageW - margin - 60, pageH - margin / 2);
+        }
+        pdf.save(`org-chart-${timestamp()}.pdf`);
+        return;
+    }
+
+    const headerCanvas = await renderChartCanvas(focusEl, {scale: 2});
+    const reportsCanvas = reportsEl ? await renderChartCanvas(reportsEl, {scale: 2}) : null;
+
+    // Scale everything so the wider of (header, reports) fills the page width.
+    const baseWidth = Math.max(headerCanvas.width, reportsCanvas ? reportsCanvas.width : 0);
+    const renderScale = availW / baseWidth;
+    const headerDrawW = headerCanvas.width * renderScale;
+    const headerDrawH = headerCanvas.height * renderScale;
+    const headerX = margin + (availW - headerDrawW) / 2;
+
+    if (!reportsCanvas) {
+        pdf.addImage(headerCanvas.toDataURL('image/png'), 'PNG', headerX, margin, headerDrawW, headerDrawH);
         pdf.setFontSize(8);
         pdf.setTextColor(150);
-        pdf.text(`Page ${r + 1} of ${rows}`, margin, pageH - margin / 2);
+        pdf.text('Page 1 / 1', pageW - margin - 60, pageH - margin / 2);
+        pdf.save(`org-chart-${timestamp()}.pdf`);
+        return;
     }
-    pdf.save(`org-chart-paginated-${timestamp()}.pdf`);
+
+    // Remaining vertical space per page for the reports band, in source px.
+    const reportsAvailH = fullH - headerDrawH - gap;
+    const pxPerPage = Math.max(1, Math.floor(reportsAvailH / renderScale));
+    const pages = Math.max(1, Math.ceil(reportsCanvas.height / pxPerPage));
+
+    for (let p = 0; p < pages; p++) {
+        if (p > 0) pdf.addPage();
+        // Manager card on top of every page.
+        pdf.addImage(headerCanvas.toDataURL('image/png'), 'PNG', headerX, margin, headerDrawW, headerDrawH);
+        // Reports slice below it.
+        const sy = p * pxPerPage;
+        const sh = Math.min(pxPerPage, reportsCanvas.height - sy);
+        if (sh > 0) {
+            const y = margin + headerDrawH + gap;
+            pdf.addImage(sliceToDataUrl(reportsCanvas, sy, sh), 'PNG', margin, y, availW, sh * renderScale);
+        }
+        pdf.setFontSize(8);
+        pdf.setTextColor(150);
+        pdf.text(`Page ${p + 1} / ${pages}`, pageW - margin - 60, pageH - margin / 2);
+    }
+    pdf.save(`org-chart-${timestamp()}.pdf`);
 }
 
 function ExportMenu({targetRef}) {
@@ -373,9 +418,8 @@ function ExportMenu({targetRef}) {
             </button>
             {open && (
                 <div className="menu">
+                    <button onClick={() => run(exportPDF)}>PDF (fills page, manager on top)</button>
                     <button onClick={() => run(exportPNG)}>PNG image</button>
-                    <button onClick={() => run(exportPDF)}>PDF (single page)</button>
-                    <button onClick={() => run(exportPaginatedPDF)}>PDF (multi-page)</button>
                 </div>
             )}
         </div>
@@ -610,40 +654,35 @@ function FieldsModal({table, cfg, records, onClose}) {
 
 // ─── Person card ──────────────────────────────────────────────────────────────
 
-function PersonCard({node, variant, directs, total, statusColor, onDrill, onOpen}) {
+function PersonCard({node, variant, directs, total, statusColor, showAvatar, onDrill, onOpen}) {
     const drillable = variant === 'report' && directs > 0;
-    const cls = ['person-card', `person-card-${variant}`];
-    if (variant === 'report') cls.push('clickable');
+    const cls = ['person-card', `person-card-${variant}`, 'clickable'];
+    if (!showAvatar) cls.push('no-avatar');
+    const onClick = variant === 'report' ? () => onDrill(node.id) : () => onOpen(node);
+    const title = variant === 'report'
+        ? `Drill into ${node.displayName}`
+        : `Open ${node.displayName} in Airtable`;
     return (
         <div
             className={cls.join(' ')}
             style={statusColor ? {borderLeftColor: statusColor, borderLeftWidth: 4} : undefined}
-            onClick={variant === 'report' ? () => onDrill(node.id) : undefined}
-            title={variant === 'report' ? `Open ${node.displayName}` : undefined}
+            onClick={onClick}
+            title={title}
         >
-            <div className="person-avatar" style={{background: colorFromString(node.displayName)}}>
-                {initials(node.displayName)}
-            </div>
+            {showAvatar && (
+                <div className="person-avatar" style={{background: colorFromString(node.displayName)}}>
+                    {initials(node.displayName)}
+                </div>
+            )}
             <div className="person-info">
                 <div className="person-name">{node.displayName}</div>
                 {node.jobTitle && <div className="person-title">{node.jobTitle}</div>}
                 {node.department && <div className="person-dept">{node.department}</div>}
-            </div>
-            <div className="person-footer">
-                {directs > 0 ? (
-                    <span className="person-stat">
+                {directs > 0 && (
+                    <div className="person-reports">
                         {directs} direct{directs !== 1 ? 's' : ''} · {total} total
-                    </span>
-                ) : (
-                    <span className="person-stat person-stat-leaf">Individual contributor</span>
+                    </div>
                 )}
-                <button
-                    className="person-open"
-                    onClick={e => { e.stopPropagation(); onOpen(node); }}
-                    title="Open record in Airtable"
-                >
-                    Open ↗
-                </button>
             </div>
             {drillable && <div className="person-drill">▾</div>}
         </div>
@@ -651,7 +690,7 @@ function PersonCard({node, variant, directs, total, statusColor, onDrill, onOpen
 }
 
 // A manager + their direct reports (used by the Manager filter view).
-function ManagerSection({node, nodeMap, totals, statusColors, onDrill, onOpen}) {
+function ManagerSection({node, nodeMap, totals, statusColors, showAvatar, onDrill, onOpen}) {
     const children = node.childIds.map(id => nodeMap[id]);
     return (
         <div className="manager-section">
@@ -661,6 +700,7 @@ function ManagerSection({node, nodeMap, totals, statusColors, onDrill, onOpen}) 
                 directs={node.childIds.length}
                 total={totals[node.id] || 0}
                 statusColor={node.status ? statusColors[node.status] : null}
+                showAvatar={showAvatar}
                 onDrill={onDrill}
                 onOpen={onOpen}
             />
@@ -676,6 +716,7 @@ function ManagerSection({node, nodeMap, totals, statusColors, onDrill, onOpen}) 
                                 directs={child.childIds.length}
                                 total={totals[child.id] || 0}
                                 statusColor={child.status ? statusColors[child.status] : null}
+                                showAvatar={showAvatar}
                                 onDrill={onDrill}
                                 onOpen={onOpen}
                             />
@@ -693,6 +734,7 @@ function WorkdayChart({table}) {
     const records = useRecords(table);
     const [focusIdState, setFocusIdState] = useState(null);
     const [managerFilter, setManagerFilter] = useState(() => new Set());
+    const [showAvatars, setShowAvatars] = useState(true);
     const [showAbout, setShowAbout] = useState(false);
     const [showFields, setShowFields] = useState(false);
     const boardRef = useRef(null);
@@ -817,6 +859,13 @@ function WorkdayChart({table}) {
                         </div>
                     )}
                     <SearchBox nodeMap={nodeMap} onJump={drillFromFilter} />
+                    <button
+                        className={`tb-btn ${showAvatars ? 'tb-btn-active' : ''}`}
+                        onClick={() => setShowAvatars(v => !v)}
+                        title={showAvatars ? 'Hide avatar circles' : 'Show avatar circles'}
+                    >
+                        Avatars
+                    </button>
                     <ExportMenu targetRef={boardRef} />
                     <button className="tb-btn" onClick={() => setShowFields(true)} title="Field diagnostics">Fields</button>
                     <button className="tb-btn" onClick={() => setShowAbout(true)} title="About">About</button>
@@ -853,6 +902,7 @@ function WorkdayChart({table}) {
                                     nodeMap={nodeMap}
                                     totals={totals}
                                     statusColors={statusColors}
+                                    showAvatar={showAvatars}
                                     onDrill={drillFromFilter}
                                     onOpen={openRecord}
                                 />
@@ -877,6 +927,7 @@ function WorkdayChart({table}) {
                                 directs={focus.childIds.length}
                                 total={totals[focus.id] || 0}
                                 statusColor={focus.status ? statusColors[focus.status] : null}
+                                showAvatar={showAvatars}
                                 onDrill={drill}
                                 onOpen={openRecord}
                             />
@@ -897,6 +948,7 @@ function WorkdayChart({table}) {
                                             directs={child.childIds.length}
                                             total={totals[child.id] || 0}
                                             statusColor={child.status ? statusColors[child.status] : null}
+                                            showAvatar={showAvatars}
                                             onDrill={drill}
                                             onOpen={openRecord}
                                         />
