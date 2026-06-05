@@ -350,55 +350,19 @@ function paginateRows(rows, canvasHeight, maxCanvasPx) {
     return slices;
 }
 
-// PDF export. The chart fills the page width; if the reports don't fit on one
-// page they paginate, the manager (focus) card is repeated at the top of every
-// page, and each page is footed "Page x / y".
-async function exportPDF(boardEl) {
-    const pdf = new jsPDF({orientation: 'landscape', unit: 'pt', format: 'a4'});
-    const pageW = pdf.internal.pageSize.getWidth();
-    const pageH = pdf.internal.pageSize.getHeight();
-    const margin = 24;
-    const footer = 16;
-    const gap = 12;
-    const availW = pageW - margin * 2;
-    const fullH = pageH - margin * 2 - footer;
-
-    const focusEl = boardEl.querySelector('.focus-row');
-    const reportsEl = boardEl.querySelector('.reports-grid');
-
-    // Filtered (multi-manager) view, or no separable header → simple paginate.
-    if (!focusEl || boardEl.classList.contains('board-filtered')) {
-        const canvas = await renderChartCanvas(boardEl, {scale: 2});
-        const renderScale = availW / canvas.width;
-        const pxPerPage = Math.max(1, Math.floor(fullH / renderScale));
-        const pages = Math.max(1, Math.ceil(canvas.height / pxPerPage));
-        for (let p = 0; p < pages; p++) {
-            const sy = p * pxPerPage;
-            const sh = Math.min(pxPerPage, canvas.height - sy);
-            if (sh <= 0) continue;
-            if (p > 0) pdf.addPage();
-            pdf.addImage(sliceToDataUrl(canvas, sy, sh), 'PNG', margin, margin, availW, sh * renderScale);
-            pdf.setFontSize(8);
-            pdf.setTextColor(150);
-            pdf.text(`Page ${p + 1} / ${pages}`, pageW - margin - 60, pageH - margin / 2);
-        }
-        pdf.save(`org-chart-${timestamp()}.pdf`);
-        return;
-    }
-
-    // Measure card-row boundaries before capture (CSS layout is intact here).
+// Lay out one manager for PDF: capture the manager card + reports grid, scale to
+// fill the page width, and split the reports onto pages at card-row boundaries.
+async function layoutManager(focusEl, reportsEl, geom) {
+    const {margin, availW, fullH, gap} = geom;
     const rows = reportsEl ? measureRows(reportsEl) : [];
-
     const headerCanvas = await renderChartCanvas(focusEl, {scale: EXPORT_SCALE});
     const reportsCanvas = reportsEl ? await renderChartCanvas(reportsEl, {scale: EXPORT_SCALE}) : null;
 
-    // Scale everything so the wider of (header, reports) fills the page width.
-    const baseWidth = Math.max(headerCanvas.width, reportsCanvas ? reportsCanvas.width : 0);
+    const baseWidth = Math.max(headerCanvas.width, reportsCanvas ? reportsCanvas.width : 0) || 1;
     const renderScale = availW / baseWidth;
     let headerDrawW = headerCanvas.width * renderScale;
     let headerDrawH = headerCanvas.height * renderScale;
-    // Cap the repeated manager header so it never crowds out the reports band.
-    const headerMaxH = fullH * 0.32;
+    const headerMaxH = fullH * 0.32; // never let the repeated header crowd the reports
     if (headerDrawH > headerMaxH) {
         const s = headerMaxH / headerDrawH;
         headerDrawH = headerMaxH;
@@ -406,44 +370,72 @@ async function exportPDF(boardEl) {
     }
     const headerX = margin + (availW - headerDrawW) / 2;
 
-    if (!reportsCanvas) {
-        pdf.addImage(headerCanvas.toDataURL('image/png'), 'PNG', headerX, margin, headerDrawW, headerDrawH);
-        pdf.setFontSize(8);
-        pdf.setTextColor(150);
-        pdf.text('Page 1 / 1', pageW - margin - 60, pageH - margin / 2);
-        pdf.save(`org-chart-${timestamp()}.pdf`);
-        return;
+    let slices = [];
+    if (reportsCanvas) {
+        const reportsAvailH = fullH - headerDrawH - gap;
+        slices = paginateRows(rows, reportsCanvas.height, reportsAvailH / renderScale);
+    }
+    return {headerCanvas, headerDrawW, headerDrawH, headerX, renderScale, reportsCanvas, slices};
+}
+
+// PDF export. Fills the page width, repeats the manager card on top of every
+// page, paginates reports on card-row boundaries, and — when several managers
+// are selected — starts each manager on a new page. Footer: "Page x / y".
+async function exportPDF(boardEl) {
+    const pdf = new jsPDF({orientation: 'landscape', unit: 'pt', format: 'a4'});
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const margin = 24;
+    const footer = 16;
+    const gap = 12;
+    const geom = {
+        margin, footer, gap,
+        availW: pageW - margin * 2,
+        fullH: pageH - margin * 2 - footer,
+    };
+
+    // One "section" per manager. Filtered view = each .manager-section; otherwise
+    // the single focused manager (its card + reports grid).
+    const sections = boardEl.classList.contains('board-filtered')
+        ? [...boardEl.querySelectorAll(':scope > .manager-section')]
+        : [boardEl];
+
+    const layouts = [];
+    for (const sec of sections) {
+        const focusEl = sec.querySelector('.person-card-focus') || sec;
+        const reportsEl = sec.querySelector('.reports-grid');
+        layouts.push(await layoutManager(focusEl, reportsEl, geom));
     }
 
-    // Remaining vertical space per page for the reports band, then paginate on
-    // card-row boundaries so no card is split across pages.
-    const reportsAvailH = fullH - headerDrawH - gap;
-    const maxCanvasPx = reportsAvailH / renderScale;
-    const slices = paginateRows(rows, reportsCanvas.height, maxCanvasPx);
-    const pages = slices.length;
+    const totalPages = layouts.reduce((sum, l) => sum + Math.max(1, l.slices.length), 0);
+    let pageIndex = 0;
 
-    slices.forEach((slice, p) => {
-        if (p > 0) pdf.addPage();
-        // Manager card on top of every page.
-        pdf.addImage(headerCanvas.toDataURL('image/png'), 'PNG', headerX, margin, headerDrawW, headerDrawH);
-        if (slice.sh > 0) {
-            // Fill width, but never overflow the band — shrink (centered) if a
-            // single row is taller than the space left under the header.
-            let drawW = availW;
-            let drawH = slice.sh * renderScale;
-            if (drawH > reportsAvailH) {
-                const s = reportsAvailH / drawH;
-                drawH = reportsAvailH;
-                drawW *= s;
+    layouts.forEach(l => {
+        const nPages = Math.max(1, l.slices.length);
+        const reportsAvailH = geom.fullH - l.headerDrawH - gap;
+        for (let p = 0; p < nPages; p++) {
+            if (pageIndex > 0) pdf.addPage();
+            pdf.addImage(l.headerCanvas.toDataURL('image/png'), 'PNG', l.headerX, margin, l.headerDrawW, l.headerDrawH);
+            const slice = l.slices[p];
+            if (slice && slice.sh > 0 && l.reportsCanvas) {
+                let drawW = geom.availW;
+                let drawH = slice.sh * l.renderScale;
+                if (drawH > reportsAvailH) {
+                    const s = reportsAvailH / drawH;
+                    drawH = reportsAvailH;
+                    drawW *= s;
+                }
+                const x = margin + (geom.availW - drawW) / 2;
+                const y = margin + l.headerDrawH + gap;
+                pdf.addImage(sliceToDataUrl(l.reportsCanvas, slice.sy, slice.sh), 'PNG', x, y, drawW, drawH);
             }
-            const x = margin + (availW - drawW) / 2;
-            const y = margin + headerDrawH + gap;
-            pdf.addImage(sliceToDataUrl(reportsCanvas, slice.sy, slice.sh), 'PNG', x, y, drawW, drawH);
+            pdf.setFontSize(8);
+            pdf.setTextColor(150);
+            pdf.text(`Page ${pageIndex + 1} / ${totalPages}`, pageW - margin - 60, pageH - margin / 2);
+            pageIndex++;
         }
-        pdf.setFontSize(8);
-        pdf.setTextColor(150);
-        pdf.text(`Page ${p + 1} / ${pages}`, pageW - margin - 60, pageH - margin / 2);
     });
+
     pdf.save(`org-chart-${timestamp()}.pdf`);
 }
 
