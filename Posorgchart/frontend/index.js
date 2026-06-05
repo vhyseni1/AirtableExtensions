@@ -28,6 +28,10 @@ import './style.css';
 //   parentLinkField   : the linked-record field that points to the manager /
 //                       parent. When null, the first linked-record field on the
 //                       table is auto-detected.
+//   orgFilterField    : field powering the "Organization" checkbox filter
+//                       (set to null to hide that filter).
+//   managerFilterField: field powering the "Manager" checkbox filter
+//                       (set to null to hide that filter).
 //
 const FIELDS = {
     tableName: 'Employees & Positions',
@@ -37,6 +41,8 @@ const FIELDS = {
     statusField: null,            // e.g. 'Employee Status' — set to enable border coloring
     headcountField: null,         // e.g. 'Headcount' — null ⇒ 1 per node
     parentLinkField: 'Future Manager',
+    orgFilterField: 'Future Organization',
+    managerFilterField: 'Future Manager',
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -126,6 +132,18 @@ function extractParentRef(record, parentField) {
         if (asStr) names.push(asStr);
     }
     return {ids, names};
+}
+
+// Distinct, sorted, non-empty string values of a field across all records —
+// used to populate the checkbox filter dropdowns.
+function distinctValues(records, field) {
+    if (!field) return [];
+    const set = new Set();
+    records.forEach(r => {
+        const v = safeGet(r, field).trim();
+        if (v) set.add(v);
+    });
+    return [...set].sort((a, b) => a.localeCompare(b));
 }
 
 // ─── Status → border color (dynamic) ─────────────────────────────────────────
@@ -719,6 +737,141 @@ function AboutModal({onClose}) {
     );
 }
 
+// ─── Checkbox filter dropdown ────────────────────────────────────────────────
+
+function CheckboxFilter({label, options, selected, onChange}) {
+    const [open, setOpen] = useState(false);
+    const ref = useRef(null);
+
+    useEffect(() => {
+        if (!open) return;
+        const onDocClick = e => {
+            if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+        };
+        document.addEventListener('mousedown', onDocClick);
+        return () => document.removeEventListener('mousedown', onDocClick);
+    }, [open]);
+
+    const toggle = useCallback(value => {
+        const next = new Set(selected);
+        if (next.has(value)) next.delete(value);
+        else next.add(value);
+        onChange(next);
+    }, [selected, onChange]);
+
+    const selectAll = useCallback(() => onChange(new Set(options)), [options, onChange]);
+    const clear = useCallback(() => onChange(new Set()), [onChange]);
+
+    const count = selected.size;
+
+    return (
+        <div className="filter-wrap" ref={ref}>
+            <button
+                className={`filter-btn ${count > 0 ? 'active' : ''}`}
+                onClick={() => setOpen(o => !o)}
+                title={`Filter by ${label}`}
+            >
+                {label}{count > 0 ? ` (${count})` : ''} ▾
+            </button>
+            {open && (
+                <div className="filter-menu">
+                    <div className="filter-menu-actions">
+                        <button onClick={selectAll}>All</button>
+                        <button onClick={clear}>Clear</button>
+                    </div>
+                    <div className="filter-menu-list">
+                        {options.length === 0 && (
+                            <div className="filter-empty">No values</div>
+                        )}
+                        {options.map(opt => (
+                            <label key={opt} className="filter-option">
+                                <input
+                                    type="checkbox"
+                                    checked={selected.has(opt)}
+                                    onChange={() => toggle(opt)}
+                                />
+                                <span className="filter-option-label">{opt}</span>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ─── Fields diagnostics modal ────────────────────────────────────────────────
+//
+// Shows how each configured FIELDS entry resolved against the live table, plus
+// the full list of actual field names — so a mismatch (e.g. an emoji that
+// doesn't match) is obvious and easy to copy the correct name from.
+
+function FieldsModal({table, cfg, onClose}) {
+    useEffect(() => {
+        const onKey = e => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [onClose]);
+
+    const mappings = [
+        ['Name', FIELDS.primaryNameSource === 'name' ? '(primary field)' : FIELDS.primaryNameSource,
+            FIELDS.primaryNameSource === 'name' ? {name: 'primary field', type: '—'} : cfg.nameField],
+        ['Job title', FIELDS.jobTitleField, cfg.jobTitleField],
+        ['Department', FIELDS.departmentField, cfg.departmentField],
+        ['Status', FIELDS.statusField, cfg.statusField],
+        ['Headcount', FIELDS.headcountField, cfg.headcountField],
+        ['Manager link', FIELDS.parentLinkField, cfg.parentField],
+        ['Org filter', FIELDS.orgFilterField, cfg.orgFilterField],
+        ['Manager filter', FIELDS.managerFilterField, cfg.managerFilterField],
+    ];
+
+    return (
+        <div className="about-overlay" onClick={onClose}>
+            <div className="about-modal fields-modal" onClick={e => e.stopPropagation()}>
+                <button className="about-close" onClick={onClose} title="Close">×</button>
+                <h2 className="about-title">Field diagnostics</h2>
+
+                <h3 className="fields-subtitle">Configured mappings</h3>
+                <table className="fields-table">
+                    <thead>
+                        <tr><th>Role</th><th>Configured name</th><th>Resolved</th></tr>
+                    </thead>
+                    <tbody>
+                        {mappings.map(([role, configured, field]) => (
+                            <tr key={role}>
+                                <td>{role}</td>
+                                <td className="fields-mono">{configured || <em>(none)</em>}</td>
+                                <td>
+                                    {!configured
+                                        ? <span className="fields-muted">—</span>
+                                        : field
+                                            ? <span className="fields-ok">✓ {field.type || ''}</span>
+                                            : <span className="fields-bad">✗ not found</span>}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+
+                <h3 className="fields-subtitle">All fields in “{table.name}”</h3>
+                <table className="fields-table">
+                    <thead><tr><th>Field name</th><th>Type</th></tr></thead>
+                    <tbody>
+                        {table.fields.map(f => (
+                            <tr key={f.id}>
+                                <td className="fields-mono">{f.name}</td>
+                                <td>{f.type}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}
+
 // ─── Export (PNG / PDF / paginated PDF) ──────────────────────────────────────
 
 // Render the org tree to a high-resolution canvas. We temporarily strip the
@@ -899,6 +1052,9 @@ function OrgChartWithData({table}) {
     const [showHistogram, setShowHistogram] = useState(true);
     const [showLegend, setShowLegend] = useState(true);
     const [showAbout, setShowAbout] = useState(false);
+    const [showFields, setShowFields] = useState(false);
+    const [orgFilter, setOrgFilter] = useState(() => new Set());
+    const [managerFilter, setManagerFilter] = useState(() => new Set());
     const viewportRef = useRef(null);
     const wrapperRef = useRef(null);
 
@@ -930,6 +1086,8 @@ function OrgChartWithData({table}) {
             statusField: findFieldByName(table, FIELDS.statusField),
             headcountField: findFieldByName(table, FIELDS.headcountField),
             parentField,
+            orgFilterField: findFieldByName(table, FIELDS.orgFilterField),
+            managerFilterField: findFieldByName(table, FIELDS.managerFilterField),
         };
     }, [table]);
     const parentField = cfg.parentField;
@@ -937,10 +1095,35 @@ function OrgChartWithData({table}) {
     // resolved field set actually change.
     const cfgKey = Object.values(cfg).map(f => (f ? f.id : '∅')).join('|');
 
-    const {roots, conflicts, nodeMap, statusColors} = useMemo(
-        () => buildTree(records, cfg),
+    // Distinct values for the two checkbox filters (computed over ALL records so
+    // the option list stays stable while filtering).
+    const orgOptions = useMemo(
+        () => distinctValues(records, cfg.orgFilterField),
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [records, cfgKey],
+    );
+    const managerOptions = useMemo(
+        () => distinctValues(records, cfg.managerFilterField),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [records, cfgKey],
+    );
+
+    // Apply the active filters. An empty selection means "no constraint". A
+    // record is kept only if it satisfies every active filter.
+    const filteredRecords = useMemo(() => {
+        if (orgFilter.size === 0 && managerFilter.size === 0) return records;
+        return records.filter(r => {
+            if (orgFilter.size && !orgFilter.has(safeGet(r, cfg.orgFilterField).trim())) return false;
+            if (managerFilter.size && !managerFilter.has(safeGet(r, cfg.managerFilterField).trim())) return false;
+            return true;
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [records, cfgKey, orgFilter, managerFilter]);
+
+    const {roots, conflicts, nodeMap, statusColors} = useMemo(
+        () => buildTree(filteredRecords, cfg),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [filteredRecords, cfgKey],
     );
 
     const legendItems = useMemo(
@@ -1022,19 +1205,51 @@ function OrgChartWithData({table}) {
 
     useEffect(() => {
         redrawLines();
-    }, [records, defaultExpanded, redrawLines]);
+    }, [filteredRecords, defaultExpanded, redrawLines]);
+
+    // Re-center when the filter selection changes — the visible tree can shrink
+    // or grow a lot, so the old pan/zoom would leave it off-screen.
+    useLayoutEffect(() => {
+        centerView();
+    }, [orgFilter, managerFilter, centerView]);
 
     // Note: no redraw on pan/zoom — SVG + histogram live inside transform-wrapper
     // and scale with it for free, so recomputing paths would be pure waste.
 
     const zoomPct = Math.round(zoom * 100);
     const hasLegend = legendItems.length > 0;
+    const anyFilterActive = orgFilter.size > 0 || managerFilter.size > 0;
 
     return (
         <div className="org-chart-root">
             {/* Header: legend left, controls right */}
             <div className="header-bar">
                 <div className="header-legends">
+                    {cfg.orgFilterField && (
+                        <CheckboxFilter
+                            label="Organization"
+                            options={orgOptions}
+                            selected={orgFilter}
+                            onChange={setOrgFilter}
+                        />
+                    )}
+                    {cfg.managerFilterField && (
+                        <CheckboxFilter
+                            label="Manager"
+                            options={managerOptions}
+                            selected={managerFilter}
+                            onChange={setManagerFilter}
+                        />
+                    )}
+                    {anyFilterActive && (
+                        <button
+                            className="filter-clear-all"
+                            onClick={() => { setOrgFilter(new Set()); setManagerFilter(new Set()); }}
+                            title="Clear all filters"
+                        >
+                            Clear filters · {filteredRecords.length}/{records.length}
+                        </button>
+                    )}
                     {hasLegend && showLegend && (
                         <div className="legend-group">
                             <span className="legend-title">Status:</span>
@@ -1093,6 +1308,13 @@ function OrgChartWithData({table}) {
                     <ExportMenu wrapperRef={wrapperRef} />
                     <button
                         className="about-btn"
+                        onClick={() => setShowFields(true)}
+                        title="Show field diagnostics (which fields resolved)"
+                    >
+                        Fields
+                    </button>
+                    <button
+                        className="about-btn"
                         onClick={() => setShowAbout(true)}
                         title="About this org chart"
                     >
@@ -1102,6 +1324,7 @@ function OrgChartWithData({table}) {
             </div>
 
             {showAbout && <AboutModal onClose={() => setShowAbout(false)} />}
+            {showFields && <FieldsModal table={table} cfg={cfg} onClose={() => setShowFields(false)} />}
 
             {/* Conflict banner */}
             <ConflictBanner conflicts={conflicts} />

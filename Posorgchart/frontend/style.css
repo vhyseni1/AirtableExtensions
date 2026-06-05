@@ -227,6 +227,179 @@
     to { opacity: 1; transform: translateY(0); }
 }
 
+/* ─── Checkbox filters ────────────────────────────────────────────────────── */
+
+.filter-wrap {
+    position: relative;
+    display: inline-flex;
+}
+
+.filter-btn {
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    border: 1px solid #e2e8f0;
+    border-radius: 5px;
+    background: white;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.filter-btn:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    color: #1e293b;
+}
+
+.filter-btn.active {
+    background: #1e293b;
+    color: white;
+    border-color: #1e293b;
+}
+
+.filter-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 60;
+    width: 240px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+    overflow: hidden;
+}
+
+.filter-menu-actions {
+    display: flex;
+    gap: 6px;
+    padding: 6px 8px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.filter-menu-actions button {
+    flex: 1;
+    padding: 4px 6px;
+    font-size: 11px;
+    color: #475569;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.filter-menu-actions button:hover {
+    background: #eef2f7;
+    color: #1e293b;
+}
+
+.filter-menu-list {
+    max-height: 280px;
+    overflow-y: auto;
+    padding: 4px;
+}
+
+.filter-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    font-size: 12px;
+    color: #334155;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.filter-option:hover {
+    background: #f1f5f9;
+}
+
+.filter-option input {
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.filter-option-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.filter-empty {
+    padding: 10px;
+    font-size: 11px;
+    color: #94a3b8;
+    text-align: center;
+}
+
+.filter-clear-all {
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    border: 1px dashed #cbd5e1;
+    border-radius: 5px;
+    background: #fff;
+    color: #64748b;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.filter-clear-all:hover {
+    background: #f1f5f9;
+    color: #1e293b;
+}
+
+/* ─── Fields diagnostics modal ────────────────────────────────────────────── */
+
+.fields-modal {
+    max-width: 560px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.fields-subtitle {
+    margin: 18px 0 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.fields-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.fields-table th,
+.fields-table td {
+    text-align: left;
+    padding: 5px 8px;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: top;
+}
+
+.fields-table th {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #94a3b8;
+}
+
+.fields-mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+    color: #1e293b;
+    word-break: break-word;
+}
+
+.fields-ok { color: #16a34a; font-weight: 600; }
+.fields-bad { color: #dc2626; font-weight: 600; }
+.fields-muted { color: #cbd5e1; }
+
 /* ─── Export menu ─────────────────────────────────────────────────────────── */
 
 .export-wrap {
