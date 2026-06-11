@@ -110,8 +110,8 @@ export function SourceTrace({impact, record, fieldsByName, onOpen}: Props) {
                         <div
                             style={{
                                 display: 'grid',
-                                gridTemplateColumns: '128px 1fr',
-                                rowGap: tokens.space.sm,
+                                gridTemplateColumns: '150px 1fr',
+                                rowGap: 10,
                                 columnGap: tokens.space.md,
                                 background: tokens.colors.bgPanel,
                                 border: `1px solid ${tokens.colors.rule}`,
@@ -169,11 +169,24 @@ function FieldPair({label, children}: {label: string; children: React.ReactNode}
                     textTransform: 'uppercase',
                     fontWeight: 600,
                     paddingTop: 4,
+                    paddingRight: 8,
+                    lineHeight: 1.35,
+                    wordBreak: 'break-word',
+                    alignSelf: 'start',
                 }}
             >
                 {label}
             </span>
-            <div style={{minWidth: 0, fontSize: 12, color: tokens.colors.text}}>{children}</div>
+            <div
+                style={{
+                    minWidth: 0,
+                    fontSize: 12,
+                    color: tokens.colors.text,
+                    alignSelf: 'start',
+                }}
+            >
+                {children}
+            </div>
         </>
     );
 }

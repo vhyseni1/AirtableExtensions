@@ -96,7 +96,14 @@ export function NativeRecordRow({impact, record, fieldsByName, onOpen, onSelect,
             </div>
 
             {record ? (
-                <div style={{display: 'grid', gridTemplateColumns: '108px 1fr', columnGap: tokens.space.sm, rowGap: 6}}>
+                <div
+                    style={{
+                        display: 'grid',
+                        gridTemplateColumns: '140px 1fr',
+                        columnGap: tokens.space.md,
+                        rowGap: 10,
+                    }}
+                >
                     {VISIBLE_FIELDS.map(key => {
                         const fieldName = FIELDS[key];
                         const field = fieldsByName.get(fieldName);
@@ -115,6 +122,24 @@ export function NativeRecordRow({impact, record, fieldsByName, onOpen, onSelect,
                                 <CellRenderer
                                     record={record}
                                     field={desc}
+                                    shouldWrap
+                                    cellStyle={{
+                                        fontSize: 12,
+                                        color: tokens.colors.textMuted,
+                                        lineHeight: 1.45,
+                                    }}
+                                />
+                            </FieldRow>
+                        );
+                    })()}
+                    {(() => {
+                        const toBe = fieldsByName.get(FIELDS.descriptionToBe);
+                        if (!toBe) return null;
+                        return (
+                            <FieldRow label={toBe.name}>
+                                <CellRenderer
+                                    record={record}
+                                    field={toBe}
                                     shouldWrap
                                     cellStyle={{
                                         fontSize: 12,
@@ -146,11 +171,15 @@ function FieldRow({label, children}: {label: string; children: React.ReactNode})
                     textTransform: 'uppercase',
                     fontWeight: 600,
                     paddingTop: 4,
+                    paddingRight: 8,
+                    lineHeight: 1.35,
+                    wordBreak: 'break-word',
+                    alignSelf: 'start',
                 }}
             >
                 {label}
             </span>
-            <div style={{minWidth: 0}}>{children}</div>
+            <div style={{minWidth: 0, alignSelf: 'start'}}>{children}</div>
         </>
     );
 }
