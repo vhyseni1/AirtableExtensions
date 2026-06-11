@@ -102,7 +102,7 @@ export function DrillSheet({
                     top: 0,
                     bottom: 0,
                     right: 0,
-                    width: 'min(560px, 92vw)',
+                    width: 'min(720px, 95vw)',
                     background: tokens.colors.bg,
                     borderLeft: `1px solid ${tokens.colors.rule}`,
                     boxShadow: '-12px 0 30px rgba(2,35,102,0.10)',
