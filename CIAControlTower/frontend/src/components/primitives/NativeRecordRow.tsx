@@ -22,6 +22,11 @@ interface Props {
     selected?: boolean;
 }
 
+/** Turn snake_case Airtable field names into human-readable labels. */
+function prettyLabel(raw: string): string {
+    return raw.replace(/_/g, ' ');
+}
+
 const VISIBLE_FIELDS: Array<keyof typeof FIELDS> = [
     'role',
     'businessArchetypes',
@@ -109,7 +114,7 @@ export function NativeRecordRow({impact, record, fieldsByName, onOpen, onSelect,
                         const field = fieldsByName.get(fieldName);
                         if (!field) return null;
                         return (
-                            <FieldRow key={fieldName} label={field.name}>
+                            <FieldRow key={fieldName} label={prettyLabel(field.name)}>
                                 <CellRenderer record={record} field={field} shouldWrap />
                             </FieldRow>
                         );
@@ -118,7 +123,7 @@ export function NativeRecordRow({impact, record, fieldsByName, onOpen, onSelect,
                         const desc = fieldsByName.get(FIELDS.descriptionAsIs);
                         if (!desc) return null;
                         return (
-                            <FieldRow label={desc.name}>
+                            <FieldRow label={prettyLabel(desc.name)}>
                                 <CellRenderer
                                     record={record}
                                     field={desc}
@@ -136,7 +141,7 @@ export function NativeRecordRow({impact, record, fieldsByName, onOpen, onSelect,
                         const toBe = fieldsByName.get(FIELDS.descriptionToBe);
                         if (!toBe) return null;
                         return (
-                            <FieldRow label={toBe.name}>
+                            <FieldRow label={prettyLabel(toBe.name)}>
                                 <CellRenderer
                                     record={record}
                                     field={toBe}

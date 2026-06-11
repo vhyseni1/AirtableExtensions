@@ -39,6 +39,10 @@ const NATIVE_FIELDS: Array<keyof typeof FIELDS> = [
     'notes',
 ];
 
+function prettyLabel(raw: string): string {
+    return raw.replace(/_/g, ' ');
+}
+
 export function SourceTrace({impact, record, fieldsByName, onOpen}: Props) {
     if (!impact) {
         return (
@@ -124,7 +128,7 @@ export function SourceTrace({impact, record, fieldsByName, onOpen}: Props) {
                                 const field = fieldsByName.get(fieldName);
                                 if (!field) return null;
                                 return (
-                                    <FieldPair key={fieldName} label={field.name}>
+                                    <FieldPair key={fieldName} label={prettyLabel(field.name)}>
                                         <CellRenderer record={record} field={field} shouldWrap />
                                     </FieldPair>
                                 );
