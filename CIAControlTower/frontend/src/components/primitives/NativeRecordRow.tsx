@@ -22,8 +22,16 @@ interface Props {
     selected?: boolean;
 }
 
+/** UI-only renames. Keep the raw Airtable field names intact for schema lookups. */
+const LABEL_OVERRIDES: Record<string, string> = {
+    'Persona (from Role)': 'Archetype',
+    'Persona': 'Archetype',
+};
+
 /** Turn snake_case Airtable field names into human-readable labels. */
 function prettyLabel(raw: string): string {
+    const override = LABEL_OVERRIDES[raw];
+    if (override) return override;
     return raw.replace(/_/g, ' ');
 }
 

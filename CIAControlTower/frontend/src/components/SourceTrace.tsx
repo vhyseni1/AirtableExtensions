@@ -39,7 +39,14 @@ const NATIVE_FIELDS: Array<keyof typeof FIELDS> = [
     'notes',
 ];
 
+const LABEL_OVERRIDES: Record<string, string> = {
+    'Persona (from Role)': 'Archetype',
+    'Persona': 'Archetype',
+};
+
 function prettyLabel(raw: string): string {
+    const override = LABEL_OVERRIDES[raw];
+    if (override) return override;
     return raw.replace(/_/g, ' ');
 }
 
