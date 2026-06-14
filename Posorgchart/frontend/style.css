@@ -9,6 +9,7 @@
 * { box-sizing: border-box; }
 
 .org-root {
+    position: relative;
     display: flex;
     flex-direction: column;
     height: 100vh;
@@ -553,8 +554,168 @@
 .fields-bad { color: #dc2626; font-weight: 600; }
 .fields-muted { color: #cbd5e1; }
 
-/* During export (PNG/PDF) the small blue drill badges are dropped — they're an
-   interactive affordance only. Everything else (incl. avatars) stays. */
-.exporting .person-drill { display: none !important; }
+/* During export (PNG/PDF) the small interactive affordances are dropped.
+   Everything else (incl. avatars) stays. */
+.exporting .person-drill,
+.exporting .person-open-btn { display: none !important; }
 /* Plain white background for exports (no grey canvas). */
 .exporting { background: #ffffff !important; }
+
+/* ─── Tree view (connected, pan/zoom) ─────────────────────────────────────── */
+
+.viewmode-toggle { display: inline-flex; gap: 4px; }
+
+.tree-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding-left: 8px;
+    margin-left: 4px;
+    border-left: 1px solid #e2e8f0;
+}
+
+.toolbar-label { font-size: 11px; color: #64748b; font-weight: 600; }
+
+/* The tree board fills the scroll area and pans internally instead of scrolling. */
+.board-tree {
+    min-height: 0;
+    height: 100%;
+    padding: 0;
+    gap: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+.board-tree .up-btn { margin: 8px auto; }
+
+.viewport {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    cursor: grab;
+    background: #f8fafc;
+}
+.viewport:active { cursor: grabbing; }
+
+.transform-wrapper {
+    position: relative;
+    display: inline-block;
+    min-width: 100%;
+    will-change: transform;
+}
+
+.connector-svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+    overflow: visible;
+}
+.connector-svg path {
+    fill: none;
+    stroke: #cbd5e1;
+    stroke-width: 2;
+    stroke-linecap: round;
+}
+
+.tree {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    justify-content: center;
+    padding: 32px 24px 48px;
+}
+.tree ul {
+    display: flex;
+    justify-content: center;
+    list-style: none;
+    margin: 0;
+    padding: 40px 0 0 0;
+}
+.tree > ul { padding-top: 0; }
+.tree li {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    list-style: none;
+    margin: 0;
+    padding: 0 10px;
+}
+
+/* Expand / collapse toggle under a node. */
+.tree-toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    margin-top: 6px;
+    border-radius: 50%;
+    border: 2px solid #cbd5e1;
+    background: white;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    z-index: 3;
+    transition: all 0.15s;
+    line-height: 1;
+    padding: 0;
+    position: relative;
+}
+.tree-toggle-btn:hover { background: #1e293b; border-color: #1e293b; color: white; }
+
+/* Open-record affordance shown on cards in tree mode. */
+.person-open-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    background: white;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s;
+    padding: 0;
+}
+.person-card:hover .person-open-btn { opacity: 1; }
+.person-open-btn:hover { background: #f1f5f9; color: #1e293b; }
+
+.zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin-left: 4px;
+    padding-left: 8px;
+    border-left: 1px solid #e2e8f0;
+}
+.zoom-btn {
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #e2e8f0;
+    border-radius: 5px;
+    background: white;
+    color: #475569;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    padding: 0;
+}
+.zoom-btn:hover { background: #f1f5f9; border-color: #cbd5e1; }
+.zoom-btn-reset { width: auto; padding: 0 8px; font-size: 10px; font-weight: 500; }
+.zoom-level { font-size: 10px; color: #64748b; min-width: 32px; text-align: center; font-weight: 500; }

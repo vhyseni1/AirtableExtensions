@@ -2,9 +2,10 @@ import {
     initializeBlock,
     useBase,
     useRecords,
+    useSession,
     expandRecord,
 } from '@airtable/blocks/interface/ui';
-import {useState, useRef, useEffect, useMemo, useCallback} from 'react';
+import {useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback} from 'react';
 import html2canvas from 'html2canvas';
 import {jsPDF} from 'jspdf';
 import './style.css';
@@ -27,6 +28,28 @@ import './style.css';
 //                       by id — robust when two managers share the same name.
 //   managerIdField    : OPTIONAL. The manager's unique id for this person.
 //
+// ─── Per-leader scoping (share one interface with all leaders) ────────────────
+//
+// When a scoping field is configured, each signed-in leader sees ONLY their own
+// branch (their node + everyone below), rooted at themselves, and can deep-dive
+// any sub-branch. The signed-in user is identified by email (useSession). NOTE:
+// this is DISPLAY-only scoping — the extension still loads the full table. For
+// enforced row-level security, pair it with a native Airtable interface element
+// filtered by `Visible to leaders = current user` (see scripts/ and RLS.md).
+//
+//   leaderEmailField  : OPTIONAL. Each leader's email. Matched against the
+//                       signed-in user to find their node + short code.
+//   shortCodeField    : OPTIONAL. Hierarchical org code (e.g. DSG, DSGA). A DSG
+//                       leader sees every record whose code starts with "DSG".
+//   visibleLeadersField : OPTIONAL. Multi-collaborator field listing every leader
+//                       allowed to see the record (the ancestor-leader chain,
+//                       precomputed by scripts/populate-visible-leaders.js). When
+//                       present it takes precedence over the short-code prefix.
+//   adminEmails       : emails that bypass scoping and see the whole org.
+//
+// Scoping only activates when leaderEmailField OR visibleLeadersField resolves;
+// until then the chart shows the full org (unchanged behavior).
+//
 const FIELDS = {
     tableName: 'Employees & Positions',
     primaryNameSource: '[E] First Name, Last Name',
@@ -39,6 +62,10 @@ const FIELDS = {
     // Field powering the "Organization" checkbox filter. Falls back to the
     // department field if this name doesn't resolve.
     orgFilterField: 'Future Organization',
+    leaderEmailField: null,
+    shortCodeField: 'Short Code',
+    visibleLeadersField: null,
+    adminEmails: [],
 };
 
 // ─── Field helpers ────────────────────────────────────────────────────────────
@@ -80,6 +107,23 @@ function incumbentName(record, nameField) {
 
 function normName(s) {
     return String(s == null ? '' : s).normalize('NFKC').trim().toLowerCase();
+}
+
+// Normalize a hierarchical short code for prefix matching (e.g. "dsg a" → "DSGA").
+function normCode(s) {
+    return String(s == null ? '' : s).normalize('NFKC').replace(/\s+/g, '').toUpperCase();
+}
+
+// Emails of every collaborator in a multipleCollaborators cell (lowercased).
+function readCollaboratorEmails(record, field) {
+    if (!field) return [];
+    let v;
+    try { v = record.getCellValue(field); } catch { return []; }
+    const out = [];
+    const visit = it => { if (it && typeof it === 'object' && it.email) out.push(normName(it.email)); };
+    if (Array.isArray(v)) v.forEach(visit);
+    else visit(v);
+    return out;
 }
 
 // Resolve a configured field NAME to a field instance, tolerating whitespace and
@@ -142,7 +186,8 @@ function sampleValue(records, field) {
 
 function buildOrg(records, cfg) {
     const {parentField, nameField, jobTitleField, departmentField, statusField,
-        employeeIdField, managerIdField, orgFilterField} = cfg;
+        employeeIdField, managerIdField, orgFilterField, leaderEmailField,
+        shortCodeField, visibleLeadersField} = cfg;
     const nodeMap = {};
     const idByName = {};
     const idByEmployeeId = {}; // employee-id value → record id
@@ -163,6 +208,9 @@ function buildOrg(records, cfg) {
             department: readText(r, departmentField),
             org: readText(r, orgFilterField),
             status: readText(r, statusField),
+            email: normName(readText(r, leaderEmailField)),
+            shortCode: normCode(readText(r, shortCodeField)),
+            visibleLeaders: readCollaboratorEmails(r, visibleLeadersField),
             childIds: [],
             parentId: null,
         };
@@ -239,6 +287,43 @@ function ancestorChain(nodeMap, id) {
         guard++;
     }
     return chain.reverse();
+}
+
+// Compute rootIds + descendant totals for an arbitrary node map (used after the
+// full tree is pruned to a single leader's scope).
+function deriveRootsTotals(nodeMap) {
+    const ids = Object.keys(nodeMap);
+    const byName = (a, b) => nodeMap[a].displayName.localeCompare(nodeMap[b].displayName);
+    const rootIds = ids.filter(id => !nodeMap[id].parentId).sort(byName);
+    const totals = {};
+    const compute = (id, stack) => {
+        if (totals[id] != null) return totals[id];
+        if (stack.has(id)) return 0;
+        stack.add(id);
+        let sum = 0;
+        nodeMap[id].childIds.forEach(c => { if (nodeMap[c]) sum += 1 + compute(c, stack); });
+        stack.delete(id);
+        totals[id] = sum;
+        return sum;
+    };
+    ids.forEach(id => compute(id, new Set()));
+    return {nodeMap, rootIds, totals};
+}
+
+// Every node with at least one direct report in a subtree, DFS pre-order (the
+// root leader first). Used to emit one PDF "section" per manager in the downline.
+function collectManagerSubtreeIds(nodeMap, rootId) {
+    const out = [];
+    const seen = new Set();
+    const walk = id => {
+        const n = nodeMap[id];
+        if (!n || seen.has(id)) return;
+        seen.add(id);
+        if (n.childIds.length > 0) out.push(id);
+        n.childIds.forEach(walk);
+    };
+    walk(rootId);
+    return out;
 }
 
 // ─── Avatars & status colors ──────────────────────────────────────────────────
@@ -710,6 +795,9 @@ function FieldsModal({table, cfg, records, onClose}) {
         ['Employee id', FIELDS.employeeIdField, cfg.employeeIdField],
         ['Manager id', FIELDS.managerIdField, cfg.managerIdField],
         ['Org filter', FIELDS.orgFilterField, cfg.orgFilterField],
+        ['Leader email (scoping)', FIELDS.leaderEmailField, cfg.leaderEmailField],
+        ['Short code (scoping)', FIELDS.shortCodeField, cfg.shortCodeField],
+        ['Visible to leaders (scoping)', FIELDS.visibleLeadersField, cfg.visibleLeadersField],
     ];
 
     const clip = s => (s.length > 60 ? s.slice(0, 60) + '…' : s);
@@ -761,22 +849,38 @@ function FieldsModal({table, cfg, records, onClose}) {
 
 // ─── Person card ──────────────────────────────────────────────────────────────
 
-function PersonCard({node, variant, directs, total, statusColor, showAvatar, onDrill, onOpen}) {
-    const drillable = variant === 'report' && directs > 0;
+function PersonCard({node, variant, directs, total, statusColor, showAvatar, onDrill, onOpen, treeMode}) {
+    const drillable = !treeMode && variant === 'report' && directs > 0;
     const cls = ['person-card', `person-card-${variant}`, 'clickable'];
     if (!showAvatar) cls.push('no-avatar');
     if (node.vacant) cls.push('vacant');
-    const onClick = variant === 'report' ? () => onDrill(node.id) : () => onOpen(node);
-    const title = variant === 'report'
-        ? `Drill into ${node.displayName}`
-        : `Open ${node.displayName} in Airtable`;
+    // In tree mode a click re-roots the tree on the node; a separate button opens
+    // the record. Otherwise: reports drill, the focus card opens the record.
+    const onClick = treeMode
+        ? () => onDrill(node.id)
+        : (variant === 'report' ? () => onDrill(node.id) : () => onOpen(node));
+    const title = treeMode
+        ? `Focus the tree on ${node.displayName}`
+        : (variant === 'report'
+            ? `Drill into ${node.displayName}`
+            : `Open ${node.displayName} in Airtable`);
     return (
         <div
             className={cls.join(' ')}
+            data-node-id={node.id}
             style={statusColor ? {borderLeftColor: statusColor, borderLeftWidth: 4} : undefined}
             onClick={onClick}
             title={title}
         >
+            {treeMode && (
+                <button
+                    className="person-open-btn"
+                    onClick={e => { e.stopPropagation(); onOpen(node); }}
+                    title={`Open ${node.displayName} in Airtable`}
+                >
+                    ⤢
+                </button>
+            )}
             {showAvatar && (
                 <div
                     className="person-avatar"
@@ -874,6 +978,187 @@ function OrgSection({org, members, totals, statusColors, showAvatar, onDrill, on
     );
 }
 
+// ─── Tree view (connected, pan/zoom, collapsible) ─────────────────────────────
+// Ported from the sibling org_chart extension. Draws the focused leader's full
+// downline as a top-down chart with SVG connectors, expand-to-level, and pan/zoom.
+
+function usePanZoom(viewportRef) {
+    const [pan, setPan] = useState({x: 0, y: 0});
+    const [zoom, setZoom] = useState(1);
+    const isDragging = useRef(false);
+    const dragStart = useRef({x: 0, y: 0});
+    const panStart = useRef({x: 0, y: 0});
+
+    const onMouseDown = useCallback(e => {
+        if (e.button !== 0) return;
+        // Pan only on the background, never on cards or the expand/collapse buttons.
+        if (e.target.closest('.person-card, .tree-toggle-btn')) return;
+        isDragging.current = true;
+        dragStart.current = {x: e.clientX, y: e.clientY};
+        panStart.current = {x: pan.x, y: pan.y};
+        e.preventDefault();
+    }, [pan]);
+
+    const onMouseMove = useCallback(e => {
+        if (!isDragging.current) return;
+        const dx = e.clientX - dragStart.current.x;
+        const dy = e.clientY - dragStart.current.y;
+        setPan({x: panStart.current.x + dx, y: panStart.current.y + dy});
+    }, []);
+
+    const onMouseUp = useCallback(() => { isDragging.current = false; }, []);
+
+    // Anchor a zoom change at a screen point so content under it stays fixed.
+    const applyZoomAt = useCallback((compute, anchorX, anchorY) => {
+        setZoom(prevZoom => {
+            const nextZoom = Math.min(2, Math.max(0.2, compute(prevZoom)));
+            if (nextZoom === prevZoom) return prevZoom;
+            const ratio = nextZoom / prevZoom;
+            const el = viewportRef.current;
+            if (el) {
+                const rect = el.getBoundingClientRect();
+                const ax = anchorX != null ? anchorX - rect.left : rect.width / 2;
+                const ay = anchorY != null ? anchorY - rect.top : rect.height / 2;
+                const wrapper = el.querySelector('.transform-wrapper');
+                const wrapperW = wrapper ? wrapper.offsetWidth : rect.width;
+                setPan(prev => {
+                    const ox = prev.x + wrapperW / 2;
+                    const oy = prev.y;
+                    return {
+                        x: prev.x + (1 - ratio) * (ax - ox),
+                        y: prev.y + (1 - ratio) * (ay - oy),
+                    };
+                });
+            }
+            return nextZoom;
+        });
+    }, [viewportRef]);
+
+    const onWheel = useCallback(e => {
+        if (!viewportRef.current) return;
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.05 : 0.05;
+        applyZoomAt(z => z + delta, e.clientX, e.clientY);
+    }, [viewportRef, applyZoomAt]);
+
+    useEffect(() => {
+        const el = viewportRef.current;
+        if (!el) return;
+        el.addEventListener('wheel', onWheel, {passive: false});
+        return () => el.removeEventListener('wheel', onWheel);
+    }, [viewportRef, onWheel]);
+
+    const centerView = useCallback(() => {
+        const vp = viewportRef.current;
+        if (!vp) return;
+        const wrapper = vp.querySelector('.transform-wrapper');
+        const vw = vp.offsetWidth;
+        const ww = wrapper ? wrapper.offsetWidth : vw;
+        setPan({x: (vw - ww) / 2, y: 0});
+        setZoom(1);
+    }, [viewportRef]);
+
+    const zoomIn = useCallback(() => applyZoomAt(z => z + 0.15), [applyZoomAt]);
+    const zoomOut = useCallback(() => applyZoomAt(z => z - 0.15), [applyZoomAt]);
+
+    return {pan, zoom, onMouseDown, onMouseMove, onMouseUp, resetView: centerView, zoomIn, zoomOut, centerView};
+}
+
+function TreeConnectors({wrapperRef, version}) {
+    const [paths, setPaths] = useState([]);
+
+    useEffect(() => {
+        if (!wrapperRef.current) return;
+        const wrapper = wrapperRef.current;
+        const wrapperRect = wrapper.getBoundingClientRect();
+        const scale = wrapperRect.width / wrapper.offsetWidth || 1;
+        const newPaths = [];
+        const parentCards = wrapper.querySelectorAll('[data-node-id]');
+        parentCards.forEach(parentEl => {
+            const parentId = parentEl.getAttribute('data-node-id');
+            const li = parentEl.closest('li');
+            if (!li) return;
+            const childUl = li.querySelector(':scope > ul');
+            if (!childUl) return;
+            const childCards = childUl.querySelectorAll(':scope > li > [data-node-id]');
+            if (childCards.length === 0) return;
+            const parentRect = parentEl.getBoundingClientRect();
+            const px = (parentRect.left + parentRect.width / 2 - wrapperRect.left) / scale;
+            const py = (parentRect.bottom - wrapperRect.top) / scale;
+            childCards.forEach(childEl => {
+                const childRect = childEl.getBoundingClientRect();
+                const cx = (childRect.left + childRect.width / 2 - wrapperRect.left) / scale;
+                const cy = (childRect.top - wrapperRect.top) / scale;
+                const midY = py + (cy - py) * 0.5;
+                const d = `M ${px} ${py} C ${px} ${midY}, ${cx} ${midY}, ${cx} ${cy}`;
+                newPaths.push({key: `${parentId}-${childEl.getAttribute('data-node-id')}`, d});
+            });
+        });
+        setPaths(newPaths);
+    }, [wrapperRef, version]);
+
+    return (
+        <svg className="connector-svg">
+            {paths.map(p => <path key={p.key} d={p.d} />)}
+        </svg>
+    );
+}
+
+function OrgTreeNode({node, nodeMap, totals, statusColors, showAvatar, defaultExpanded, depth, onToggle, onDrill, onOpen}) {
+    const [expanded, setExpanded] = useState(depth < defaultExpanded);
+    const childNodes = node.childIds.map(id => nodeMap[id]).filter(Boolean);
+    const hasChildren = childNodes.length > 0;
+
+    const handleToggle = useCallback(() => {
+        setExpanded(prev => !prev);
+        setTimeout(() => onToggle(), 0); // let layout settle, then redraw connectors
+    }, [onToggle]);
+
+    return (
+        <li>
+            <PersonCard
+                node={node}
+                variant={depth === 0 ? 'focus' : 'report'}
+                directs={node.childIds.length}
+                total={totals[node.id] || 0}
+                statusColor={node.status ? statusColors[node.status] : null}
+                showAvatar={showAvatar}
+                onDrill={onDrill}
+                onOpen={onOpen}
+                treeMode
+            />
+            {hasChildren && (
+                <button
+                    className="tree-toggle-btn"
+                    onClick={e => { e.stopPropagation(); handleToggle(); }}
+                    title={expanded ? 'Collapse' : 'Expand'}
+                >
+                    {expanded ? '−' : `+${childNodes.length}`}
+                </button>
+            )}
+            {hasChildren && expanded && (
+                <ul>
+                    {childNodes.map(child => (
+                        <OrgTreeNode
+                            key={child.id}
+                            node={child}
+                            nodeMap={nodeMap}
+                            totals={totals}
+                            statusColors={statusColors}
+                            showAvatar={showAvatar}
+                            defaultExpanded={defaultExpanded}
+                            depth={depth + 1}
+                            onToggle={onToggle}
+                            onDrill={onDrill}
+                            onOpen={onOpen}
+                        />
+                    ))}
+                </ul>
+            )}
+        </li>
+    );
+}
+
 // ─── Main Workday-style chart ─────────────────────────────────────────────────
 
 function WorkdayChart({table}) {
@@ -904,15 +1189,74 @@ function WorkdayChart({table}) {
             managerIdField: findFieldByName(table, FIELDS.managerIdField),
             // Org filter field, falling back to the department/supervisory org.
             orgFilterField: findFieldByName(table, FIELDS.orgFilterField) || departmentField,
+            leaderEmailField: findFieldByName(table, FIELDS.leaderEmailField),
+            shortCodeField: findFieldByName(table, FIELDS.shortCodeField),
+            visibleLeadersField: findFieldByName(table, FIELDS.visibleLeadersField),
         };
     }, [table]);
     const cfgKey = Object.values(cfg).map(f => (f ? f.id : '∅')).join('|');
 
-    const {nodeMap, rootIds, totals} = useMemo(
+    const {nodeMap: fullNodeMap} = useMemo(
         () => buildOrg(records, cfg),
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [records, cfgKey],
     );
+
+    // ─── Per-leader scoping ──────────────────────────────────────────────────
+    // Identify the signed-in user and restrict the org to their branch. Scoping
+    // is off (full org) until leaderEmailField or visibleLeadersField is set.
+    const session = useSession();
+    const viewerEmail = normName(session && session.currentUser ? session.currentUser.email : '');
+    const adminSet = useMemo(
+        () => new Set((FIELDS.adminEmails || []).map(normName)),
+        [],
+    );
+    const scopingConfigured = !!(cfg.leaderEmailField || cfg.visibleLeadersField);
+    const isAdmin = adminSet.has(viewerEmail);
+
+    // Set of record ids the viewer may see, or null = unrestricted (full org).
+    const scope = useMemo(() => {
+        if (!scopingConfigured || isAdmin) return null;
+        if (!viewerEmail) return new Set(); // public share / unidentifiable
+        // 1) Collaborator field ("Visible to leaders") takes precedence.
+        if (cfg.visibleLeadersField) {
+            const s = new Set();
+            for (const n of Object.values(fullNodeMap)) {
+                if (n.visibleLeaders && n.visibleLeaders.includes(viewerEmail)) s.add(n.id);
+            }
+            if (s.size > 0) return s;
+        }
+        // 2) Fall back to short-code prefix from the viewer's own leader node.
+        const leaderNode = Object.values(fullNodeMap).find(n => n.email && n.email === viewerEmail);
+        if (leaderNode && leaderNode.shortCode) {
+            const code = leaderNode.shortCode;
+            const s = new Set();
+            for (const n of Object.values(fullNodeMap)) {
+                if (n.shortCode && n.shortCode.startsWith(code)) s.add(n.id);
+            }
+            s.add(leaderNode.id);
+            return s;
+        }
+        return new Set();
+    }, [scopingConfigured, isAdmin, viewerEmail, fullNodeMap, cfg.visibleLeadersField]);
+
+    const noView = scopingConfigured && !isAdmin && (!scope || scope.size === 0);
+
+    // Prune the full tree to the scoped branch (parent/child links clipped to scope).
+    const {nodeMap, rootIds, totals} = useMemo(() => {
+        if (!scope) return deriveRootsTotals(fullNodeMap);
+        const m = {};
+        for (const id of scope) {
+            const n = fullNodeMap[id];
+            if (!n) continue;
+            m[id] = {
+                ...n,
+                parentId: (n.parentId && scope.has(n.parentId)) ? n.parentId : null,
+                childIds: n.childIds.filter(c => scope.has(c)),
+            };
+        }
+        return deriveRootsTotals(m);
+    }, [scope, fullNodeMap]);
 
     const statusColors = useMemo(() => buildStatusColors(nodeMap), [nodeMap]);
     const hasStatus = Object.keys(statusColors).length > 0;
@@ -996,9 +1340,44 @@ function WorkdayChart({table}) {
         }));
     }, [orgActive, orgFilter, nodeMap]);
 
+    // ─── Tree view (focused leader's full downline) ──────────────────────────
+    const [viewMode, setViewMode] = useState('focus'); // 'focus' | 'tree'
+    const [treeDepth, setTreeDepth] = useState(2);      // 1 | 2 | 3 | 99 (All)
+    const viewportRef = useRef(null);
+    const wrapperRef = useRef(null);
+    const {pan, zoom, onMouseDown, onMouseMove, onMouseUp, resetView, zoomIn, zoomOut, centerView} =
+        usePanZoom(viewportRef);
+    const treeActive = viewMode === 'tree' && !filterActive;
+
+    // Connector redraw (rAF-batched) when the tree changes shape.
+    const [lineVersion, setLineVersion] = useState(0);
+    const redrawRafRef = useRef(0);
+    const redrawLines = useCallback(() => {
+        if (redrawRafRef.current) return;
+        redrawRafRef.current = requestAnimationFrame(() => {
+            redrawRafRef.current = 0;
+            setLineVersion(v => v + 1);
+        });
+    }, []);
+    useEffect(() => () => { if (redrawRafRef.current) cancelAnimationFrame(redrawRafRef.current); }, []);
+    useEffect(() => { redrawLines(); }, [records, treeDepth, focusId, treeActive, redrawLines]);
+
+    // Re-center the tree when it (re)appears, the leader changes, or depth changes.
+    useLayoutEffect(() => {
+        if (treeActive) centerView();
+    }, [treeActive, focusId, treeDepth, centerView]);
+
+    // Managers (with reports) in the focused subtree, DFS pre-order — one PDF
+    // "section" each, so a tree-mode export covers the whole downline.
+    const treeManagerIds = useMemo(
+        () => (focusId ? collectManagerSubtreeIds(nodeMap, focusId) : []),
+        [nodeMap, focusId],
+    );
+
     // Build the sections the vector PDF draws: a manager section (manager card +
     // direct reports) per manager, OR an org section (org banner + members) per
-    // organization, OR the focused manager when no filter is active.
+    // organization, OR — in Tree view — every manager in the focused downline,
+    // OR the focused manager when no filter is active.
     const buildExportData = useCallback(() => {
         const toCard = n => ({
             name: n.displayName,
@@ -1018,13 +1397,33 @@ function WorkdayChart({table}) {
         }
         const ids = managerActive
             ? [...selectedManagers].sort((a, b) => nodeMap[a].displayName.localeCompare(nodeMap[b].displayName))
-            : (focusId ? [focusId] : []);
+            : treeActive
+                ? treeManagerIds
+                : (focusId ? [focusId] : []);
         return ids.map(id => ({
             kind: 'manager',
             header: toCard(nodeMap[id]),
             reports: nodeMap[id].childIds.map(c => toCard(nodeMap[c])),
         }));
-    }, [orgActive, selectedOrgs, managerActive, selectedManagers, focusId, nodeMap, totals]);
+    }, [orgActive, selectedOrgs, managerActive, selectedManagers, treeActive, treeManagerIds, focusId, nodeMap, totals]);
+
+    if (noView) {
+        return (
+            <div className="org-root">
+                <div className="toolbar">
+                    <span className="app-title">Org Chart</span>
+                    <button className="tb-btn" onClick={() => setShowFields(true)}>Fields</button>
+                </div>
+                <div className="empty-state">
+                    This org chart is personalized per leader, and there is no view
+                    available for{viewerEmail ? <> <strong>{viewerEmail}</strong></> : ' your account'}.
+                    If you should have access, ask an administrator to add your email as
+                    a leader, or to the admin list.
+                </div>
+                {showFields && <FieldsModal table={table} cfg={cfg} records={records} onClose={() => setShowFields(false)} />}
+            </div>
+        );
+    }
 
     if (!focus) {
         return (
@@ -1088,6 +1487,44 @@ function WorkdayChart({table}) {
                         </div>
                     )}
                     <SearchBox nodeMap={nodeMap} onJump={drillFromFilter} />
+                    {!filterActive && (
+                        <div className="viewmode-toggle">
+                            <button
+                                className={`tb-btn ${viewMode === 'focus' ? 'tb-btn-active' : ''}`}
+                                onClick={() => setViewMode('focus')}
+                                title="Focus card + direct reports"
+                            >
+                                Focus
+                            </button>
+                            <button
+                                className={`tb-btn ${viewMode === 'tree' ? 'tb-btn-active' : ''}`}
+                                onClick={() => setViewMode('tree')}
+                                title="Connected tree of the whole downline (pan / zoom)"
+                            >
+                                Tree
+                            </button>
+                        </div>
+                    )}
+                    {treeActive && (
+                        <div className="tree-controls">
+                            <span className="toolbar-label">Levels:</span>
+                            {[1, 2, 3, 99].map(d => (
+                                <button
+                                    key={d}
+                                    className={`tb-btn ${treeDepth === d ? 'tb-btn-active' : ''}`}
+                                    onClick={() => setTreeDepth(d)}
+                                >
+                                    {d === 99 ? 'All' : d}
+                                </button>
+                            ))}
+                            <div className="zoom-controls">
+                                <button className="zoom-btn" onClick={zoomIn} title="Zoom in">+</button>
+                                <span className="zoom-level">{Math.round(zoom * 100)}%</span>
+                                <button className="zoom-btn" onClick={zoomOut} title="Zoom out">−</button>
+                                <button className="zoom-btn zoom-btn-reset" onClick={resetView} title="Reset view">Reset</button>
+                            </div>
+                        </div>
+                    )}
                     <button
                         className={`tb-btn ${showAvatars ? 'tb-btn-active' : ''}`}
                         onClick={() => setShowAvatars(v => !v)}
@@ -1154,6 +1591,53 @@ function WorkdayChart({table}) {
                                     onOpen={openRecord}
                                 />
                             ))}
+                    </div>
+                ) : treeActive ? (
+                    <div className="board board-tree" ref={boardRef}>
+                        {focus.parentId && nodeMap[focus.parentId] && (
+                            <button
+                                className="up-btn"
+                                onClick={() => drill(focus.parentId)}
+                                title={`Up to ${nodeMap[focus.parentId].displayName}`}
+                            >
+                                ↑ {nodeMap[focus.parentId].displayName}
+                            </button>
+                        )}
+                        <div
+                            className="viewport"
+                            ref={viewportRef}
+                            onMouseDown={onMouseDown}
+                            onMouseMove={onMouseMove}
+                            onMouseUp={onMouseUp}
+                            onMouseLeave={onMouseUp}
+                        >
+                            <div
+                                className="transform-wrapper"
+                                ref={wrapperRef}
+                                style={{
+                                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                                    transformOrigin: 'top center',
+                                }}
+                            >
+                                <TreeConnectors wrapperRef={wrapperRef} version={lineVersion} />
+                                <div className="tree" key={treeDepth}>
+                                    <ul>
+                                        <OrgTreeNode
+                                            node={focus}
+                                            nodeMap={nodeMap}
+                                            totals={totals}
+                                            statusColors={statusColors}
+                                            showAvatar={showAvatars}
+                                            defaultExpanded={treeDepth}
+                                            depth={0}
+                                            onToggle={redrawLines}
+                                            onDrill={drill}
+                                            onOpen={openRecord}
+                                        />
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 ) : (
                     <div className="board" ref={boardRef}>
