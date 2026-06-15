@@ -68,7 +68,7 @@ const FIELDS = {
     adminEmails: [],
     // Per-employee "decision" shown as a chip on the card. Toggleable on screen
     // and ALWAYS omitted from exports (PDF/PNG). Set to null to disable entirely.
-    employeeDecisionField: 'Employee Decision',
+    employeeDecisionField: '[D] Employee Decision',
 };
 
 // ─── Field helpers ────────────────────────────────────────────────────────────
