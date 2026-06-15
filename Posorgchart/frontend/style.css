@@ -325,7 +325,7 @@
 
 .person-card {
     position: relative;
-    width: 220px;
+    width: 248px;
     background: white;
     border: 1px solid #e2e8f0;
     border-left: 4px solid #e2e8f0;
@@ -393,7 +393,7 @@
 }
 
 .person-dept {
-    font-size: 11px;
+    font-size: 10px;
     color: #94a3b8;
     margin-top: 2px;
     word-break: break-word;
@@ -422,8 +422,8 @@
 .decision-chip {
     display: inline-block;
     max-width: 100%;
-    padding: 2px 10px;
-    font-size: 11px;
+    padding: 2px 8px;
+    font-size: 10px;
     font-weight: 600;
     color: #5b21b6;
     background: #f3e8ff;
