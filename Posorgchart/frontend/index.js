@@ -5,7 +5,7 @@ import {
     useSession,
     expandRecord,
 } from '@airtable/blocks/interface/ui';
-import {useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback} from 'react';
+import {createContext, useContext, useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback} from 'react';
 import html2canvas from 'html2canvas';
 import {jsPDF} from 'jspdf';
 import './style.css';
@@ -66,6 +66,9 @@ const FIELDS = {
     shortCodeField: 'Short Code',
     visibleLeadersField: null,
     adminEmails: [],
+    // Per-employee "decision" shown as a chip on the card. Toggleable on screen
+    // and ALWAYS omitted from exports (PDF/PNG). Set to null to disable entirely.
+    employeeDecisionField: 'Employee Decision',
 };
 
 // ─── Field helpers ────────────────────────────────────────────────────────────
@@ -187,7 +190,7 @@ function sampleValue(records, field) {
 function buildOrg(records, cfg) {
     const {parentField, nameField, jobTitleField, departmentField, statusField,
         employeeIdField, managerIdField, orgFilterField, leaderEmailField,
-        shortCodeField, visibleLeadersField} = cfg;
+        shortCodeField, visibleLeadersField, employeeDecisionField} = cfg;
     const nodeMap = {};
     const idByName = {};
     const idByEmployeeId = {}; // employee-id value → record id
@@ -211,6 +214,7 @@ function buildOrg(records, cfg) {
             email: normName(readText(r, leaderEmailField)),
             shortCode: normCode(readText(r, shortCodeField)),
             visibleLeaders: readCollaboratorEmails(r, visibleLeadersField),
+            decision: readText(r, employeeDecisionField),
             childIds: [],
             parentId: null,
         };
@@ -798,6 +802,7 @@ function FieldsModal({table, cfg, records, onClose}) {
         ['Leader email (scoping)', FIELDS.leaderEmailField, cfg.leaderEmailField],
         ['Short code (scoping)', FIELDS.shortCodeField, cfg.shortCodeField],
         ['Visible to leaders (scoping)', FIELDS.visibleLeadersField, cfg.visibleLeadersField],
+        ['Employee decision (chip)', FIELDS.employeeDecisionField, cfg.employeeDecisionField],
     ];
 
     const clip = s => (s.length > 60 ? s.slice(0, 60) + '…' : s);
@@ -849,7 +854,13 @@ function FieldsModal({table, cfg, records, onClose}) {
 
 // ─── Person card ──────────────────────────────────────────────────────────────
 
+// Whether the per-employee "decision" chip is shown. Provided once at the board
+// root rather than drilled through every section/tree level (parallel to the
+// avatar toggle, which is prop-drilled). Always false during export.
+const DecisionContext = createContext(false);
+
 function PersonCard({node, variant, directs, total, statusColor, showAvatar, onDrill, onOpen, treeMode}) {
+    const showDecision = useContext(DecisionContext);
     const drillable = !treeMode && variant === 'report' && directs > 0;
     const cls = ['person-card', `person-card-${variant}`, 'clickable'];
     if (!showAvatar) cls.push('no-avatar');
@@ -905,6 +916,11 @@ function PersonCard({node, variant, directs, total, statusColor, showAvatar, onD
                     <span className="person-ic">(Individual contributor)</span>
                 )}
             </div>
+            {showDecision && node.decision && (
+                <div className="person-decision">
+                    <span className="decision-chip">{node.decision}</span>
+                </div>
+            )}
             {drillable && <div className="person-drill">▾</div>}
         </div>
     );
@@ -1167,6 +1183,7 @@ function WorkdayChart({table}) {
     const [managerFilter, setManagerFilter] = useState(() => new Set());
     const [orgFilter, setOrgFilter] = useState(() => new Set());
     const [showAvatars, setShowAvatars] = useState(true);
+    const [showDecision, setShowDecision] = useState(true);
     const [showAbout, setShowAbout] = useState(false);
     const [showFields, setShowFields] = useState(false);
     const boardRef = useRef(null);
@@ -1192,6 +1209,7 @@ function WorkdayChart({table}) {
             leaderEmailField: findFieldByName(table, FIELDS.leaderEmailField),
             shortCodeField: findFieldByName(table, FIELDS.shortCodeField),
             visibleLeadersField: findFieldByName(table, FIELDS.visibleLeadersField),
+            employeeDecisionField: findFieldByName(table, FIELDS.employeeDecisionField),
         };
     }, [table]);
     const cfgKey = Object.values(cfg).map(f => (f ? f.id : '∅')).join('|');
@@ -1444,6 +1462,7 @@ function WorkdayChart({table}) {
     const children = focus.childIds.map(id => nodeMap[id]);
 
     return (
+        <DecisionContext.Provider value={showDecision}>
         <div className="org-root">
             {/* Toolbar */}
             <div className="toolbar">
@@ -1532,6 +1551,15 @@ function WorkdayChart({table}) {
                     >
                         Avatars
                     </button>
+                    {cfg.employeeDecisionField && (
+                        <button
+                            className={`tb-btn ${showDecision ? 'tb-btn-active' : ''}`}
+                            onClick={() => setShowDecision(v => !v)}
+                            title={showDecision ? 'Hide employee decision' : 'Show employee decision'}
+                        >
+                            Decision
+                        </button>
+                    )}
                     <ExportMenu boardRef={boardRef} getData={buildExportData} />
                     <button className="tb-btn" onClick={() => setShowFields(true)} title="Field diagnostics">Fields</button>
                     <button className="tb-btn" onClick={() => setShowAbout(true)} title="About">About</button>
@@ -1696,6 +1724,7 @@ function WorkdayChart({table}) {
             {showAbout && <AboutModal onClose={() => setShowAbout(false)} />}
             {showFields && <FieldsModal table={table} cfg={cfg} records={records} onClose={() => setShowFields(false)} />}
         </div>
+        </DecisionContext.Provider>
     );
 }
 
