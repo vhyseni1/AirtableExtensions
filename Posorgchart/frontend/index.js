@@ -4,6 +4,7 @@ import {
     useRecords,
     useSession,
     expandRecord,
+    colorUtils,
 } from '@airtable/blocks/interface/ui';
 import {createContext, useContext, useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback} from 'react';
 import html2canvas from 'html2canvas';
@@ -191,6 +192,23 @@ function buildOrg(records, cfg) {
     const {parentField, nameField, jobTitleField, departmentField, statusField,
         employeeIdField, managerIdField, orgFilterField, leaderEmailField,
         shortCodeField, visibleLeadersField, employeeDecisionField} = cfg;
+
+    // Map each decision value to its native Airtable colour (so the chip matches
+    // the single-select swatches exactly). Keyed by normalised choice name.
+    const decisionStyleByName = {};
+    const choices = employeeDecisionField
+        && employeeDecisionField.options
+        && employeeDecisionField.options.choices;
+    if (Array.isArray(choices)) {
+        choices.forEach(c => {
+            if (!c || !c.name) return;
+            const hex = c.color ? colorUtils.getHexForColor(c.color) : null;
+            decisionStyleByName[normName(c.name)] = hex
+                ? {bg: hex, fg: colorUtils.shouldUseLightTextOnColor(c.color) ? '#ffffff' : '#1f2937'}
+                : null;
+        });
+    }
+
     const nodeMap = {};
     const idByName = {};
     const idByEmployeeId = {}; // employee-id value → record id
@@ -215,6 +233,7 @@ function buildOrg(records, cfg) {
             shortCode: normCode(readText(r, shortCodeField)),
             visibleLeaders: readCollaboratorEmails(r, visibleLeadersField),
             decision: readText(r, employeeDecisionField),
+            decisionStyle: decisionStyleByName[normName(readText(r, employeeDecisionField))] || null,
             childIds: [],
             parentId: null,
         };
@@ -755,33 +774,6 @@ function SearchBox({nodeMap, onJump}) {
 
 // ─── Modals ───────────────────────────────────────────────────────────────────
 
-function AboutModal({onClose}) {
-    useEffect(() => {
-        const onKey = e => { if (e.key === 'Escape') onClose(); };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, [onClose]);
-
-    return (
-        <div className="overlay" onClick={onClose}>
-            <div className="modal" onClick={e => e.stopPropagation()}>
-                <button className="modal-close" onClick={onClose} title="Close">×</button>
-                <h2 className="modal-title">About this Org Chart</h2>
-                <p className="modal-body">
-                    A Workday-style org explorer built by PwC as a token of appreciation
-                    for the trust and partnership Roche has placed in us — and for the
-                    results we&rsquo;ve delivered together.
-                </p>
-                <p className="modal-contact">
-                    Developed by the PwC team. Primary contact:{' '}
-                    <strong>Valon Hyseni (PwC P&amp;O)</strong>.
-                </p>
-                <div className="modal-signoff">— PwC</div>
-            </div>
-        </div>
-    );
-}
-
 function FieldsModal({table, cfg, records, onClose}) {
     useEffect(() => {
         const onKey = e => { if (e.key === 'Escape') onClose(); };
@@ -918,7 +910,14 @@ function PersonCard({node, variant, directs, total, statusColor, showAvatar, onD
             </div>
             {showDecision && node.decision && (
                 <div className="person-decision">
-                    <span className="decision-chip">{node.decision}</span>
+                    <span
+                        className="decision-chip"
+                        style={node.decisionStyle
+                            ? {background: node.decisionStyle.bg, color: node.decisionStyle.fg, borderColor: node.decisionStyle.bg}
+                            : undefined}
+                    >
+                        {node.decision}
+                    </span>
                 </div>
             )}
             {drillable && <div className="person-drill">▾</div>}
@@ -1184,7 +1183,6 @@ function WorkdayChart({table}) {
     const [orgFilter, setOrgFilter] = useState(() => new Set());
     const [showAvatars, setShowAvatars] = useState(true);
     const [showDecision, setShowDecision] = useState(true);
-    const [showAbout, setShowAbout] = useState(false);
     const [showFields, setShowFields] = useState(false);
     const boardRef = useRef(null);
 
@@ -1562,7 +1560,6 @@ function WorkdayChart({table}) {
                     )}
                     <ExportMenu boardRef={boardRef} getData={buildExportData} />
                     <button className="tb-btn" onClick={() => setShowFields(true)} title="Field diagnostics">Fields</button>
-                    <button className="tb-btn" onClick={() => setShowAbout(true)} title="About">About</button>
                 </div>
             </div>
 
@@ -1721,7 +1718,6 @@ function WorkdayChart({table}) {
                 )}
             </div>
 
-            {showAbout && <AboutModal onClose={() => setShowAbout(false)} />}
             {showFields && <FieldsModal table={table} cfg={cfg} records={records} onClose={() => setShowFields(false)} />}
         </div>
         </DecisionContext.Provider>
