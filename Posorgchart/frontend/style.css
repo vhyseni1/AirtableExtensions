@@ -274,7 +274,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 24px 24px 48px;
+    padding: 24px 12px 48px;
     gap: 4px;
 }
 
@@ -311,8 +311,8 @@
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 16px;
-    max-width: 1280px;
+    gap: 14px;
+    max-width: 1380px;
 }
 
 .no-reports {
@@ -325,7 +325,7 @@
 
 .person-card {
     position: relative;
-    width: 248px;
+    width: 256px; /* fits 5 per row within the reports grid below */
     background: white;
     border: 1px solid #e2e8f0;
     border-left: 4px solid #e2e8f0;
