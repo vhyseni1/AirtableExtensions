@@ -1240,7 +1240,20 @@ function WorkdayChart({table}) {
             for (const n of Object.values(fullNodeMap)) {
                 if (n.visibleLeaders && n.visibleLeaders.includes(viewerEmail)) s.add(n.id);
             }
-            if (s.size > 0) return s;
+            if (s.size > 0) {
+                // The access field lists each record's SUPERIORS, so this set is the
+                // leader's subordinates — it excludes the leader's own seat, which
+                // sits up in the parent org they don't manage. Add the immediate
+                // parent(s) of the top of the scoped branch so the leader appears as
+                // the top box, with their direct reports hanging beneath it.
+                const parents = new Set();
+                for (const id of s) {
+                    const n = fullNodeMap[id];
+                    if (n && n.parentId && !s.has(n.parentId)) parents.add(n.parentId);
+                }
+                parents.forEach(pid => { if (fullNodeMap[pid]) s.add(pid); });
+                return s;
+            }
         }
         // 2) Fall back to short-code prefix from the viewer's own leader node.
         const leaderNode = Object.values(fullNodeMap).find(n => n.email && n.email === viewerEmail);
