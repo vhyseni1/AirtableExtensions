@@ -6,7 +6,7 @@ import {
     expandRecord,
     colorUtils,
 } from '@airtable/blocks/interface/ui';
-import {createContext, useContext, useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback} from 'react';
+import {createContext, useContext, useState, useRef, useEffect, useMemo, useCallback} from 'react';
 import html2canvas from 'html2canvas';
 import {jsPDF} from 'jspdf';
 import './style.css';
@@ -176,16 +176,6 @@ function extractParentRef(record, parentField) {
     return {ids, names};
 }
 
-function sampleValue(records, field) {
-    if (!field) return '';
-    const cap = Math.min(records.length, 400);
-    for (let i = 0; i < cap; i++) {
-        const t = readText(records[i], field);
-        if (t) return t;
-    }
-    return '';
-}
-
 // ─── Org model ────────────────────────────────────────────────────────────────
 
 function buildOrg(records, cfg) {
@@ -331,22 +321,6 @@ function deriveRootsTotals(nodeMap) {
     };
     ids.forEach(id => compute(id, new Set()));
     return {nodeMap, rootIds, totals};
-}
-
-// Every node with at least one direct report in a subtree, DFS pre-order (the
-// root leader first). Used to emit one PDF "section" per manager in the downline.
-function collectManagerSubtreeIds(nodeMap, rootId) {
-    const out = [];
-    const seen = new Set();
-    const walk = id => {
-        const n = nodeMap[id];
-        if (!n || seen.has(id)) return;
-        seen.add(id);
-        if (n.childIds.length > 0) out.push(id);
-        n.childIds.forEach(walk);
-    };
-    walk(rootId);
-    return out;
 }
 
 // ─── Avatars & status colors ──────────────────────────────────────────────────
@@ -774,76 +748,6 @@ function SearchBox({nodeMap, onJump}) {
 
 // ─── Modals ───────────────────────────────────────────────────────────────────
 
-function FieldsModal({table, cfg, records, onClose}) {
-    useEffect(() => {
-        const onKey = e => { if (e.key === 'Escape') onClose(); };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, [onClose]);
-
-    const mappings = [
-        ['Name', FIELDS.primaryNameSource === 'name' ? '(primary field)' : FIELDS.primaryNameSource,
-            FIELDS.primaryNameSource === 'name' ? {type: 'primary'} : cfg.nameField],
-        ['Job title', FIELDS.jobTitleField, cfg.jobTitleField],
-        ['Department', FIELDS.departmentField, cfg.departmentField],
-        ['Status', FIELDS.statusField, cfg.statusField],
-        ['Manager link', FIELDS.parentLinkField, cfg.parentField],
-        ['Employee id', FIELDS.employeeIdField, cfg.employeeIdField],
-        ['Manager id', FIELDS.managerIdField, cfg.managerIdField],
-        ['Org filter', FIELDS.orgFilterField, cfg.orgFilterField],
-        ['Leader email (scoping)', FIELDS.leaderEmailField, cfg.leaderEmailField],
-        ['Short code (scoping)', FIELDS.shortCodeField, cfg.shortCodeField],
-        ['Visible to leaders (scoping)', FIELDS.visibleLeadersField, cfg.visibleLeadersField],
-        ['Employee decision (chip)', FIELDS.employeeDecisionField, cfg.employeeDecisionField],
-    ];
-
-    const clip = s => (s.length > 60 ? s.slice(0, 60) + '…' : s);
-
-    return (
-        <div className="overlay" onClick={onClose}>
-            <div className="modal fields-modal" onClick={e => e.stopPropagation()}>
-                <button className="modal-close" onClick={onClose} title="Close">×</button>
-                <h2 className="modal-title">Field diagnostics</h2>
-
-                <h3 className="fields-subtitle">Configured mappings</h3>
-                <table className="fields-table">
-                    <thead><tr><th>Role</th><th>Configured name</th><th>Resolved</th><th>Sample value</th></tr></thead>
-                    <tbody>
-                        {mappings.map(([role, configured, field]) => (
-                            <tr key={role}>
-                                <td>{role}</td>
-                                <td className="fields-mono">{configured || <em>(none)</em>}</td>
-                                <td>
-                                    {!configured
-                                        ? <span className="fields-muted">—</span>
-                                        : field
-                                            ? <span className="fields-ok">✓ {field.type || ''}</span>
-                                            : <span className="fields-bad">✗ not found</span>}
-                                </td>
-                                <td className="fields-mono">{field && field.id ? clip(sampleValue(records, field)) : ''}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-
-                <h3 className="fields-subtitle">All fields in “{table.name}”</h3>
-                <table className="fields-table">
-                    <thead><tr><th>Field name</th><th>Type</th><th>Sample value</th></tr></thead>
-                    <tbody>
-                        {table.fields.map(f => (
-                            <tr key={f.id}>
-                                <td className="fields-mono">{f.name}</td>
-                                <td>{f.type}</td>
-                                <td className="fields-mono">{clip(sampleValue(records, f))}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
-}
-
 // ─── Person card ──────────────────────────────────────────────────────────────
 
 // Whether the per-employee "decision" chip is shown. Provided once at the board
@@ -851,39 +755,24 @@ function FieldsModal({table, cfg, records, onClose}) {
 // avatar toggle, which is prop-drilled). Always false during export.
 const DecisionContext = createContext(false);
 
-function PersonCard({node, variant, directs, total, statusColor, showAvatar, onDrill, onOpen, treeMode}) {
+function PersonCard({node, variant, directs, total, statusColor, showAvatar, onDrill, onOpen}) {
     const showDecision = useContext(DecisionContext);
-    const drillable = !treeMode && variant === 'report' && directs > 0;
+    const drillable = variant === 'report' && directs > 0;
     const cls = ['person-card', `person-card-${variant}`, 'clickable'];
     if (!showAvatar) cls.push('no-avatar');
     if (node.vacant) cls.push('vacant');
-    // In tree mode a click re-roots the tree on the node; a separate button opens
-    // the record. Otherwise: reports drill, the focus card opens the record.
-    const onClick = treeMode
-        ? () => onDrill(node.id)
-        : (variant === 'report' ? () => onDrill(node.id) : () => onOpen(node));
-    const title = treeMode
-        ? `Focus the tree on ${node.displayName}`
-        : (variant === 'report'
-            ? `Drill into ${node.displayName}`
-            : `Open ${node.displayName} in Airtable`);
+    // Reports drill into their own subtree; the focus card opens the record.
+    const onClick = variant === 'report' ? () => onDrill(node.id) : () => onOpen(node);
+    const title = variant === 'report'
+        ? `Drill into ${node.displayName}`
+        : `Open ${node.displayName} in Airtable`;
     return (
         <div
             className={cls.join(' ')}
-            data-node-id={node.id}
             style={statusColor ? {borderLeftColor: statusColor, borderLeftWidth: 4} : undefined}
             onClick={onClick}
             title={title}
         >
-            {treeMode && (
-                <button
-                    className="person-open-btn"
-                    onClick={e => { e.stopPropagation(); onOpen(node); }}
-                    title={`Open ${node.displayName} in Airtable`}
-                >
-                    ⤢
-                </button>
-            )}
             {showAvatar && (
                 <div
                     className="person-avatar"
@@ -993,187 +882,6 @@ function OrgSection({org, members, totals, statusColors, showAvatar, onDrill, on
     );
 }
 
-// ─── Tree view (connected, pan/zoom, collapsible) ─────────────────────────────
-// Ported from the sibling org_chart extension. Draws the focused leader's full
-// downline as a top-down chart with SVG connectors, expand-to-level, and pan/zoom.
-
-function usePanZoom(viewportRef) {
-    const [pan, setPan] = useState({x: 0, y: 0});
-    const [zoom, setZoom] = useState(1);
-    const isDragging = useRef(false);
-    const dragStart = useRef({x: 0, y: 0});
-    const panStart = useRef({x: 0, y: 0});
-
-    const onMouseDown = useCallback(e => {
-        if (e.button !== 0) return;
-        // Pan only on the background, never on cards or the expand/collapse buttons.
-        if (e.target.closest('.person-card, .tree-toggle-btn')) return;
-        isDragging.current = true;
-        dragStart.current = {x: e.clientX, y: e.clientY};
-        panStart.current = {x: pan.x, y: pan.y};
-        e.preventDefault();
-    }, [pan]);
-
-    const onMouseMove = useCallback(e => {
-        if (!isDragging.current) return;
-        const dx = e.clientX - dragStart.current.x;
-        const dy = e.clientY - dragStart.current.y;
-        setPan({x: panStart.current.x + dx, y: panStart.current.y + dy});
-    }, []);
-
-    const onMouseUp = useCallback(() => { isDragging.current = false; }, []);
-
-    // Anchor a zoom change at a screen point so content under it stays fixed.
-    const applyZoomAt = useCallback((compute, anchorX, anchorY) => {
-        setZoom(prevZoom => {
-            const nextZoom = Math.min(2, Math.max(0.2, compute(prevZoom)));
-            if (nextZoom === prevZoom) return prevZoom;
-            const ratio = nextZoom / prevZoom;
-            const el = viewportRef.current;
-            if (el) {
-                const rect = el.getBoundingClientRect();
-                const ax = anchorX != null ? anchorX - rect.left : rect.width / 2;
-                const ay = anchorY != null ? anchorY - rect.top : rect.height / 2;
-                const wrapper = el.querySelector('.transform-wrapper');
-                const wrapperW = wrapper ? wrapper.offsetWidth : rect.width;
-                setPan(prev => {
-                    const ox = prev.x + wrapperW / 2;
-                    const oy = prev.y;
-                    return {
-                        x: prev.x + (1 - ratio) * (ax - ox),
-                        y: prev.y + (1 - ratio) * (ay - oy),
-                    };
-                });
-            }
-            return nextZoom;
-        });
-    }, [viewportRef]);
-
-    const onWheel = useCallback(e => {
-        if (!viewportRef.current) return;
-        e.preventDefault();
-        const delta = e.deltaY > 0 ? -0.05 : 0.05;
-        applyZoomAt(z => z + delta, e.clientX, e.clientY);
-    }, [viewportRef, applyZoomAt]);
-
-    useEffect(() => {
-        const el = viewportRef.current;
-        if (!el) return;
-        el.addEventListener('wheel', onWheel, {passive: false});
-        return () => el.removeEventListener('wheel', onWheel);
-    }, [viewportRef, onWheel]);
-
-    const centerView = useCallback(() => {
-        const vp = viewportRef.current;
-        if (!vp) return;
-        const wrapper = vp.querySelector('.transform-wrapper');
-        const vw = vp.offsetWidth;
-        const ww = wrapper ? wrapper.offsetWidth : vw;
-        setPan({x: (vw - ww) / 2, y: 0});
-        setZoom(1);
-    }, [viewportRef]);
-
-    const zoomIn = useCallback(() => applyZoomAt(z => z + 0.15), [applyZoomAt]);
-    const zoomOut = useCallback(() => applyZoomAt(z => z - 0.15), [applyZoomAt]);
-
-    return {pan, zoom, onMouseDown, onMouseMove, onMouseUp, resetView: centerView, zoomIn, zoomOut, centerView};
-}
-
-function TreeConnectors({wrapperRef, version}) {
-    const [paths, setPaths] = useState([]);
-
-    useEffect(() => {
-        if (!wrapperRef.current) return;
-        const wrapper = wrapperRef.current;
-        const wrapperRect = wrapper.getBoundingClientRect();
-        const scale = wrapperRect.width / wrapper.offsetWidth || 1;
-        const newPaths = [];
-        const parentCards = wrapper.querySelectorAll('[data-node-id]');
-        parentCards.forEach(parentEl => {
-            const parentId = parentEl.getAttribute('data-node-id');
-            const li = parentEl.closest('li');
-            if (!li) return;
-            const childUl = li.querySelector(':scope > ul');
-            if (!childUl) return;
-            const childCards = childUl.querySelectorAll(':scope > li > [data-node-id]');
-            if (childCards.length === 0) return;
-            const parentRect = parentEl.getBoundingClientRect();
-            const px = (parentRect.left + parentRect.width / 2 - wrapperRect.left) / scale;
-            const py = (parentRect.bottom - wrapperRect.top) / scale;
-            childCards.forEach(childEl => {
-                const childRect = childEl.getBoundingClientRect();
-                const cx = (childRect.left + childRect.width / 2 - wrapperRect.left) / scale;
-                const cy = (childRect.top - wrapperRect.top) / scale;
-                const midY = py + (cy - py) * 0.5;
-                const d = `M ${px} ${py} C ${px} ${midY}, ${cx} ${midY}, ${cx} ${cy}`;
-                newPaths.push({key: `${parentId}-${childEl.getAttribute('data-node-id')}`, d});
-            });
-        });
-        setPaths(newPaths);
-    }, [wrapperRef, version]);
-
-    return (
-        <svg className="connector-svg">
-            {paths.map(p => <path key={p.key} d={p.d} />)}
-        </svg>
-    );
-}
-
-function OrgTreeNode({node, nodeMap, totals, statusColors, showAvatar, defaultExpanded, depth, onToggle, onDrill, onOpen}) {
-    const [expanded, setExpanded] = useState(depth < defaultExpanded);
-    const childNodes = node.childIds.map(id => nodeMap[id]).filter(Boolean);
-    const hasChildren = childNodes.length > 0;
-
-    const handleToggle = useCallback(() => {
-        setExpanded(prev => !prev);
-        setTimeout(() => onToggle(), 0); // let layout settle, then redraw connectors
-    }, [onToggle]);
-
-    return (
-        <li>
-            <PersonCard
-                node={node}
-                variant={depth === 0 ? 'focus' : 'report'}
-                directs={node.childIds.length}
-                total={totals[node.id] || 0}
-                statusColor={node.status ? statusColors[node.status] : null}
-                showAvatar={showAvatar}
-                onDrill={onDrill}
-                onOpen={onOpen}
-                treeMode
-            />
-            {hasChildren && (
-                <button
-                    className="tree-toggle-btn"
-                    onClick={e => { e.stopPropagation(); handleToggle(); }}
-                    title={expanded ? 'Collapse' : 'Expand'}
-                >
-                    {expanded ? '−' : `+${childNodes.length}`}
-                </button>
-            )}
-            {hasChildren && expanded && (
-                <ul>
-                    {childNodes.map(child => (
-                        <OrgTreeNode
-                            key={child.id}
-                            node={child}
-                            nodeMap={nodeMap}
-                            totals={totals}
-                            statusColors={statusColors}
-                            showAvatar={showAvatar}
-                            defaultExpanded={defaultExpanded}
-                            depth={depth + 1}
-                            onToggle={onToggle}
-                            onDrill={onDrill}
-                            onOpen={onOpen}
-                        />
-                    ))}
-                </ul>
-            )}
-        </li>
-    );
-}
-
 // ─── Main Workday-style chart ─────────────────────────────────────────────────
 
 function WorkdayChart({table}) {
@@ -1183,7 +891,6 @@ function WorkdayChart({table}) {
     const [orgFilter, setOrgFilter] = useState(() => new Set());
     const [showAvatars, setShowAvatars] = useState(true);
     const [showDecision, setShowDecision] = useState(true);
-    const [showFields, setShowFields] = useState(false);
     const boardRef = useRef(null);
 
     const cfg = useMemo(() => {
@@ -1369,44 +1076,9 @@ function WorkdayChart({table}) {
         }));
     }, [orgActive, orgFilter, nodeMap]);
 
-    // ─── Tree view (focused leader's full downline) ──────────────────────────
-    const [viewMode, setViewMode] = useState('focus'); // 'focus' | 'tree'
-    const [treeDepth, setTreeDepth] = useState(2);      // 1 | 2 | 3 | 99 (All)
-    const viewportRef = useRef(null);
-    const wrapperRef = useRef(null);
-    const {pan, zoom, onMouseDown, onMouseMove, onMouseUp, resetView, zoomIn, zoomOut, centerView} =
-        usePanZoom(viewportRef);
-    const treeActive = viewMode === 'tree' && !filterActive;
-
-    // Connector redraw (rAF-batched) when the tree changes shape.
-    const [lineVersion, setLineVersion] = useState(0);
-    const redrawRafRef = useRef(0);
-    const redrawLines = useCallback(() => {
-        if (redrawRafRef.current) return;
-        redrawRafRef.current = requestAnimationFrame(() => {
-            redrawRafRef.current = 0;
-            setLineVersion(v => v + 1);
-        });
-    }, []);
-    useEffect(() => () => { if (redrawRafRef.current) cancelAnimationFrame(redrawRafRef.current); }, []);
-    useEffect(() => { redrawLines(); }, [records, treeDepth, focusId, treeActive, redrawLines]);
-
-    // Re-center the tree when it (re)appears, the leader changes, or depth changes.
-    useLayoutEffect(() => {
-        if (treeActive) centerView();
-    }, [treeActive, focusId, treeDepth, centerView]);
-
-    // Managers (with reports) in the focused subtree, DFS pre-order — one PDF
-    // "section" each, so a tree-mode export covers the whole downline.
-    const treeManagerIds = useMemo(
-        () => (focusId ? collectManagerSubtreeIds(nodeMap, focusId) : []),
-        [nodeMap, focusId],
-    );
-
     // Build the sections the vector PDF draws: a manager section (manager card +
     // direct reports) per manager, OR an org section (org banner + members) per
-    // organization, OR — in Tree view — every manager in the focused downline,
-    // OR the focused manager when no filter is active.
+    // organization, OR the focused manager when no filter is active.
     const buildExportData = useCallback(() => {
         const toCard = n => ({
             name: n.displayName,
@@ -1426,22 +1098,19 @@ function WorkdayChart({table}) {
         }
         const ids = managerActive
             ? [...selectedManagers].sort((a, b) => nodeMap[a].displayName.localeCompare(nodeMap[b].displayName))
-            : treeActive
-                ? treeManagerIds
-                : (focusId ? [focusId] : []);
+            : (focusId ? [focusId] : []);
         return ids.map(id => ({
             kind: 'manager',
             header: toCard(nodeMap[id]),
             reports: nodeMap[id].childIds.map(c => toCard(nodeMap[c])),
         }));
-    }, [orgActive, selectedOrgs, managerActive, selectedManagers, treeActive, treeManagerIds, focusId, nodeMap, totals]);
+    }, [orgActive, selectedOrgs, managerActive, selectedManagers, focusId, nodeMap, totals]);
 
     if (noView) {
         return (
             <div className="org-root">
                 <div className="toolbar">
                     <span className="app-title">Org Chart</span>
-                    <button className="tb-btn" onClick={() => setShowFields(true)}>Fields</button>
                 </div>
                 <div className="empty-state">
                     This org chart is personalized per leader, and there is no view
@@ -1449,7 +1118,6 @@ function WorkdayChart({table}) {
                     If you should have access, ask an administrator to add your email as
                     a leader, or to the admin list.
                 </div>
-                {showFields && <FieldsModal table={table} cfg={cfg} records={records} onClose={() => setShowFields(false)} />}
             </div>
         );
     }
@@ -1459,13 +1127,11 @@ function WorkdayChart({table}) {
             <div className="org-root">
                 <div className="toolbar">
                     <span className="app-title">Org Chart</span>
-                    <button className="tb-btn" onClick={() => setShowFields(true)}>Fields</button>
                 </div>
                 <div className="empty-state">
-                    No people to display. Open <strong>Fields</strong> to check that the
-                    name and manager fields resolved, or configure a table in the Data panel.
+                    No people to display. Check that the name and manager fields
+                    resolved, or configure a table in the Data panel.
                 </div>
-                {showFields && <FieldsModal table={table} cfg={cfg} records={records} onClose={() => setShowFields(false)} />}
             </div>
         );
     }
@@ -1517,44 +1183,6 @@ function WorkdayChart({table}) {
                         </div>
                     )}
                     <SearchBox nodeMap={nodeMap} onJump={drillFromFilter} />
-                    {!filterActive && (
-                        <div className="viewmode-toggle">
-                            <button
-                                className={`tb-btn ${viewMode === 'focus' ? 'tb-btn-active' : ''}`}
-                                onClick={() => setViewMode('focus')}
-                                title="Focus card + direct reports"
-                            >
-                                Focus
-                            </button>
-                            <button
-                                className={`tb-btn ${viewMode === 'tree' ? 'tb-btn-active' : ''}`}
-                                onClick={() => setViewMode('tree')}
-                                title="Connected tree of the whole downline (pan / zoom)"
-                            >
-                                Tree
-                            </button>
-                        </div>
-                    )}
-                    {treeActive && (
-                        <div className="tree-controls">
-                            <span className="toolbar-label">Levels:</span>
-                            {[1, 2, 3, 99].map(d => (
-                                <button
-                                    key={d}
-                                    className={`tb-btn ${treeDepth === d ? 'tb-btn-active' : ''}`}
-                                    onClick={() => setTreeDepth(d)}
-                                >
-                                    {d === 99 ? 'All' : d}
-                                </button>
-                            ))}
-                            <div className="zoom-controls">
-                                <button className="zoom-btn" onClick={zoomIn} title="Zoom in">+</button>
-                                <span className="zoom-level">{Math.round(zoom * 100)}%</span>
-                                <button className="zoom-btn" onClick={zoomOut} title="Zoom out">−</button>
-                                <button className="zoom-btn zoom-btn-reset" onClick={resetView} title="Reset view">Reset</button>
-                            </div>
-                        </div>
-                    )}
                     <button
                         className={`tb-btn ${showAvatars ? 'tb-btn-active' : ''}`}
                         onClick={() => setShowAvatars(v => !v)}
@@ -1572,7 +1200,6 @@ function WorkdayChart({table}) {
                         </button>
                     )}
                     <ExportMenu boardRef={boardRef} getData={buildExportData} />
-                    <button className="tb-btn" onClick={() => setShowFields(true)} title="Field diagnostics">Fields</button>
                 </div>
             </div>
 
@@ -1630,53 +1257,6 @@ function WorkdayChart({table}) {
                                 />
                             ))}
                     </div>
-                ) : treeActive ? (
-                    <div className="board board-tree" ref={boardRef}>
-                        {focus.parentId && nodeMap[focus.parentId] && (
-                            <button
-                                className="up-btn"
-                                onClick={() => drill(focus.parentId)}
-                                title={`Up to ${nodeMap[focus.parentId].displayName}`}
-                            >
-                                ↑ {nodeMap[focus.parentId].displayName}
-                            </button>
-                        )}
-                        <div
-                            className="viewport"
-                            ref={viewportRef}
-                            onMouseDown={onMouseDown}
-                            onMouseMove={onMouseMove}
-                            onMouseUp={onMouseUp}
-                            onMouseLeave={onMouseUp}
-                        >
-                            <div
-                                className="transform-wrapper"
-                                ref={wrapperRef}
-                                style={{
-                                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-                                    transformOrigin: 'top center',
-                                }}
-                            >
-                                <TreeConnectors wrapperRef={wrapperRef} version={lineVersion} />
-                                <div className="tree" key={treeDepth}>
-                                    <ul>
-                                        <OrgTreeNode
-                                            node={focus}
-                                            nodeMap={nodeMap}
-                                            totals={totals}
-                                            statusColors={statusColors}
-                                            showAvatar={showAvatars}
-                                            defaultExpanded={treeDepth}
-                                            depth={0}
-                                            onToggle={redrawLines}
-                                            onDrill={drill}
-                                            onOpen={openRecord}
-                                        />
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                 ) : (
                     <div className="board" ref={boardRef}>
                         {focus.parentId && nodeMap[focus.parentId] && (
@@ -1730,8 +1310,6 @@ function WorkdayChart({table}) {
                     </div>
                 )}
             </div>
-
-            {showFields && <FieldsModal table={table} cfg={cfg} records={records} onClose={() => setShowFields(false)} />}
         </div>
         </DecisionContext.Provider>
     );
