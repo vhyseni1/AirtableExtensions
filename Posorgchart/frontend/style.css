@@ -339,10 +339,45 @@
     max-width: 1380px; /* 5 × 256px card + gaps */
 }
 
+/* ─── Connectors: a vertical drop from the parent, a horizontal bus across the
+   children, and a short stub up to each card — so every box in a level reads as
+   clearly wired to its parent. Cards are 256px wide, so the bus is inset 128px
+   (half a card) on each side to land on the outer cards' centers. ──────────── */
+.tree-section > .tree-level {
+    position: relative;
+    padding-top: 26px;
+}
+.tree-section > .tree-level::before {
+    /* horizontal bus */
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 128px;
+    right: 128px;
+    height: 2px;
+    background: #c2ccd8;
+    border-radius: 2px;
+}
+.tree-section > .tree-level > .person-card::before {
+    /* stub from the bus down to each card */
+    content: '';
+    position: absolute;
+    top: -26px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    height: 26px;
+    background: #c2ccd8;
+    border-radius: 2px;
+}
+
 /* Card entrance + the slide-to-center reorder are animated in JS (FLIP), so the
    same card elements glide between positions. Only the connector animates here:
    it unfurls downward toward a freshly revealed level. */
 .tree-section > .connector-vertical {
+    height: 26px;
+    background: #c2ccd8;
+    border-radius: 2px;
     transform-origin: top center;
     animation: connector-grow 460ms ease-out both;
 }
