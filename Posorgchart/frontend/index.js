@@ -818,6 +818,15 @@ function PersonCard({node, variant, directs, total, statusColor, showAvatar, exp
                 {node.location && node.status !== STATUS_NEW_POSITION && (
                     <div className="person-loc">{node.location}</div>
                 )}
+                {node.status && (
+                    <div className="person-status">
+                        <span
+                            className="status-dot"
+                            style={statusColor ? {background: statusColor} : undefined}
+                        />
+                        {node.status}
+                    </div>
+                )}
             </div>
             <div className="person-foot">
                 {directs > 0 ? (
@@ -984,8 +993,10 @@ function WorkdayChart({table}) {
             nameField,
             jobTitleField: findFieldByName(table, FIELDS.jobTitleField),
             departmentField,
-            statusField: findFieldByName(table, FIELDS.statusField),
-            locationField: findFieldByName(table, FIELDS.locationField),
+            statusField: findFieldByName(table, FIELDS.statusField)
+                || findFieldByName(table, 'Position Status'),
+            locationField: findFieldByName(table, FIELDS.locationField)
+                || findFieldByName(table, 'Location'),
             parentField,
             employeeIdField: findFieldByName(table, FIELDS.employeeIdField),
             managerIdField: findFieldByName(table, FIELDS.managerIdField),

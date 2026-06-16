@@ -455,6 +455,23 @@
     word-break: break-word;
 }
 
+.person-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 5px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #475569;
+}
+.status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #cbd5e1;
+    flex-shrink: 0;
+}
+
 /* Thin divider, then the team size in parentheses (blue) or the
    "(Individual contributor)" label for people with no reports. */
 .person-foot {
