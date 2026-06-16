@@ -118,16 +118,17 @@ function normName(s) {
 
 // Map a raw "[T] Position Status ⚙️" value to a clean display label: drops the
 // verbose suffixes (e.g. "Employee mapped - position …") and fixes casing.
-// Unknown values pass through unchanged.
+// Matches on distinctive substrings so it's tolerant of leading codes/icons or
+// trailing detail. Unknown values pass through unchanged.
 function normalizeStatus(raw) {
     const s = (raw || '').trim();
     if (!s) return '';
     const low = s.toLowerCase();
-    if (low.startsWith('new position'))     return 'New position';
-    if (low.startsWith('out of scope'))     return 'Out of scope';
-    if (low.startsWith('employee mapped'))  return 'Employee mapped';
-    if (low.startsWith('employee at risk')) return 'Employee at risk';
-    if (low.startsWith('decision pending')) return 'Decision pending';
+    if (low.includes('new position'))   return 'New position';
+    if (low.includes('out of scope'))   return 'Out of scope';
+    if (low.includes('at risk'))        return 'Employee at risk';
+    if (low.includes('mapped'))         return 'Employee mapped';
+    if (low.includes('decision pending') || low.includes('pending')) return 'Decision pending';
     return s;
 }
 const STATUS_NEW_POSITION = 'New position';
@@ -1356,7 +1357,7 @@ function WorkdayChart({table}) {
                             ))}
                     </div>
                 ) : (
-                    <div className="board board-expandable" ref={boardRef}>
+                    <div className="board" ref={boardRef}>
                         {focus.parentId && nodeMap[focus.parentId] && (
                             <button
                                 className="up-btn"
