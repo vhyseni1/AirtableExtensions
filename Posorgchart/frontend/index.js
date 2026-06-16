@@ -6,7 +6,7 @@ import {
     expandRecord,
     colorUtils,
 } from '@airtable/blocks/interface/ui';
-import {createContext, useContext, useState, useRef, useEffect, useMemo, useCallback} from 'react';
+import {createContext, useContext, useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback} from 'react';
 import {jsPDF} from 'jspdf';
 import './style.css';
 
@@ -869,6 +869,72 @@ function centerOrder(ids, openId) {
     return [...others.slice(0, mid), openId, ...others.slice(mid)];
 }
 
+// A single level (row) of sibling cards with FLIP animation: when `ids` reorder
+// (the open peer slides to the center), the SAME card elements glide from their
+// old positions to their new ones, like swapping cards; freshly added cards fade
+// in. Card elements persist (keyed by id) so the slide is possible.
+const FLIP_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
+function reducedMotion() {
+    return typeof window !== 'undefined' && window.matchMedia
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+function TreeLevel({ids, nodeMap, totals, showAvatar, openChildId, onToggle, onOpen}) {
+    const ref = useRef(null);
+    const prevRects = useRef(new Map());
+    useLayoutEffect(() => {
+        const el = ref.current;
+        if (!el) return;
+        const kids = Array.from(el.children);
+        const newRects = new Map();
+        const reduce = reducedMotion();
+        kids.forEach((node, i) => {
+            const cid = ids[i];
+            if (!cid) return;
+            const rect = node.getBoundingClientRect();
+            newRects.set(cid, rect);
+            if (reduce) return;
+            const prev = prevRects.current.get(cid);
+            if (prev) {
+                const dx = prev.left - rect.left;
+                const dy = prev.top - rect.top;
+                if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+                    node.animate(
+                        [{transform: `translate(${dx}px, ${dy}px)`}, {transform: 'translate(0, 0)'}],
+                        {duration: 520, easing: FLIP_EASING},
+                    );
+                }
+            } else {
+                // Newly revealed card — fade/slide in.
+                node.animate(
+                    [{opacity: 0, transform: 'translateY(-22px) scale(0.96)'}, {opacity: 1, transform: 'none'}],
+                    {duration: 560, easing: FLIP_EASING},
+                );
+            }
+        });
+        prevRects.current = newRects;
+    });
+    return (
+        <div className="tree-level" ref={ref}>
+            {ids.map(cid => {
+                const child = nodeMap[cid];
+                return (
+                    <PersonCard
+                        key={cid}
+                        node={child}
+                        variant="report"
+                        directs={child.childIds.length}
+                        total={totals[cid] || 0}
+                        showAvatar={showAvatar}
+                        expanded={cid === openChildId && child.childIds.length > 0}
+                        onDrill={onToggle}
+                        onOpen={onOpen}
+                    />
+                );
+            })}
+        </div>
+    );
+}
+
 // Inline expand/collapse as a LEVEL STACK (Workday-style drill-down). Each level
 // is a row of siblings; expanding one centers it (peers stay on the sides) and
 // its direct reports appear as a NEW row beneath — never displacing the peers.
@@ -900,31 +966,23 @@ function ExpandTree({focus, nodeMap, totals, showAvatar, openByParent, onToggle,
             {path.map(p => {
                 if (p.childIds.length === 0) return null;
                 const openChildId = openByParent[p.id];
-                const ordered = centerOrder(p.childIds, openChildId);
+                const ids = centerOrder(p.childIds, openChildId).filter(cid => nodeMap[cid]);
+                if (ids.length === 0) return null;
+                // Stable key (p.id) so the section & its cards persist across
+                // expansion changes — that persistence is what lets the cards
+                // slide (FLIP) instead of remounting.
                 return (
-                    // `key` includes the open child so the level re-plays its
-                    // entrance (and re-centering) whenever the expansion changes.
-                    <div className="tree-section" key={`${p.id}:${openChildId || 'none'}`}>
+                    <div className="tree-section" key={p.id}>
                         <div className="connector-vertical" />
-                        <div className="tree-level">
-                            {ordered.map(cid => {
-                                const child = nodeMap[cid];
-                                if (!child) return null;
-                                return (
-                                    <PersonCard
-                                        key={cid}
-                                        node={child}
-                                        variant="report"
-                                        directs={child.childIds.length}
-                                        total={totals[cid] || 0}
-                                        showAvatar={showAvatar}
-                                        expanded={cid === openChildId && child.childIds.length > 0}
-                                        onDrill={onToggle}
-                                        onOpen={onOpen}
-                                    />
-                                );
-                            })}
-                        </div>
+                        <TreeLevel
+                            ids={ids}
+                            nodeMap={nodeMap}
+                            totals={totals}
+                            showAvatar={showAvatar}
+                            openChildId={openChildId}
+                            onToggle={onToggle}
+                            onOpen={onOpen}
+                        />
                     </div>
                 );
             })}

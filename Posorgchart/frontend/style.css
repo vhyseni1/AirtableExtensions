@@ -339,35 +339,20 @@
     max-width: 1380px; /* 5 × 256px card + gaps */
 }
 
-/* A revealed level animates in slowly enough to follow; its cards rise with a
-   gentle stagger so the eye can track which row just appeared. The `key` on
-   each level remounts it whenever the expansion changes, replaying this. */
-.tree-section > .tree-level > .person-card {
-    animation: card-rise 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-.tree-section > .tree-level > .person-card:nth-child(2)  { animation-delay: 90ms; }
-.tree-section > .tree-level > .person-card:nth-child(3)  { animation-delay: 150ms; }
-.tree-section > .tree-level > .person-card:nth-child(4)  { animation-delay: 210ms; }
-.tree-section > .tree-level > .person-card:nth-child(5)  { animation-delay: 270ms; }
-.tree-section > .tree-level > .person-card:nth-child(n+6){ animation-delay: 330ms; }
-
-/* The connector unfurls downward toward the revealed level. */
+/* Card entrance + the slide-to-center reorder are animated in JS (FLIP), so the
+   same card elements glide between positions. Only the connector animates here:
+   it unfurls downward toward a freshly revealed level. */
 .tree-section > .connector-vertical {
     transform-origin: top center;
     animation: connector-grow 460ms ease-out both;
 }
 
-@keyframes card-rise {
-    from { opacity: 0; transform: translateY(-22px) scale(0.96); }
-    to   { opacity: 1; transform: translateY(0) scale(1); }
-}
 @keyframes connector-grow {
     from { transform: scaleY(0); }
     to   { transform: scaleY(1); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .tree-section > .tree-level > .person-card,
     .tree-section > .connector-vertical { animation: none; }
 }
 
