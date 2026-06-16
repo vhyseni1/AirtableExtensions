@@ -378,17 +378,31 @@
 
 /* Keep every report card the same footprint so grid rows stay uniform even as
    branches expand (the tree top-aligns cells, so size must come from the card).
-   Text is clamped to bounded line counts to hold the height steady. */
-.person-card-report { min-height: 168px; justify-content: flex-start; }
-.person-card-report.no-avatar { min-height: 104px; }
+   Name / title / department each get a FIXED two-line slot: text wraps to at
+   most two lines and is vertically centered when it's only one line, so the
+   card height never depends on how long these strings are. */
+.person-card-report { justify-content: flex-start; }
 .person-card-report .person-name,
-.person-card-report .person-title {
+.person-card-report .person-title,
+.person-card-report .person-dept {
+    height: 2.6em;            /* 2 lines × 1.3 line-height */
+    line-height: 1.3;
+    margin-top: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    overflow: hidden;
+}
+.person-card-report .person-name { margin-top: 0; }
+.person-card-report .person-name > span,
+.person-card-report .person-title > span:not(.vacant-badge),
+.person-card-report .person-dept > span {
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
-.person-card-report .person-dept,
 .person-card-report .person-loc {
     max-width: 100%;
     white-space: nowrap;
@@ -456,20 +470,24 @@
 }
 
 .person-status {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
+    display: flex;
+    justify-content: center;
     margin-top: 5px;
+}
+.status-chip {
+    display: inline-block;
+    max-width: 100%;
+    padding: 2px 9px;
     font-size: 10px;
     font-weight: 600;
+    line-height: 1.4;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    background: #f1f5f9;
     color: #475569;
-}
-.status-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: #cbd5e1;
-    flex-shrink: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* Thin divider, then the team size in parentheses (blue) or the

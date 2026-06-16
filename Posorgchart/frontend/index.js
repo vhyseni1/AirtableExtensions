@@ -133,6 +133,16 @@ function normalizeStatus(raw) {
 }
 const STATUS_NEW_POSITION = 'New position';
 
+// Fallback chip colours used when the status field is text/formula (no native
+// single-select swatches). Soft pill backgrounds with a readable foreground.
+const STATUS_FALLBACK_STYLES = {
+    'New position':     {bg: '#e0e7ff', fg: '#3730a3'}, // indigo
+    'Out of scope':     {bg: '#fee2e2', fg: '#991b1b'}, // red
+    'Employee mapped':  {bg: '#dcfce7', fg: '#166534'}, // green
+    'Employee at risk': {bg: '#fef3c7', fg: '#92400e'}, // amber
+    'Decision pending': {bg: '#fef9c3', fg: '#854d0e'}, // yellow
+};
+
 // Normalize a hierarchical short code for prefix matching (e.g. "dsg a" → "DSGA").
 function normCode(s) {
     return String(s == null ? '' : s).normalize('NFKC').replace(/\s+/g, '').toUpperCase();
@@ -219,6 +229,23 @@ function buildOrg(records, cfg) {
         });
     }
 
+    // Status colours. Prefer the field's own single-select swatches (keyed by the
+    // NORMALISED label so it lines up with node.status); otherwise fall back to a
+    // sensible palette for the known statuses.
+    const statusStyleByName = {};
+    const statusChoices = statusField && statusField.options && statusField.options.choices;
+    if (Array.isArray(statusChoices)) {
+        statusChoices.forEach(c => {
+            if (!c || !c.name) return;
+            const key = normName(normalizeStatus(c.name));
+            const hex = c.color ? colorUtils.getHexForColor(c.color) : null;
+            if (hex && !statusStyleByName[key]) {
+                statusStyleByName[key] = {bg: hex, fg: colorUtils.shouldUseLightTextOnColor(c.color) ? '#ffffff' : '#1f2937'};
+            }
+        });
+    }
+    const statusStyleFor = label => statusStyleByName[normName(label)] || STATUS_FALLBACK_STYLES[label] || null;
+
     const nodeMap = {};
     const idByName = {};
     const idByEmployeeId = {}; // employee-id value → record id
@@ -239,6 +266,7 @@ function buildOrg(records, cfg) {
             department: readText(r, departmentField),
             org: readText(r, orgFilterField),
             status: normalizeStatus(readText(r, statusField)),
+            statusStyle: statusStyleFor(normalizeStatus(readText(r, statusField))),
             location: readText(r, locationField),
             email: normName(readText(r, leaderEmailField)),
             shortCode: normCode(readText(r, shortCodeField)),
@@ -810,21 +838,28 @@ function PersonCard({node, variant, directs, total, statusColor, showAvatar, exp
                 </div>
             )}
             <div className="person-info">
-                <div className="person-name">{node.displayName}</div>
-                {node.vacant
-                    ? <div className="vacant-badge">Vacant</div>
-                    : (node.jobTitle && <div className="person-title">{node.jobTitle}</div>)}
-                {node.department && <div className="person-dept">{node.department}</div>}
+                {/* Name / title / department use fixed two-line slots (wrap to 2,
+                    centered when shorter) so every card stays the same height. */}
+                <div className="person-name"><span>{node.displayName}</span></div>
+                <div className="person-title">
+                    {node.vacant
+                        ? <span className="vacant-badge">Vacant</span>
+                        : <span>{node.jobTitle}</span>}
+                </div>
+                <div className="person-dept"><span>{node.department}</span></div>
                 {node.location && node.status !== STATUS_NEW_POSITION && (
                     <div className="person-loc">{node.location}</div>
                 )}
                 {node.status && (
                     <div className="person-status">
                         <span
-                            className="status-dot"
-                            style={statusColor ? {background: statusColor} : undefined}
-                        />
-                        {node.status}
+                            className="status-chip"
+                            style={node.statusStyle
+                                ? {background: node.statusStyle.bg, color: node.statusStyle.fg, borderColor: node.statusStyle.bg}
+                                : undefined}
+                        >
+                            {node.status}
+                        </span>
                     </div>
                 )}
             </div>
