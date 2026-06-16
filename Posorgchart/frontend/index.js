@@ -56,7 +56,10 @@ const FIELDS = {
     primaryNameSource: '[E] First Name, Last Name',
     jobTitleField: 'REF Title [F]',
     departmentField: '[F] Supervisory Organization 🔗',
-    statusField: null,
+    statusField: '[T] Position Status ⚙️',
+    // Location shown under the team. Hidden for "New position" seats (no
+    // incumbent / location yet).
+    locationField: '[F] Location',
     parentLinkField: 'Future Manager',
     employeeIdField: '[E] Employee ID',
     managerIdField: '[F] Manager ID',
@@ -112,6 +115,22 @@ function incumbentName(record, nameField) {
 function normName(s) {
     return String(s == null ? '' : s).normalize('NFKC').trim().toLowerCase();
 }
+
+// Map a raw "[T] Position Status ⚙️" value to a clean display label: drops the
+// verbose suffixes (e.g. "Employee mapped - position …") and fixes casing.
+// Unknown values pass through unchanged.
+function normalizeStatus(raw) {
+    const s = (raw || '').trim();
+    if (!s) return '';
+    const low = s.toLowerCase();
+    if (low.startsWith('new position'))     return 'New position';
+    if (low.startsWith('out of scope'))     return 'Out of scope';
+    if (low.startsWith('employee mapped'))  return 'Employee mapped';
+    if (low.startsWith('employee at risk')) return 'Employee at risk';
+    if (low.startsWith('decision pending')) return 'Decision pending';
+    return s;
+}
+const STATUS_NEW_POSITION = 'New position';
 
 // Normalize a hierarchical short code for prefix matching (e.g. "dsg a" → "DSGA").
 function normCode(s) {
@@ -180,7 +199,7 @@ function extractParentRef(record, parentField) {
 
 function buildOrg(records, cfg) {
     const {parentField, nameField, jobTitleField, departmentField, statusField,
-        employeeIdField, managerIdField, orgFilterField, leaderEmailField,
+        locationField, employeeIdField, managerIdField, orgFilterField, leaderEmailField,
         shortCodeField, visibleLeadersField, employeeDecisionField} = cfg;
 
     // Map each decision value to its native Airtable colour (so the chip matches
@@ -218,7 +237,8 @@ function buildOrg(records, cfg) {
             jobTitle,
             department: readText(r, departmentField),
             org: readText(r, orgFilterField),
-            status: readText(r, statusField),
+            status: normalizeStatus(readText(r, statusField)),
+            location: readText(r, locationField),
             email: normName(readText(r, leaderEmailField)),
             shortCode: normCode(readText(r, shortCodeField)),
             visibleLeaders: readCollaboratorEmails(r, visibleLeadersField),
@@ -787,6 +807,9 @@ function PersonCard({node, variant, directs, total, statusColor, showAvatar, onD
                     ? <div className="vacant-badge">Vacant</div>
                     : (node.jobTitle && <div className="person-title">{node.jobTitle}</div>)}
                 {node.department && <div className="person-dept">{node.department}</div>}
+                {node.location && node.status !== STATUS_NEW_POSITION && (
+                    <div className="person-loc">{node.location}</div>
+                )}
             </div>
             <div className="person-foot">
                 {directs > 0 ? (
@@ -906,6 +929,7 @@ function WorkdayChart({table}) {
             jobTitleField: findFieldByName(table, FIELDS.jobTitleField),
             departmentField,
             statusField: findFieldByName(table, FIELDS.statusField),
+            locationField: findFieldByName(table, FIELDS.locationField),
             parentField,
             employeeIdField: findFieldByName(table, FIELDS.employeeIdField),
             managerIdField: findFieldByName(table, FIELDS.managerIdField),
