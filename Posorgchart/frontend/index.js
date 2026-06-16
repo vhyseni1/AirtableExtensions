@@ -775,17 +775,24 @@ function SearchBox({nodeMap, onJump}) {
 // avatar toggle, which is prop-drilled). Always false during export.
 const DecisionContext = createContext(false);
 
-function PersonCard({node, variant, directs, total, statusColor, showAvatar, onDrill, onOpen}) {
+function PersonCard({node, variant, directs, total, statusColor, showAvatar, expanded, onDrill, onOpen}) {
     const showDecision = useContext(DecisionContext);
     const drillable = variant === 'report' && directs > 0;
     const cls = ['person-card', `person-card-${variant}`, 'clickable'];
     if (!showAvatar) cls.push('no-avatar');
     if (node.vacant) cls.push('vacant');
+    if (expanded) cls.push('expanded');
     // Reports drill into their own subtree; the focus card opens the record.
     const onClick = variant === 'report' ? () => onDrill(node.id) : () => onOpen(node);
-    const title = variant === 'report'
-        ? `Drill into ${node.displayName}`
-        : `Open ${node.displayName} in Airtable`;
+    // `expanded` is a boolean in the inline-expand tree (▾ collapse / ▴), and
+    // undefined in the filtered views where a click re-roots ("drill").
+    const title = variant !== 'report'
+        ? `Open ${node.displayName} in Airtable`
+        : expanded === undefined
+            ? `Drill into ${node.displayName}`
+            : drillable
+                ? `${expanded ? 'Collapse' : 'Expand'} ${node.displayName}`
+                : `Open ${node.displayName} in Airtable`;
     return (
         <div
             className={cls.join(' ')}
@@ -832,7 +839,52 @@ function PersonCard({node, variant, directs, total, statusColor, showAvatar, onD
                     </span>
                 </div>
             )}
-            {drillable && <div className="person-drill">▾</div>}
+            {drillable && <div className="person-drill">{expanded ? '▴' : '▾'}</div>}
+        </div>
+    );
+}
+
+// One node in the inline expand/collapse tree (Workday-style drill-down). A node
+// shows its direct reports only while it's the *open* child of its parent —
+// siblings are mutually exclusive, so opening one collapses the other and the
+// newly-opened box centers over its own reports while staying linked to the
+// manager above. The root focus is always open.
+function Branch({node, nodeMap, totals, statusColors, showAvatar, openByParent, onToggle, onOpen, isRoot}) {
+    const open = isRoot || openByParent[node.parentId] === node.id;
+    const children = open ? node.childIds.map(id => nodeMap[id]).filter(Boolean) : [];
+    return (
+        <div className="branch">
+            <PersonCard
+                node={node}
+                variant={isRoot ? 'focus' : 'report'}
+                directs={node.childIds.length}
+                total={totals[node.id] || 0}
+                statusColor={node.status ? statusColors[node.status] : null}
+                showAvatar={showAvatar}
+                expanded={isRoot ? undefined : (open && node.childIds.length > 0)}
+                onDrill={onToggle}
+                onOpen={onOpen}
+            />
+            {children.length > 0 && (
+                <>
+                    <div className="connector-vertical" />
+                    <div className="branch-children">
+                        {children.map(child => (
+                            <Branch
+                                key={child.id}
+                                node={child}
+                                nodeMap={nodeMap}
+                                totals={totals}
+                                statusColors={statusColors}
+                                showAvatar={showAvatar}
+                                openByParent={openByParent}
+                                onToggle={onToggle}
+                                onOpen={onOpen}
+                            />
+                        ))}
+                    </div>
+                </>
+            )}
         </div>
     );
 }
@@ -914,6 +966,9 @@ function WorkdayChart({table}) {
     const [orgFilter, setOrgFilter] = useState(() => new Set());
     const [showAvatars, setShowAvatars] = useState(true);
     const [showDecision, setShowDecision] = useState(true);
+    // Inline expand/collapse tree: parentId → the id of its currently-open child
+    // (one open child per parent ⇒ siblings are mutually exclusive).
+    const [openByParent, setOpenByParent] = useState({});
     const boardRef = useRef(null);
 
     const cfg = useMemo(() => {
@@ -1079,6 +1134,25 @@ function WorkdayChart({table}) {
         setFocusIdState(id);
     }, []);
     const openRecord = useCallback(node => { if (node && node.record) expandRecord(node.record); }, []);
+
+    // Toggle a report's inline expansion. Opening a node sets it as its parent's
+    // open child (collapsing any sibling); a leaf has nothing to expand, so it
+    // opens its record instead.
+    const toggleExpand = useCallback(id => {
+        const n = nodeMap[id];
+        if (!n) return;
+        if (n.childIds.length === 0) { openRecord(n); return; }
+        const pid = n.parentId;
+        setOpenByParent(prev => {
+            const next = {...prev};
+            if (next[pid] === id) delete next[pid];
+            else next[pid] = id;
+            return next;
+        });
+    }, [nodeMap, openRecord]);
+
+    // Re-rooting (new focus, search jump, or filter) starts from a clean tree.
+    useEffect(() => { setOpenByParent({}); }, [focusId]);
 
     const managerActive = managerFilter.size > 0;
     const orgActive = orgFilter.size > 0;
@@ -1282,7 +1356,7 @@ function WorkdayChart({table}) {
                             ))}
                     </div>
                 ) : (
-                    <div className="board" ref={boardRef}>
+                    <div className="board board-expandable" ref={boardRef}>
                         {focus.parentId && nodeMap[focus.parentId] && (
                             <button
                                 className="up-btn"
@@ -1293,42 +1367,18 @@ function WorkdayChart({table}) {
                             </button>
                         )}
 
-                        <div className="focus-row">
-                            <PersonCard
-                                node={focus}
-                                variant="focus"
-                                directs={focus.childIds.length}
-                                total={totals[focus.id] || 0}
-                                statusColor={focus.status ? statusColors[focus.status] : null}
-                                showAvatar={showAvatars}
-                                onDrill={drill}
-                                onOpen={openRecord}
-                            />
-                        </div>
-
-                        {children.length > 0 ? (
-                            <>
-                                <div className="connector-vertical" />
-                                <div className="reports-label">
-                                    {children.length} direct report{children.length !== 1 ? 's' : ''}
-                                </div>
-                                <div className="reports-grid">
-                                    {children.map(child => (
-                                        <PersonCard
-                                            key={child.id}
-                                            node={child}
-                                            variant="report"
-                                            directs={child.childIds.length}
-                                            total={totals[child.id] || 0}
-                                            statusColor={child.status ? statusColors[child.status] : null}
-                                            showAvatar={showAvatars}
-                                            onDrill={drill}
-                                            onOpen={openRecord}
-                                        />
-                                    ))}
-                                </div>
-                            </>
-                        ) : (
+                        <Branch
+                            node={focus}
+                            nodeMap={nodeMap}
+                            totals={totals}
+                            statusColors={statusColors}
+                            showAvatar={showAvatars}
+                            openByParent={openByParent}
+                            onToggle={toggleExpand}
+                            onOpen={openRecord}
+                            isRoot
+                        />
+                        {children.length === 0 && (
                             <div className="no-reports">No direct reports</div>
                         )}
                     </div>

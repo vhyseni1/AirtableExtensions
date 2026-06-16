@@ -145,6 +145,11 @@
 
 .board-filtered { gap: 32px; }
 
+/* The expandable tree can grow wider than the viewport; sizing to its content
+   (but at least full width) lets it center when small and scroll — without
+   clipping the leftmost cards — when a level is wide. */
+.board-expandable { width: max-content; min-width: 100%; }
+
 .manager-section {
     display: flex;
     flex-direction: column;
@@ -313,6 +318,33 @@
     justify-content: center;
     gap: 14px;
     max-width: 1380px;
+}
+
+/* ─── Inline expand/collapse tree (Workday-style drill-down) ────────────────── */
+
+/* A node and, beneath it, the row of its children. Centering each branch makes
+   an expanded node sit above its own reports while siblings stay in the row. */
+.branch {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Children sit in a single non-wrapping row so each subtree stays centered under
+   its parent; the board scrolls horizontally when a level is wide. */
+.branch-children {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 14px;
+    padding: 0 4px;
+}
+
+/* The currently-open box is highlighted so it reads as the centered focus. */
+.person-card.expanded {
+    border-color: #93c5fd;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25), 0 2px 6px rgba(37, 99, 235, 0.12);
 }
 
 .no-reports {
