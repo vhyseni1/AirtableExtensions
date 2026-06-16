@@ -1284,10 +1284,17 @@ function WorkdayChart({table}) {
                 <div className="toolbar-right">
                     <div className="field-diag" title="Temporary diagnostic — remove once fields resolve">
                         status:&nbsp;<b>{cfg.statusField ? cfg.statusField.name : '✗ NOT FOUND'}</b>
-                        {cfg.statusField && (() => {
-                            const sample = Object.values(nodeMap).find(n => n.status);
-                            return <> (eg “{sample ? sample.status : '— all empty —'}”)</>;
-                        })()}
+                        {cfg.statusField
+                            ? (() => {
+                                const sample = Object.values(nodeMap).find(n => n.status);
+                                return <> (eg “{sample ? sample.status : '— all empty —'}”)</>;
+                            })()
+                            : (() => {
+                                const hits = table.fields
+                                    .filter(f => /stat/i.test(f.name))
+                                    .map(f => f.name);
+                                return <> — fields with “stat”: <b>{hits.length ? hits.join(' | ') : 'none on this table'}</b></>;
+                            })()}
                         &nbsp;·&nbsp; location:&nbsp;<b>{cfg.locationField ? cfg.locationField.name : '✗ NOT FOUND'}</b>
                     </div>
                     {hasStatus && (
