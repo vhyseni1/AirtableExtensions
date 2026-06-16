@@ -7,7 +7,6 @@ import {
     colorUtils,
 } from '@airtable/blocks/interface/ui';
 import {createContext, useContext, useState, useRef, useEffect, useMemo, useCallback} from 'react';
-import html2canvas from 'html2canvas';
 import {jsPDF} from 'jspdf';
 import './style.css';
 
@@ -21,7 +20,7 @@ import './style.css';
 //                       field-name string to use a specific field.
 //   jobTitleField     : job title shown on the card (null to hide).
 //   departmentField   : department / org shown on the card (null to hide).
-//   statusField       : optional colored accent + legend (null to disable).
+//   statusField       : optional status shown as a colored chip (null to disable).
 //   parentLinkField   : field pointing to a person's manager. May be a
 //                       linked-record field OR a lookup.
 //   employeeIdField   : OPTIONAL. Each person's unique id (e.g. position/worker
@@ -393,56 +392,10 @@ function initials(name) {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-const STATUS_PALETTE = [
-    '#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6',
-    '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#14b8a6',
-];
-
-function buildStatusColors(nodeMap) {
-    const vals = new Set();
-    Object.values(nodeMap).forEach(n => { if (n.status) vals.add(n.status); });
-    const m = {};
-    [...vals].sort().forEach((v, i) => { m[v] = STATUS_PALETTE[i % STATUS_PALETTE.length]; });
-    return m;
-}
-
-// ─── Export (PNG / PDF / paginated PDF) ──────────────────────────────────────
-
-async function renderChartCanvas(el, {scale = 2} = {}) {
-    el.classList.add('exporting');
-    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    try {
-        return await html2canvas(el, {
-            scale,
-            backgroundColor: '#ffffff',
-            useCORS: true,
-            logging: false,
-            width: el.scrollWidth,
-            height: el.scrollHeight,
-            windowWidth: el.scrollWidth,
-            windowHeight: el.scrollHeight,
-        });
-    } finally {
-        el.classList.remove('exporting');
-    }
-}
-
-function downloadDataUrl(dataUrl, filename) {
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-}
+// ─── Export (vector PDF) ─────────────────────────────────────────────────────
 
 function timestamp() {
     return new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-}
-
-async function exportPNG(boardEl) {
-    const canvas = await renderChartCanvas(boardEl, {scale: 3});
-    downloadDataUrl(canvas.toDataURL('image/png'), `org-chart-${timestamp()}.png`);
 }
 
 // ── Vector PDF ────────────────────────────────────────────────────────────
@@ -624,42 +577,23 @@ function exportVectorPDF(sections) {
     pdf.save(`org-chart-${timestamp()}.pdf`);
 }
 
-function ExportMenu({boardRef, getData}) {
-    const [open, setOpen] = useState(false);
+function ExportButton({getData}) {
     const [busy, setBusy] = useState(false);
-    const ref = useRef(null);
-
-    useEffect(() => {
-        if (!open) return;
-        const onDoc = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-        document.addEventListener('mousedown', onDoc);
-        return () => document.removeEventListener('mousedown', onDoc);
-    }, [open]);
-
-    const run = useCallback(async fn => {
+    const run = useCallback(async () => {
         setBusy(true);
-        setOpen(false);
         try {
-            await fn();
+            await exportVectorPDF(getData());
         } catch (err) {
             window.alert('Export failed: ' + (err && err.message ? err.message : err));
         } finally {
             setBusy(false);
         }
-    }, []);
+    }, [getData]);
 
     return (
-        <div className="export-wrap" ref={ref}>
-            <button className="tb-btn" onClick={() => setOpen(o => !o)} disabled={busy} title="Export">
-                {busy ? 'Exporting…' : 'Export ▾'}
-            </button>
-            {open && (
-                <div className="menu">
-                    <button onClick={() => run(() => exportVectorPDF(getData()))}>PDF (crisp vector)</button>
-                    <button onClick={() => run(() => boardRef.current && exportPNG(boardRef.current))}>PNG image</button>
-                </div>
-            )}
-        </div>
+        <button className="tb-btn" onClick={run} disabled={busy} title="Export the chart as a PDF">
+            {busy ? 'Exporting…' : 'Export PDF'}
+        </button>
     );
 }
 
@@ -804,7 +738,7 @@ function SearchBox({nodeMap, onJump}) {
 // avatar toggle, which is prop-drilled). Always false during export.
 const DecisionContext = createContext(false);
 
-function PersonCard({node, variant, directs, total, statusColor, showAvatar, expanded, onDrill, onOpen}) {
+function PersonCard({node, variant, directs, total, showAvatar, expanded, onDrill, onOpen}) {
     const showDecision = useContext(DecisionContext);
     const drillable = variant === 'report' && directs > 0;
     const cls = ['person-card', `person-card-${variant}`, 'clickable'];
@@ -825,7 +759,6 @@ function PersonCard({node, variant, directs, total, statusColor, showAvatar, exp
     return (
         <div
             className={cls.join(' ')}
-            style={statusColor ? {borderLeftColor: statusColor, borderLeftWidth: 4} : undefined}
             onClick={onClick}
             title={title}
         >
@@ -894,7 +827,7 @@ function PersonCard({node, variant, directs, total, statusColor, showAvatar, exp
 // siblings are mutually exclusive, so opening one collapses the other and the
 // newly-opened box centers over its own reports while staying linked to the
 // manager above. The root focus is always open.
-function Branch({node, nodeMap, totals, statusColors, showAvatar, openByParent, onToggle, onOpen, isRoot}) {
+function Branch({node, nodeMap, totals, showAvatar, openByParent, onToggle, onOpen, isRoot}) {
     const open = isRoot || openByParent[node.parentId] === node.id;
     const children = open ? node.childIds.map(id => nodeMap[id]).filter(Boolean) : [];
     return (
@@ -904,7 +837,6 @@ function Branch({node, nodeMap, totals, statusColors, showAvatar, openByParent, 
                 variant={isRoot ? 'focus' : 'report'}
                 directs={node.childIds.length}
                 total={totals[node.id] || 0}
-                statusColor={node.status ? statusColors[node.status] : null}
                 showAvatar={showAvatar}
                 expanded={isRoot ? undefined : (open && node.childIds.length > 0)}
                 onDrill={onToggle}
@@ -913,14 +845,15 @@ function Branch({node, nodeMap, totals, statusColors, showAvatar, openByParent, 
             {children.length > 0 && (
                 <>
                     <div className="connector-vertical" />
-                    <div className="branch-children">
+                    {/* `key` ties the animation to the open child so the subtree
+                        re-plays its entrance whenever the expansion changes. */}
+                    <div className="branch-children" key={openByParent[node.id] || 'none'}>
                         {children.map(child => (
                             <Branch
                                 key={child.id}
                                 node={child}
                                 nodeMap={nodeMap}
                                 totals={totals}
-                                statusColors={statusColors}
                                 showAvatar={showAvatar}
                                 openByParent={openByParent}
                                 onToggle={onToggle}
@@ -935,7 +868,7 @@ function Branch({node, nodeMap, totals, statusColors, showAvatar, openByParent, 
 }
 
 // A manager + their direct reports (used by the Manager filter view).
-function ManagerSection({node, nodeMap, totals, statusColors, showAvatar, onDrill, onOpen}) {
+function ManagerSection({node, nodeMap, totals, showAvatar, onDrill, onOpen}) {
     const children = node.childIds.map(id => nodeMap[id]);
     return (
         <div className="manager-section">
@@ -944,7 +877,6 @@ function ManagerSection({node, nodeMap, totals, statusColors, showAvatar, onDril
                 variant="focus"
                 directs={node.childIds.length}
                 total={totals[node.id] || 0}
-                statusColor={node.status ? statusColors[node.status] : null}
                 showAvatar={showAvatar}
                 onDrill={onDrill}
                 onOpen={onOpen}
@@ -960,7 +892,6 @@ function ManagerSection({node, nodeMap, totals, statusColors, showAvatar, onDril
                                 variant="report"
                                 directs={child.childIds.length}
                                 total={totals[child.id] || 0}
-                                statusColor={child.status ? statusColors[child.status] : null}
                                 showAvatar={showAvatar}
                                 onDrill={onDrill}
                                 onOpen={onOpen}
@@ -973,12 +904,13 @@ function ManagerSection({node, nodeMap, totals, statusColors, showAvatar, onDril
     );
 }
 
-// An organization + the positions in it (used by the Organization filter view).
-function OrgSection({org, members, totals, statusColors, showAvatar, onDrill, onOpen}) {
+// A flat group of positions under a header (used by the Organization and
+// Location filter views).
+function GroupSection({title, members, totals, showAvatar, onDrill, onOpen}) {
     return (
         <div className="manager-section">
             <div className="org-header">
-                <span className="org-header-name">{org}</span>
+                <span className="org-header-name">{title}</span>
                 <span className="org-header-count">
                     {members.length} position{members.length !== 1 ? 's' : ''}
                 </span>
@@ -991,7 +923,6 @@ function OrgSection({org, members, totals, statusColors, showAvatar, onDrill, on
                         variant="report"
                         directs={n.childIds.length}
                         total={totals[n.id] || 0}
-                        statusColor={n.status ? statusColors[n.status] : null}
                         showAvatar={showAvatar}
                         onDrill={onDrill}
                         onOpen={onOpen}
@@ -1002,6 +933,31 @@ function OrgSection({org, members, totals, statusColors, showAvatar, onDrill, on
     );
 }
 
+// A set of selected values → one group per value (positions whose field equals
+// it), each sorted managers-first then by name.
+function groupsForValues(nodeMap, filterSet, pick) {
+    return [...filterSet].sort((a, b) => a.localeCompare(b)).map(value => ({
+        title: value,
+        members: Object.values(nodeMap)
+            .filter(n => (pick(n) || '').trim() === value)
+            .sort((a, b) =>
+                (b.childIds.length > 0) - (a.childIds.length > 0) ||
+                a.displayName.localeCompare(b.displayName)),
+    }));
+}
+
+// Distinct non-empty values of a node field → filter options with a count.
+function distinctFieldOptions(nodeMap, pick) {
+    const counts = new Map();
+    Object.values(nodeMap).forEach(n => {
+        const v = (pick(n) || '').trim();
+        if (v) counts.set(v, (counts.get(v) || 0) + 1);
+    });
+    return [...counts.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([v, c]) => ({value: v, label: v, sub: `${c} position${c !== 1 ? 's' : ''}`}));
+}
+
 // ─── Main Workday-style chart ─────────────────────────────────────────────────
 
 function WorkdayChart({table}) {
@@ -1009,6 +965,7 @@ function WorkdayChart({table}) {
     const [focusIdState, setFocusIdState] = useState(null);
     const [managerFilter, setManagerFilter] = useState(() => new Set());
     const [orgFilter, setOrgFilter] = useState(() => new Set());
+    const [locationFilter, setLocationFilter] = useState(() => new Set());
     const [showAvatars, setShowAvatars] = useState(true);
     const [showDecision, setShowDecision] = useState(true);
     // Inline expand/collapse tree: parentId → the id of its currently-open child
@@ -1120,9 +1077,6 @@ function WorkdayChart({table}) {
         return deriveRootsTotals(m);
     }, [scope, fullNodeMap]);
 
-    const statusColors = useMemo(() => buildStatusColors(nodeMap), [nodeMap]);
-    const hasStatus = Object.keys(statusColors).length > 0;
-
     // Managers = people with at least one direct report.
     const managerOptions = useMemo(() => {
         return Object.values(nodeMap)
@@ -1138,26 +1092,23 @@ function WorkdayChart({table}) {
     }, [nodeMap]);
 
     // Organizations = distinct values of the org field, with a position count.
-    const orgOptions = useMemo(() => {
-        const counts = new Map();
-        Object.values(nodeMap).forEach(n => {
-            const org = (n.org || '').trim();
-            if (org) counts.set(org, (counts.get(org) || 0) + 1);
-        });
-        return [...counts.entries()]
-            .sort((a, b) => a[0].localeCompare(b[0]))
-            .map(([org, c]) => ({value: org, label: org, sub: `${c} position${c !== 1 ? 's' : ''}`}));
-    }, [nodeMap]);
+    const orgOptions = useMemo(() => distinctFieldOptions(nodeMap, n => n.org), [nodeMap]);
+    // Locations = distinct values of the location field, with a position count.
+    const locationOptions = useMemo(() => distinctFieldOptions(nodeMap, n => n.location), [nodeMap]);
 
-    // The Manager and Organization filters are mutually exclusive — selecting in
-    // one clears the other so the board shows a single, unambiguous view.
+    // The Manager / Organization / Location filters are mutually exclusive —
+    // selecting in one clears the others so the board shows a single view.
     const selectManagers = useCallback(next => {
         setManagerFilter(next);
-        if (next.size) setOrgFilter(new Set());
+        if (next.size) { setOrgFilter(new Set()); setLocationFilter(new Set()); }
     }, []);
     const selectOrgs = useCallback(next => {
         setOrgFilter(next);
-        if (next.size) setManagerFilter(new Set());
+        if (next.size) { setManagerFilter(new Set()); setLocationFilter(new Set()); }
+    }, []);
+    const selectLocations = useCallback(next => {
+        setLocationFilter(next);
+        if (next.size) { setManagerFilter(new Set()); setOrgFilter(new Set()); }
     }, []);
 
     const defaultFocusId = useMemo(() => {
@@ -1203,23 +1154,21 @@ function WorkdayChart({table}) {
 
     const managerActive = managerFilter.size > 0;
     const orgActive = orgFilter.size > 0;
-    const filterActive = managerActive || orgActive;
+    const locationActive = locationFilter.size > 0;
+    const filterActive = managerActive || orgActive || locationActive;
     const selectedManagers = useMemo(
         () => [...managerFilter].filter(id => nodeMap[id]),
         [managerFilter, nodeMap],
     );
-    // Selected orgs → the positions in each, sorted managers-first then by name.
-    const selectedOrgs = useMemo(() => {
-        if (!orgActive) return [];
-        return [...orgFilter].sort((a, b) => a.localeCompare(b)).map(org => ({
-            org,
-            members: Object.values(nodeMap)
-                .filter(n => (n.org || '').trim() === org)
-                .sort((a, b) =>
-                    (b.childIds.length > 0) - (a.childIds.length > 0) ||
-                    a.displayName.localeCompare(b.displayName)),
-        }));
-    }, [orgActive, orgFilter, nodeMap]);
+    // A value filter (org or location) → the positions in each group.
+    const selectedOrgs = useMemo(
+        () => (orgActive ? groupsForValues(nodeMap, orgFilter, n => n.org) : []),
+        [orgActive, orgFilter, nodeMap],
+    );
+    const selectedLocations = useMemo(
+        () => (locationActive ? groupsForValues(nodeMap, locationFilter, n => n.location) : []),
+        [locationActive, locationFilter, nodeMap],
+    );
 
     // Build the sections the vector PDF draws: a manager section (manager card +
     // direct reports) per manager, OR an org section (org banner + members) per
@@ -1234,10 +1183,11 @@ function WorkdayChart({table}) {
             total: totals[n.id] || 0,
             vacant: n.vacant,
         });
-        if (orgActive) {
-            return selectedOrgs.map(({org, members}) => ({
+        const groups = orgActive ? selectedOrgs : locationActive ? selectedLocations : null;
+        if (groups) {
+            return groups.map(({title, members}) => ({
                 kind: 'org',
-                header: {name: org, count: members.length},
+                header: {name: title, count: members.length},
                 reports: members.map(toCard),
             }));
         }
@@ -1249,7 +1199,7 @@ function WorkdayChart({table}) {
             header: toCard(nodeMap[id]),
             reports: nodeMap[id].childIds.map(c => toCard(nodeMap[c])),
         }));
-    }, [orgActive, selectedOrgs, managerActive, selectedManagers, focusId, nodeMap, totals]);
+    }, [orgActive, selectedOrgs, locationActive, selectedLocations, managerActive, selectedManagers, focusId, nodeMap, totals]);
 
     if (noView) {
         return (
@@ -1304,45 +1254,30 @@ function WorkdayChart({table}) {
                             onChange={selectOrgs}
                         />
                     )}
+                    {cfg.locationField && (
+                        <CheckboxFilter
+                            label="Location"
+                            options={locationOptions}
+                            selected={locationFilter}
+                            onChange={selectLocations}
+                        />
+                    )}
                     {filterActive && (
                         <button
                             className="tb-btn tb-btn-clear"
-                            onClick={() => { setManagerFilter(new Set()); setOrgFilter(new Set()); }}
+                            onClick={() => { setManagerFilter(new Set()); setOrgFilter(new Set()); setLocationFilter(new Set()); }}
                             title="Clear filters"
                         >
                             {orgActive
                                 ? `Clear · ${selectedOrgs.length} org${selectedOrgs.length !== 1 ? 's' : ''}`
-                                : `Clear · ${selectedManagers.length} manager${selectedManagers.length !== 1 ? 's' : ''}`}
+                                : locationActive
+                                    ? `Clear · ${selectedLocations.length} location${selectedLocations.length !== 1 ? 's' : ''}`
+                                    : `Clear · ${selectedManagers.length} manager${selectedManagers.length !== 1 ? 's' : ''}`}
                         </button>
                     )}
+                    <SearchBox nodeMap={nodeMap} onJump={drillFromFilter} />
                 </div>
                 <div className="toolbar-right">
-                    <div className="field-diag" title="Temporary diagnostic — remove once fields resolve">
-                        status:&nbsp;<b>{cfg.statusField ? cfg.statusField.name : '✗ NOT FOUND'}</b>
-                        {cfg.statusField
-                            ? (() => {
-                                const sample = Object.values(nodeMap).find(n => n.status);
-                                return <> (eg “{sample ? sample.status : '— all empty —'}”)</>;
-                            })()
-                            : (() => {
-                                const hits = table.fields
-                                    .filter(f => /stat/i.test(f.name))
-                                    .map(f => f.name);
-                                return <> — fields with “stat”: <b>{hits.length ? hits.join(' | ') : 'none on this table'}</b></>;
-                            })()}
-                        &nbsp;·&nbsp; location:&nbsp;<b>{cfg.locationField ? cfg.locationField.name : '✗ NOT FOUND'}</b>
-                    </div>
-                    {hasStatus && (
-                        <div className="legend">
-                            {Object.entries(statusColors).map(([label, color]) => (
-                                <span key={label} className="legend-item">
-                                    <span className="legend-dot" style={{background: color}} />
-                                    {label}
-                                </span>
-                            ))}
-                        </div>
-                    )}
-                    <SearchBox nodeMap={nodeMap} onJump={drillFromFilter} />
                     <button
                         className={`tb-btn ${showAvatars ? 'tb-btn-active' : ''}`}
                         onClick={() => setShowAvatars(v => !v)}
@@ -1359,7 +1294,7 @@ function WorkdayChart({table}) {
                             Decision
                         </button>
                     )}
-                    <ExportMenu boardRef={boardRef} getData={buildExportData} />
+                    <ExportButton getData={buildExportData} />
                 </div>
             </div>
 
@@ -1379,18 +1314,17 @@ function WorkdayChart({table}) {
 
             {/* Board */}
             <div className="board-scroll">
-                {orgActive ? (
+                {(orgActive || locationActive) ? (
                     <div className="board board-filtered" ref={boardRef}>
-                        {selectedOrgs.length === 0 && (
-                            <div className="no-reports">No matching organizations.</div>
+                        {(orgActive ? selectedOrgs : selectedLocations).length === 0 && (
+                            <div className="no-reports">No matching {orgActive ? 'organizations' : 'locations'}.</div>
                         )}
-                        {selectedOrgs.map(({org, members}) => (
-                            <OrgSection
-                                key={org}
-                                org={org}
+                        {(orgActive ? selectedOrgs : selectedLocations).map(({title, members}) => (
+                            <GroupSection
+                                key={title}
+                                title={title}
                                 members={members}
                                 totals={totals}
-                                statusColors={statusColors}
                                 showAvatar={showAvatars}
                                 onDrill={drillFromFilter}
                                 onOpen={openRecord}
@@ -1410,7 +1344,6 @@ function WorkdayChart({table}) {
                                     node={nodeMap[id]}
                                     nodeMap={nodeMap}
                                     totals={totals}
-                                    statusColors={statusColors}
                                     showAvatar={showAvatars}
                                     onDrill={drillFromFilter}
                                     onOpen={openRecord}
@@ -1433,7 +1366,6 @@ function WorkdayChart({table}) {
                             node={focus}
                             nodeMap={nodeMap}
                             totals={totals}
-                            statusColors={statusColors}
                             showAvatar={showAvatars}
                             openByParent={openByParent}
                             onToggle={toggleExpand}
