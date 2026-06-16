@@ -62,6 +62,15 @@ const FIELDS = {
     parentLinkField: 'Future Manager',
     employeeIdField: '[E] Employee ID',
     managerIdField: '[F] Manager ID',
+    // Position-based linking so a VACANT manager (no incumbent, so no name or
+    // employee id to match) still connects its branch to the level above.
+    //   positionIdField        : each record's OWN position id.
+    //   managerPositionIdField : the manager's position id on each record.
+    // Both tolerate values like "50692845 - Global Head … (Name)" — the leading
+    // number is used. If positionIdField doesn't resolve, the record's primary
+    // field is parsed for a leading id as a fallback.
+    positionIdField: '[F] Position ID',
+    managerPositionIdField: '[F] Manager ID',
     // Field powering the "Organization" checkbox filter. Falls back to the
     // department field if this name doesn't resolve.
     orgFilterField: 'Future Organization',
@@ -147,6 +156,17 @@ function normCode(s) {
     return String(s == null ? '' : s).normalize('NFKC').replace(/\s+/g, '').toUpperCase();
 }
 
+// Pull a position id out of a value that may be a bare id ("50692845") or a
+// formatted label ("50692845 - Global Head … (Name)"): the first run of 3+
+// digits, else the whole trimmed/normalized token.
+function parsePositionId(s) {
+    const str = String(s == null ? '' : s);
+    const m = str.match(/\d{3,}/);
+    if (m) return m[0];
+    const t = str.normalize('NFKC').trim().toLowerCase();
+    return t;
+}
+
 // Emails of every collaborator in a multipleCollaborators cell (lowercased).
 function readCollaboratorEmails(record, field) {
     if (!field) return [];
@@ -209,8 +229,19 @@ function extractParentRef(record, parentField) {
 
 function buildOrg(records, cfg) {
     const {parentField, nameField, jobTitleField, departmentField, statusField,
-        locationField, employeeIdField, managerIdField, orgFilterField, leaderEmailField,
+        locationField, employeeIdField, managerIdField, positionIdField,
+        managerPositionIdField, orgFilterField, leaderEmailField,
         shortCodeField, visibleLeadersField, employeeDecisionField} = cfg;
+
+    // Each record's own position id (works even for vacant seats). Prefer the
+    // dedicated field; fall back to a leading id parsed from the primary field.
+    const positionIdOf = r => {
+        const raw = positionIdField ? readText(r, positionIdField) : '';
+        if (raw) return parsePositionId(raw);
+        return parsePositionId(r.name);
+    };
+    const managerPositionIdOf = r =>
+        managerPositionIdField ? parsePositionId(readText(r, managerPositionIdField)) : '';
 
     // Map each decision value to its native Airtable colour (so the chip matches
     // the single-select swatches exactly). Keyed by normalised choice name.
@@ -247,7 +278,8 @@ function buildOrg(records, cfg) {
 
     const nodeMap = {};
     const idByName = {};
-    const idByEmployeeId = {}; // employee-id value → record id
+    const idByEmployeeId = {};  // employee-id value → record id
+    const idByPositionId = {};  // position-id value → record id (survives vacancy)
 
     records.forEach(r => {
         const incumbent = incumbentName(r, nameField);
@@ -286,13 +318,19 @@ function buildOrg(records, cfg) {
             const eid = normName(readText(r, employeeIdField));
             if (eid && !(eid in idByEmployeeId)) idByEmployeeId[eid] = r.id;
         }
+        const pid = positionIdOf(r);
+        if (pid && !(pid in idByPositionId)) idByPositionId[pid] = r.id;
     });
 
     // Prefer a true id over name matching (names are ambiguous for duplicates):
-    //   1. explicit manager-id → employee-id mapping (most reliable),
+    //   0. manager POSITION id → position id (works even when the manager seat
+    //      is vacant, so the branch above never gets cut off),
+    //   1. explicit manager-id → employee-id mapping,
     //   2. linked-record id from the manager lookup/link,
     //   3. name match as a last resort.
     const resolveParentId = r => {
+        const mpid = managerPositionIdOf(r);
+        if (mpid && idByPositionId[mpid] && idByPositionId[mpid] !== r.id) return idByPositionId[mpid];
         if (managerIdField) {
             const mid = normName(readText(r, managerIdField));
             if (mid && idByEmployeeId[mid] && idByEmployeeId[mid] !== r.id) return idByEmployeeId[mid];
@@ -992,6 +1030,9 @@ function WorkdayChart({table}) {
             parentField,
             employeeIdField: findFieldByName(table, FIELDS.employeeIdField),
             managerIdField: findFieldByName(table, FIELDS.managerIdField),
+            positionIdField: findFieldByName(table, FIELDS.positionIdField)
+                || findFieldByName(table, 'Position ID'),
+            managerPositionIdField: findFieldByName(table, FIELDS.managerPositionIdField),
             // Org filter field, falling back to the department/supervisory org.
             orgFilterField: findFieldByName(table, FIELDS.orgFilterField) || departmentField,
             leaderEmailField: findFieldByName(table, FIELDS.leaderEmailField),
