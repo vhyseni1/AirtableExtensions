@@ -860,47 +860,74 @@ function PersonCard({node, variant, directs, total, showAvatar, expanded, onDril
     );
 }
 
-// One node in the inline expand/collapse tree (Workday-style drill-down). A node
-// shows its direct reports only while it's the *open* child of its parent —
-// siblings are mutually exclusive, so opening one collapses the other and the
-// newly-opened box centers over its own reports while staying linked to the
-// manager above. The root focus is always open.
-function Branch({node, nodeMap, totals, showAvatar, openByParent, onToggle, onOpen, isRoot}) {
-    const open = isRoot || openByParent[node.parentId] === node.id;
-    const children = open ? node.childIds.map(id => nodeMap[id]).filter(Boolean) : [];
+// Reorder a row of siblings so the open one sits in the middle, peers split to
+// the sides (Workday-style: the expanded peer takes the center).
+function centerOrder(ids, openId) {
+    if (!openId || !ids.includes(openId)) return ids;
+    const others = ids.filter(id => id !== openId);
+    const mid = Math.floor(others.length / 2);
+    return [...others.slice(0, mid), openId, ...others.slice(mid)];
+}
+
+// Inline expand/collapse as a LEVEL STACK (Workday-style drill-down). Each level
+// is a row of siblings; expanding one centers it (peers stay on the sides) and
+// its direct reports appear as a NEW row beneath — never displacing the peers.
+// Only the open path expands, so siblings are mutually exclusive.
+function ExpandTree({focus, nodeMap, totals, showAvatar, openByParent, onToggle, onOpen}) {
+    // Open path: the focus, then each open child down the chain.
+    const path = [];
+    const guard = new Set();
+    let cur = focus;
+    while (cur && !guard.has(cur.id)) {
+        guard.add(cur.id);
+        path.push(cur);
+        const oc = openByParent[cur.id];
+        cur = (oc && nodeMap[oc] && cur.childIds.includes(oc)) ? nodeMap[oc] : null;
+    }
     return (
-        <div className="branch">
-            <PersonCard
-                node={node}
-                variant={isRoot ? 'focus' : 'report'}
-                directs={node.childIds.length}
-                total={totals[node.id] || 0}
-                showAvatar={showAvatar}
-                expanded={isRoot ? undefined : (open && node.childIds.length > 0)}
-                onDrill={onToggle}
-                onOpen={onOpen}
-            />
-            {children.length > 0 && (
-                <>
-                    <div className="connector-vertical" />
-                    {/* `key` ties the animation to the open child so the subtree
-                        re-plays its entrance whenever the expansion changes. */}
-                    <div className="branch-children" key={openByParent[node.id] || 'none'}>
-                        {children.map(child => (
-                            <Branch
-                                key={child.id}
-                                node={child}
-                                nodeMap={nodeMap}
-                                totals={totals}
-                                showAvatar={showAvatar}
-                                openByParent={openByParent}
-                                onToggle={onToggle}
-                                onOpen={onOpen}
-                            />
-                        ))}
+        <div className="tree-stack">
+            <div className="tree-level">
+                <PersonCard
+                    node={focus}
+                    variant="focus"
+                    directs={focus.childIds.length}
+                    total={totals[focus.id] || 0}
+                    showAvatar={showAvatar}
+                    onDrill={onToggle}
+                    onOpen={onOpen}
+                />
+            </div>
+            {path.map(p => {
+                if (p.childIds.length === 0) return null;
+                const openChildId = openByParent[p.id];
+                const ordered = centerOrder(p.childIds, openChildId);
+                return (
+                    // `key` includes the open child so the level re-plays its
+                    // entrance (and re-centering) whenever the expansion changes.
+                    <div className="tree-section" key={`${p.id}:${openChildId || 'none'}`}>
+                        <div className="connector-vertical" />
+                        <div className="tree-level">
+                            {ordered.map(cid => {
+                                const child = nodeMap[cid];
+                                if (!child) return null;
+                                return (
+                                    <PersonCard
+                                        key={cid}
+                                        node={child}
+                                        variant="report"
+                                        directs={child.childIds.length}
+                                        total={totals[cid] || 0}
+                                        showAvatar={showAvatar}
+                                        expanded={cid === openChildId && child.childIds.length > 0}
+                                        onDrill={onToggle}
+                                        onOpen={onOpen}
+                                    />
+                                );
+                            })}
+                        </div>
                     </div>
-                </>
-            )}
+                );
+            })}
         </div>
     );
 }
@@ -1403,15 +1430,14 @@ function WorkdayChart({table}) {
                             </button>
                         )}
 
-                        <Branch
-                            node={focus}
+                        <ExpandTree
+                            focus={focus}
                             nodeMap={nodeMap}
                             totals={totals}
                             showAvatar={showAvatars}
                             openByParent={openByParent}
                             onToggle={toggleExpand}
                             onOpen={openRecord}
-                            isRoot
                         />
                         {children.length === 0 && (
                             <div className="no-reports">No direct reports</div>

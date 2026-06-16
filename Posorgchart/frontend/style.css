@@ -315,20 +315,21 @@
     max-width: 1380px;
 }
 
-/* ─── Inline expand/collapse tree (Workday-style drill-down) ────────────────── */
+/* ─── Inline expand/collapse: level stack (Workday-style drill-down) ────────── */
 
-/* A node and, beneath it, the row of its children. Centering each branch makes
-   an expanded node sit above its own reports while siblings stay in the row. */
-.branch {
+/* The whole drill-down is a vertical stack of levels (rows). Expanding a peer
+   centers it and adds its reports as a NEW row below — peers are never pushed
+   beneath their cousins' reports. */
+.tree-stack,
+.tree-section {
     display: flex;
     flex-direction: column;
     align-items: center;
 }
 
-/* Direct reports use the same 5-across wrapping grid as the rest of the chart:
-   the manager's box sits above and its reports fill rows of up to five, wrapping
-   onto new lines as needed. An expanded report grows downward within its cell. */
-.branch-children {
+/* One level = a row of siblings, wrapping at five across (the open one is
+   centered by reordering in JS). */
+.tree-level {
     display: flex;
     flex-direction: row;
     flex-wrap: wrap;
@@ -336,48 +337,38 @@
     justify-content: center;
     gap: 14px;
     max-width: 1380px; /* 5 × 256px card + gaps */
-    /* Animate the subtree in so the user can follow what just expanded. The
-       `key` on this element (the open child id) remounts it on every change,
-       replaying the entrance. */
-    transform-origin: top center;
-    animation: branch-grow 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-.branch-children > .branch {
-    animation: card-rise 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-/* Gentle stagger so the boxes sway out rather than snapping together. */
-.branch-children > .branch:nth-child(2) { animation-delay: 35ms; }
-.branch-children > .branch:nth-child(3) { animation-delay: 70ms; }
-.branch-children > .branch:nth-child(4) { animation-delay: 105ms; }
-.branch-children > .branch:nth-child(5) { animation-delay: 140ms; }
-.branch-children > .branch:nth-child(n+6) { animation-delay: 175ms; }
-
-/* The connector unfurls downward toward the revealed reports. */
-.branch > .connector-vertical {
-    transform-origin: top center;
-    animation: connector-grow 240ms ease-out both;
 }
 
-@keyframes branch-grow {
-    from { opacity: 0; transform: translateY(-12px) scale(0.96); }
-    to   { opacity: 1; transform: translateY(0) scale(1); }
+/* A revealed level animates in slowly enough to follow; its cards rise with a
+   gentle stagger so the eye can track which row just appeared. The `key` on
+   each level remounts it whenever the expansion changes, replaying this. */
+.tree-section > .tree-level > .person-card {
+    animation: card-rise 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+.tree-section > .tree-level > .person-card:nth-child(2)  { animation-delay: 90ms; }
+.tree-section > .tree-level > .person-card:nth-child(3)  { animation-delay: 150ms; }
+.tree-section > .tree-level > .person-card:nth-child(4)  { animation-delay: 210ms; }
+.tree-section > .tree-level > .person-card:nth-child(5)  { animation-delay: 270ms; }
+.tree-section > .tree-level > .person-card:nth-child(n+6){ animation-delay: 330ms; }
+
+/* The connector unfurls downward toward the revealed level. */
+.tree-section > .connector-vertical {
+    transform-origin: top center;
+    animation: connector-grow 460ms ease-out both;
+}
+
 @keyframes card-rise {
-    from { opacity: 0; transform: translateY(-8px); }
-    to   { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; transform: translateY(-22px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 @keyframes connector-grow {
     from { transform: scaleY(0); }
     to   { transform: scaleY(1); }
 }
 
-/* Smooth the layout reflow of cards as branches open/close. */
-.person-card { transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease; }
-
 @media (prefers-reduced-motion: reduce) {
-    .branch-children,
-    .branch-children > .branch,
-    .branch > .connector-vertical { animation: none; }
+    .tree-section > .tree-level > .person-card,
+    .tree-section > .connector-vertical { animation: none; }
 }
 
 /* The currently-open box is highlighted so it reads as the centered focus. */
