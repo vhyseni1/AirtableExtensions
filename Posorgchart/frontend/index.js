@@ -1282,6 +1282,14 @@ function WorkdayChart({table}) {
                     )}
                 </div>
                 <div className="toolbar-right">
+                    <div className="field-diag" title="Temporary diagnostic — remove once fields resolve">
+                        status:&nbsp;<b>{cfg.statusField ? cfg.statusField.name : '✗ NOT FOUND'}</b>
+                        {cfg.statusField && (() => {
+                            const sample = Object.values(nodeMap).find(n => n.status);
+                            return <> (eg “{sample ? sample.status : '— all empty —'}”)</>;
+                        })()}
+                        &nbsp;·&nbsp; location:&nbsp;<b>{cfg.locationField ? cfg.locationField.name : '✗ NOT FOUND'}</b>
+                    </div>
                     {hasStatus && (
                         <div className="legend">
                             {Object.entries(statusColors).map(([label, color]) => (
