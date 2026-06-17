@@ -320,16 +320,32 @@
     max-width: 1380px;
 }
 
-/* ─── Inline expand/collapse: level stack (Workday-style drill-down) ────────── */
+/* ─── Drill-down: spine + reports (no peers) ───────────────────────────────── */
 
-/* The whole drill-down is a vertical stack of levels (rows). Expanding a peer
-   centers it and adds its reports as a NEW row below — peers are never pushed
-   beneath their cousins' reports. */
+/* The drill path is a vertical SPINE (focus → each drilled-into manager), and
+   under the deepest one its direct reports. Peers of a drilled-in card are not
+   shown, so reporting lines are unambiguous. */
 .tree-stack,
-.tree-section {
+.tree-section,
+.spine-node {
     display: flex;
     flex-direction: column;
     align-items: center;
+}
+
+/* Each new spine card eases in as you drill (existing ones persist). */
+.spine-node > .tree-level > .person-card {
+    animation: card-rise 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes card-rise {
+    from { opacity: 0; transform: translateY(-18px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+/* The top of the spine (the focus) gets a subtle accent so the root reads. */
+.spine-root > .tree-level > .person-card { border-top: 3px solid #2563eb; }
+
+@media (prefers-reduced-motion: reduce) {
+    .spine-node > .tree-level > .person-card { animation: none; }
 }
 
 /* One level = a row of siblings. A level with NOTHING expanded wraps at five

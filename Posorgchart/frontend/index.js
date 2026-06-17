@@ -895,19 +895,9 @@ function PersonCard({node, variant, directs, total, showAvatar, expanded, onDril
     );
 }
 
-// Reorder a row of siblings so the open one sits in the middle, peers split to
-// the sides (Workday-style: the expanded peer takes the center).
-function centerOrder(ids, openId) {
-    if (!openId || !ids.includes(openId)) return ids;
-    const others = ids.filter(id => id !== openId);
-    const mid = Math.floor(others.length / 2);
-    return [...others.slice(0, mid), openId, ...others.slice(mid)];
-}
-
-// A single level (row) of sibling cards with FLIP animation: when `ids` reorder
-// (the open peer slides to the center), the SAME card elements glide from their
-// old positions to their new ones, like swapping cards; freshly added cards fade
-// in. Card elements persist (keyed by id) so the slide is possible.
+// A single level (row) of sibling cards with FLIP animation: freshly added cards
+// fade in, and if cards reorder the SAME elements glide to their new positions.
+// Card elements persist (keyed by id) so the slide is possible.
 const FLIP_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
 function reducedMotion() {
     return typeof window !== 'undefined' && window.matchMedia
@@ -970,12 +960,12 @@ function TreeLevel({ids, nodeMap, totals, showAvatar, openChildId, nowrap, onTog
     );
 }
 
-// Inline expand/collapse as a LEVEL STACK (Workday-style drill-down). Each level
-// is a row of siblings; expanding one centers it (peers stay on the sides) and
-// its direct reports appear as a NEW row beneath — never displacing the peers.
-// Only the open path expands, so siblings are mutually exclusive.
-function ExpandTree({focus, nodeMap, totals, showAvatar, openByParent, onToggle, onOpen}) {
-    // Open path: the focus, then each open child down the chain.
+// Drill-down WITHOUT peers (Workday "show this branch" style). The view is the
+// open path rendered as a vertical SPINE — the focus, then each manager you've
+// drilled into — and beneath the deepest one, ITS direct reports. Expanding a
+// report adds it to the spine and replaces the reports row with its own; the
+// expanded card's siblings are not shown, so reporting lines are unambiguous.
+function ExpandTree({focus, nodeMap, totals, showAvatar, openByParent, onToggle, onCollapseTo, onOpen}) {
     const path = [];
     const guard = new Set();
     let cur = focus;
@@ -985,48 +975,45 @@ function ExpandTree({focus, nodeMap, totals, showAvatar, openByParent, onToggle,
         const oc = openByParent[cur.id];
         cur = (oc && nodeMap[oc] && cur.childIds.includes(oc)) ? nodeMap[oc] : null;
     }
+    const deepest = path[path.length - 1];
+    const fanIds = deepest ? deepest.childIds.filter(cid => nodeMap[cid]) : [];
     return (
         <div className="tree-stack">
-            <div className="tree-level">
-                <PersonCard
-                    node={focus}
-                    variant="focus"
-                    directs={focus.childIds.length}
-                    total={totals[focus.id] || 0}
-                    showAvatar={showAvatar}
-                    onDrill={onToggle}
-                    onOpen={onOpen}
-                />
-            </div>
-            {path.map(p => {
-                if (p.childIds.length === 0) return null;
-                const openChildId = openByParent[p.id];
-                const ids = centerOrder(p.childIds, openChildId).filter(cid => nodeMap[cid]);
-                if (ids.length === 0) return null;
-                // A level that has an expanded child is laid out as a SINGLE row
-                // (no wrap) so the expanded card sits directly above its reports;
-                // a level with nothing expanded (the deepest) wraps to stay
-                // compact. This keeps the drill path unambiguous.
-                const hasOpenChild = !!(openChildId && nodeMap[openChildId]);
-                // Stable key (p.id) so the section & its cards persist across
-                // expansion changes — that persistence is what lets the cards
-                // slide (FLIP) instead of remounting.
-                return (
-                    <div className="tree-section" key={p.id}>
-                        <div className="connector-vertical" />
-                        <TreeLevel
-                            ids={ids}
-                            nodeMap={nodeMap}
-                            totals={totals}
+            {path.map((p, idx) => (
+                <div className={`spine-node${idx === 0 ? ' spine-root' : ''}`} key={p.id}>
+                    {idx > 0 && <div className="connector-vertical" />}
+                    <div className="tree-level">
+                        <PersonCard
+                            node={p}
+                            variant="report"
+                            directs={p.childIds.length}
+                            total={totals[p.id] || 0}
                             showAvatar={showAvatar}
-                            openChildId={openChildId}
-                            nowrap={hasOpenChild}
-                            onToggle={onToggle}
+                            expanded={p.childIds.length > 0 ? true : undefined}
+                            onDrill={onCollapseTo}
                             onOpen={onOpen}
                         />
                     </div>
-                );
-            })}
+                </div>
+            ))}
+            {fanIds.length > 0 && (
+                <div className="tree-section">
+                    <div className="connector-vertical" />
+                    {/* keyed by the deepest node so the reports row replays its
+                        entrance each time you drill or collapse. */}
+                    <TreeLevel
+                        key={deepest.id}
+                        ids={fanIds}
+                        nodeMap={nodeMap}
+                        totals={totals}
+                        showAvatar={showAvatar}
+                        openChildId={undefined}
+                        nowrap={false}
+                        onToggle={onToggle}
+                        onOpen={onOpen}
+                    />
+                </div>
+            )}
         </div>
     );
 }
@@ -1316,6 +1303,20 @@ function WorkdayChart({table}) {
         });
     }, [nodeMap, openRecord]);
 
+    // Clicking a card already in the spine: an ancestor collapses everything
+    // below it (it becomes the deepest, showing its own reports); the deepest one
+    // collapses itself, going up a level.
+    const collapseTo = useCallback(id => {
+        const n = nodeMap[id];
+        if (!n) return;
+        setOpenByParent(prev => {
+            const next = {...prev};
+            if (next[id]) delete next[id];
+            else if (n.parentId) delete next[n.parentId];
+            return next;
+        });
+    }, [nodeMap]);
+
     // Re-rooting (new focus, search jump, or filter) starts from a clean tree.
     useEffect(() => { setOpenByParent({}); }, [focusId]);
 
@@ -1536,6 +1537,7 @@ function WorkdayChart({table}) {
                             showAvatar={showAvatars}
                             openByParent={openByParent}
                             onToggle={toggleExpand}
+                            onCollapseTo={collapseTo}
                             onOpen={openRecord}
                         />
                         {children.length === 0 && (
