@@ -60,8 +60,14 @@ const FIELDS = {
     // incumbent / location yet).
     locationField: '[F] Location',
     parentLinkField: 'Future Manager',
-    employeeIdField: '[E] Employee ID',
+    // ─── Core parent→child relationship ──────────────────────────────────────
+    // Every record has a "Unique ID"; its parent is the record whose Unique ID
+    // equals this record's "[F] Manager ID". This works for new positions too
+    // (they have a Unique ID even when they have no position id).
+    uniqueIdField: 'Unique ID',
     managerIdField: '[F] Manager ID',
+    // ─── Legacy / fallback matching (used only if the Unique-ID join misses) ──
+    employeeIdField: '[E] Employee ID',
     // Position-based linking so a VACANT manager (no incumbent, so no name or
     // employee id to match) still connects its branch to the level above.
     //   positionIdField        : each record's OWN position id.
@@ -240,7 +246,7 @@ function extractParentRef(record, parentField) {
 
 function buildOrg(records, cfg) {
     const {parentField, nameField, jobTitleField, departmentField, statusField,
-        locationField, employeeIdField, managerIdField, positionIdField,
+        locationField, uniqueIdField, employeeIdField, managerIdField, positionIdField,
         managerPositionIdField, orgFilterField, leaderEmailField,
         shortCodeField, visibleLeadersField, employeeDecisionField} = cfg;
 
@@ -288,11 +294,21 @@ function buildOrg(records, cfg) {
     const statusStyleFor = label => statusStyleByName[normName(label)] || STATUS_FALLBACK_STYLES[label] || null;
 
     const nodeMap = {};
+    const idByUniqueId = {};     // Unique ID value → record id (the CORE join)
     const idByName = {};
     const idByEmployeeId = {};  // employee-id value → record id
     const idByPositionId = {};  // position-id value → record id (survives vacancy)
     const idByTitle = {};       // position title → record id (for new positions w/o id)
     const titleCount = {};      // title → how many records share it (only unique titles link)
+
+    // Index a Unique ID under both its normalized text and its leading-number
+    // form, so a "[F] Manager ID" like "50692845 - Title (Name)" still matches a
+    // Unique ID of "50692845".
+    const addUniqueKey = (val, recId) => {
+        for (const k of [normName(val), parsePositionId(val)]) {
+            if (k && !(k in idByUniqueId)) idByUniqueId[k] = recId;
+        }
+    };
 
     records.forEach(r => {
         const incumbent = incumbentName(r, nameField);
@@ -327,6 +343,7 @@ function buildOrg(records, cfg) {
                 if (k && !(k in idByName)) idByName[k] = r.id;
             });
         }
+        if (uniqueIdField) addUniqueKey(readText(r, uniqueIdField), r.id);
         if (employeeIdField) {
             const eid = normName(readText(r, employeeIdField));
             if (eid && !(eid in idByEmployeeId)) idByEmployeeId[eid] = r.id;
@@ -350,15 +367,22 @@ function buildOrg(records, cfg) {
         return null;
     };
 
-    // Prefer a true id over name matching (names are ambiguous for duplicates):
-    //   0. manager POSITION id → position id (works even when the manager seat
-    //      is vacant, so the branch above never gets cut off),
-    //   0b. manager TITLE → unique position title (for "New Position" managers
-    //       that have no id),
-    //   1. explicit manager-id → employee-id mapping,
-    //   2. linked-record id from the manager lookup/link,
-    //   3. name (or title) match as a last resort.
+    // Resolution order (first match wins):
+    //   CORE. "[F] Manager ID" → a record's "Unique ID" (works for new records,
+    //         which have a Unique ID even with no position id),
+    //   then legacy fallbacks if the core join can't resolve:
+    //   a. manager POSITION id → position id (vacant-but-existing seats),
+    //   b. manager TITLE → unique position title (new positions w/o id),
+    //   c. employee-id mapping,
+    //   d. linked-record id from the manager lookup/link,
+    //   e. name (or title) text match.
     const resolveParentId = r => {
+        if (uniqueIdField && managerIdField) {
+            const mgr = readText(r, managerIdField);
+            for (const k of [normName(mgr), parsePositionId(mgr)]) {
+                if (k && idByUniqueId[k] && idByUniqueId[k] !== r.id) return idByUniqueId[k];
+            }
+        }
         const mpid = managerPositionIdOf(r);
         if (mpid && idByPositionId[mpid] && idByPositionId[mpid] !== r.id) return idByPositionId[mpid];
         if (managerPositionIdField) {
@@ -1141,6 +1165,8 @@ function WorkdayChart({table}) {
             locationField: findFieldByName(table, FIELDS.locationField)
                 || findFieldByName(table, 'Location'),
             parentField,
+            uniqueIdField: findFieldByName(table, FIELDS.uniqueIdField)
+                || findFieldByName(table, 'Unique ID'),
             employeeIdField: findFieldByName(table, FIELDS.employeeIdField),
             managerIdField: findFieldByName(table, FIELDS.managerIdField),
             positionIdField: findFieldByName(table, FIELDS.positionIdField)
