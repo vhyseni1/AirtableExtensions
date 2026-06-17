@@ -47,12 +47,21 @@ const CONFIG = {
     // themselves at the top of their branch). Set false for "managers see
     // reports only".
     includeSelf:       true,
+
+    // FALLBACK: when the hierarchy walk finds no leaders for a record (e.g. a
+    // broken chain), grant every leader whose SHORT CODE is a prefix of the
+    // record's short code (a "DSG" leader covers DSG, DSGA, DSGAB, …).
+    shortCodeField:    'Short Code (from [F] Supervisory Organization 🔗)',
+    // 'empty'  → use short codes only when the hierarchy found nothing (default)
+    // 'always' → also UNION short-code leaders onto every record
+    shortCodeMode:     'empty',
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
 const norm      = s => String(s == null ? '' : s).normalize('NFKC').trim();
 const normKey   = s => norm(s).toUpperCase();      // id matching (case-tolerant)
 const normEmail = s => norm(s).toLowerCase();
+const normCode  = s => norm(s).replace(/\s+/g, '').toUpperCase();  // short codes
 
 // Parent-id key: the first run of 3+ digits ("12345 - Title" → "12345"), else
 // the whole normalized value. Mirrors the org-chart's matching.
@@ -88,11 +97,15 @@ const fUid = posTable.getField(CONFIG.uniqueIdField);
 const fMgr = posTable.getField(CONFIG.managerIdField);
 const fEmp = posTable.getField(CONFIG.employeeIdField);
 const fOut = posTable.getField(CONFIG.outputField);
-const posQ = await posTable.selectRecordsAsync({fields: [fUid, fMgr, fEmp, fOut]});
+const fCode = CONFIG.shortCodeField ? posTable.getField(CONFIG.shortCodeField) : null;
+const posQ = await posTable.selectRecordsAsync({
+    fields: fCode ? [fUid, fMgr, fEmp, fOut, fCode] : [fUid, fMgr, fEmp, fOut],
+});
 
-const recByUid    = {};   // unique-id key → record  (keyed by raw AND leading-number)
-const mgrRawByRec = {};   // record id → raw "[F] Manager ID" text
-const empKeyByRec = {};   // record id → employee-id key
+const recByUid     = {};   // unique-id key → record  (keyed by raw AND leading-number)
+const mgrRawByRec  = {};   // record id → raw "[F] Manager ID 🔎" text
+const empKeyByRec  = {};   // record id → employee-id key
+const codeByRec    = {};   // record id → short code
 for (const r of posQ.records) {
     const uidRaw = readText(r, fUid);
     for (const k of [normKey(uidRaw), idKey(uidRaw)]) {
@@ -100,7 +113,35 @@ for (const r of posQ.records) {
     }
     mgrRawByRec[r.id] = readText(r, fMgr);
     empKeyByRec[r.id] = normKey(readText(r, fEmp));
+    codeByRec[r.id]   = fCode ? normCode(readText(r, fCode)) : '';
 }
+
+// Leaders that have a short code → {code, email}. A record inherits every leader
+// whose code is a PREFIX of the record's code.
+const leadersByCode = [];
+const seenLeaderCode = new Set();
+for (const r of posQ.records) {
+    const email = emailByEmpId[empKeyByRec[r.id]];
+    const code = codeByRec[r.id];
+    if (!email || !code) continue;
+    const key = code + '|' + normEmail(email);
+    if (seenLeaderCode.has(key)) continue;
+    seenLeaderCode.add(key);
+    leadersByCode.push({code, email});
+}
+const shortCodeEmailsFor = r => {
+    const code = codeByRec[r.id];
+    if (!code) return [];
+    const out = [];
+    const seen = new Set();
+    for (const L of leadersByCode) {
+        if (code.startsWith(L.code)) {
+            const k = normEmail(L.email);
+            if (!seen.has(k)) { seen.add(k); out.push(L.email); }
+        }
+    }
+    return out;
+};
 
 const parentOf = r => {
     const raw = mgrRawByRec[r.id];
@@ -132,10 +173,27 @@ function leaderEmailsFor(startRec) {
 }
 
 // ── Write "[T] Email Text" for every position ───────────────────────────────
-const updates = posQ.records.map(r => ({
-    id: r.id,
-    fields: {[fOut.id]: leaderEmailsFor(r).join(', ')},
-}));
+let filledByHierarchy = 0, filledByShortCode = 0, stillEmpty = 0;
+const updates = posQ.records.map(r => {
+    let emails = leaderEmailsFor(r);
+    const hadHierarchy = emails.length > 0;
+
+    if (CONFIG.shortCodeMode === 'always') {
+        const seen = new Set(emails.map(normEmail));
+        for (const e of shortCodeEmailsFor(r)) {
+            const k = normEmail(e);
+            if (!seen.has(k)) { seen.add(k); emails.push(e); }
+        }
+    } else if (!hadHierarchy) {
+        emails = shortCodeEmailsFor(r);   // fallback only when the chain found nothing
+    }
+
+    if (hadHierarchy) filledByHierarchy++;
+    else if (emails.length > 0) filledByShortCode++;
+    else stillEmpty++;
+
+    return {id: r.id, fields: {[fOut.id]: emails.join(', ')}};
+});
 
 let written = 0;
 while (updates.length > 0) {
@@ -143,4 +201,9 @@ while (updates.length > 0) {
     await posTable.updateRecordsAsync(batch);
     written += batch.length;
 }
-output.text(`Updated "${CONFIG.outputField}" on ${written} position(s). Done.`);
+output.markdown(
+    `Updated **"${CONFIG.outputField}"** on **${written}** position(s).\n\n` +
+    `- ${filledByHierarchy} filled via the hierarchy\n` +
+    `- ${filledByShortCode} filled via the short-code fallback\n` +
+    `- **${stillEmpty} still have no emails**`,
+);
