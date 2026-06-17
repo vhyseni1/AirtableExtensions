@@ -361,7 +361,7 @@
     align-items: flex-start;
     justify-content: center;
     gap: 14px;
-    max-width: 1380px; /* 5 × 256px card + gaps */
+    max-width: 1620px; /* up to 6 × 256px cards + gaps per line */
 }
 .tree-level-nowrap {
     flex-wrap: nowrap;

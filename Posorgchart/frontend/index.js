@@ -931,7 +931,7 @@ function reducedMotion() {
     return typeof window !== 'undefined' && window.matchMedia
         && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
-function TreeLevel({ids, nodeMap, totals, showAvatar, openChildId, nowrap, onToggle, onOpen}) {
+function TreeLevel({ids, nodeMap, totals, showAvatar, openChildId, nowrap, keepSet, matchSet, onToggle, onOpen}) {
     const ref = useRef(null);
     const prevRects = useRef(new Map());
     useLayoutEffect(() => {
@@ -970,15 +970,19 @@ function TreeLevel({ids, nodeMap, totals, showAvatar, openChildId, nowrap, onTog
         <div className={`tree-level${nowrap ? ' tree-level-nowrap' : ''}`} ref={ref}>
             {ids.map(cid => {
                 const child = nodeMap[cid];
+                const directs = keepSet
+                    ? child.childIds.filter(id => keepSet.has(id)).length
+                    : child.childIds.length;
                 return (
                     <PersonCard
                         key={cid}
                         node={child}
                         variant="report"
-                        directs={child.childIds.length}
+                        directs={directs}
                         total={totals[cid] || 0}
                         showAvatar={showAvatar}
-                        expanded={cid === openChildId && child.childIds.length > 0}
+                        expanded={cid === openChildId && directs > 0}
+                        dimmed={matchSet ? !matchSet.has(cid) : undefined}
                         onDrill={onToggle}
                         onOpen={onOpen}
                     />
@@ -993,7 +997,12 @@ function TreeLevel({ids, nodeMap, totals, showAvatar, openChildId, nowrap, onTog
 // drilled into — and beneath the deepest one, ITS direct reports. Expanding a
 // report adds it to the spine and replaces the reports row with its own; the
 // expanded card's siblings are not shown, so reporting lines are unambiguous.
-function ExpandTree({focus, nodeMap, totals, showAvatar, openByParent, onToggle, onCollapseTo, onOpen}) {
+function ExpandTree({focus, nodeMap, totals, showAvatar, openByParent, onToggle, onCollapseTo, onOpen, keepSet, matchSet}) {
+    // When filtering, a node's visible children are limited to the kept set
+    // (matches + ancestors); otherwise all real children.
+    const keptIds = node => node.childIds.filter(id => nodeMap[id] && (!keepSet || keepSet.has(id)));
+    const dimmedOf = id => (matchSet ? !matchSet.has(id) : undefined);
+
     const path = [];
     const guard = new Set();
     let cur = focus;
@@ -1001,29 +1010,33 @@ function ExpandTree({focus, nodeMap, totals, showAvatar, openByParent, onToggle,
         guard.add(cur.id);
         path.push(cur);
         const oc = openByParent[cur.id];
-        cur = (oc && nodeMap[oc] && cur.childIds.includes(oc)) ? nodeMap[oc] : null;
+        cur = (oc && nodeMap[oc] && keptIds(cur).includes(oc)) ? nodeMap[oc] : null;
     }
     const deepest = path[path.length - 1];
-    const fanIds = deepest ? deepest.childIds.filter(cid => nodeMap[cid]) : [];
+    const fanIds = deepest ? keptIds(deepest) : [];
     return (
         <div className="tree-stack">
-            {path.map((p, idx) => (
-                <div className={`spine-node${idx === 0 ? ' spine-root' : ''}`} key={p.id}>
-                    {idx > 0 && <div className="connector-vertical" />}
-                    <div className="tree-level">
-                        <PersonCard
-                            node={p}
-                            variant="report"
-                            directs={p.childIds.length}
-                            total={totals[p.id] || 0}
-                            showAvatar={showAvatar}
-                            expanded={p.childIds.length > 0 ? true : undefined}
-                            onDrill={onCollapseTo}
-                            onOpen={onOpen}
-                        />
+            {path.map((p, idx) => {
+                const directs = keptIds(p).length;
+                return (
+                    <div className={`spine-node${idx === 0 ? ' spine-root' : ''}`} key={p.id}>
+                        {idx > 0 && <div className="connector-vertical" />}
+                        <div className="tree-level">
+                            <PersonCard
+                                node={p}
+                                variant="report"
+                                directs={directs}
+                                total={totals[p.id] || 0}
+                                showAvatar={showAvatar}
+                                expanded={directs > 0 ? true : undefined}
+                                dimmed={dimmedOf(p.id)}
+                                onDrill={onCollapseTo}
+                                onOpen={onOpen}
+                            />
+                        </div>
                     </div>
-                </div>
-            ))}
+                );
+            })}
             {fanIds.length > 0 && (
                 <div className="tree-section">
                     <div className="connector-vertical" />
@@ -1037,6 +1050,8 @@ function ExpandTree({focus, nodeMap, totals, showAvatar, openByParent, onToggle,
                         showAvatar={showAvatar}
                         openChildId={undefined}
                         nowrap={false}
+                        keepSet={keepSet}
+                        matchSet={matchSet}
                         onToggle={onToggle}
                         onOpen={onOpen}
                     />
@@ -1078,44 +1093,6 @@ function ManagerSection({node, nodeMap, totals, showAvatar, onDrill, onOpen}) {
                         ))}
                     </div>
                 </>
-            )}
-        </div>
-    );
-}
-
-// Filtered ORG CHART: the org tree pruned to the matching positions plus the
-// managers needed to connect them to the top. Matching positions render normally;
-// connector managers that don't match are greyed out; everything else is dropped.
-function FilterNode({node, nodeMap, keep, match, totals, showAvatar, onDrill, onOpen}) {
-    const kids = node.childIds.filter(id => keep.has(id)).map(id => nodeMap[id]);
-    return (
-        <div className="ftree-node">
-            <PersonCard
-                node={node}
-                variant="report"
-                directs={node.childIds.length}
-                total={totals[node.id] || 0}
-                showAvatar={showAvatar}
-                dimmed={!match.has(node.id)}
-                onDrill={onDrill}
-                onOpen={onOpen}
-            />
-            {kids.length > 0 && (
-                <div className="ftree-children">
-                    {kids.map(k => (
-                        <FilterNode
-                            key={k.id}
-                            node={k}
-                            nodeMap={nodeMap}
-                            keep={keep}
-                            match={match}
-                            totals={totals}
-                            showAvatar={showAvatar}
-                            onDrill={onDrill}
-                            onOpen={onOpen}
-                        />
-                    ))}
-                </div>
             )}
         </div>
     );
@@ -1380,14 +1357,14 @@ function WorkdayChart({table}) {
         });
     }, [nodeMap]);
 
-    // Re-rooting (new focus, search jump, or filter) starts from a clean tree.
-    useEffect(() => { setOpenByParent({}); }, [focusId]);
-
     const managerActive = managerFilter.size > 0;
     const orgActive = orgFilter.size > 0;
     const locationActive = locationFilter.size > 0;
     const statusActive = statusFilter.size > 0;
     const filterActive = managerActive || orgActive || locationActive || statusActive;
+
+    // Re-rooting (new focus) or toggling a filter on/off starts from a clean tree.
+    useEffect(() => { setOpenByParent({}); }, [focusId, filterActive]);
     const selectedManagers = useMemo(
         () => [...managerFilter].filter(id => nodeMap[id]),
         [managerFilter, nodeMap],
@@ -1435,6 +1412,12 @@ function WorkdayChart({table}) {
             .sort((a, b) => nodeMap[a].displayName.localeCompare(nodeMap[b].displayName));
         return {match, keep, roots};
     }, [orgActive, locationActive, statusActive, orgFilter, locationFilter, statusFilter, nodeMap]);
+    // Where the pruned spine roots: the normal focus if it's kept, else the top
+    // of the matching subtree.
+    const filterFocus = filterPrune
+        ? (focus && filterPrune.keep.has(focus.id) ? focus
+            : (filterPrune.roots[0] ? nodeMap[filterPrune.roots[0]] : null))
+        : null;
     // The leader has navigated away from their top view (drilled in or re-rooted).
     const drilled = (!!focusId && focusId !== defaultFocusId) || Object.keys(openByParent).length > 0;
 
@@ -1596,24 +1579,24 @@ function WorkdayChart({table}) {
             <div className="board-scroll">
                 {filterPrune ? (
                     <div className="board board-expandable" ref={boardRef}>
-                        {filterPrune.roots.length === 0 ? (
+                        {!filterFocus ? (
                             <div className="no-reports">No matching {groupNoun}.</div>
                         ) : (
-                            <div className="ftree">
-                                {filterPrune.roots.map(id => (
-                                    <FilterNode
-                                        key={id}
-                                        node={nodeMap[id]}
-                                        nodeMap={nodeMap}
-                                        keep={filterPrune.keep}
-                                        match={filterPrune.match}
-                                        totals={totals}
-                                        showAvatar={showAvatars}
-                                        onDrill={drillFromFilter}
-                                        onOpen={openRecord}
-                                    />
-                                ))}
-                            </div>
+                            // Same spine/grid layout as the unfiltered view, but
+                            // pruned to the matches + their managers; non-matching
+                            // managers are greyed out.
+                            <ExpandTree
+                                focus={filterFocus}
+                                nodeMap={nodeMap}
+                                totals={totals}
+                                showAvatar={showAvatars}
+                                openByParent={openByParent}
+                                onToggle={toggleExpand}
+                                onCollapseTo={collapseTo}
+                                onOpen={openRecord}
+                                keepSet={filterPrune.keep}
+                                matchSet={filterPrune.match}
+                            />
                         )}
                     </div>
                 ) : managerActive ? (
