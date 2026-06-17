@@ -55,7 +55,12 @@ const FIELDS = {
     primaryNameSource: '[E] First Name, Last Name',
     jobTitleField: 'REF Title [F]',
     departmentField: '[F] Supervisory Organization 🔗',
-    statusField: '[T] Position Status ⚙️',
+    // Status shown as a colored chip AND offered as a filter. It's a single-select
+    // ("pills"), so the chip inherits each option's native Airtable colour.
+    statusField: '[F] Decision Status for Org',
+    // Position status, used only to detect "New Position" seats (to hide their
+    // location). Not shown as the chip anymore.
+    newPositionField: '[T] Position Status ⚙️',
     // Location shown under the team. Hidden for "New position" seats (no
     // incumbent / location yet).
     locationField: '[F] Location',
@@ -147,16 +152,6 @@ function normalizeStatus(raw) {
 }
 const STATUS_NEW_POSITION = 'New position';
 
-// Fallback chip colours used when the status field is text/formula (no native
-// single-select swatches). Soft pill backgrounds with a readable foreground.
-const STATUS_FALLBACK_STYLES = {
-    'New position':     {bg: '#e0e7ff', fg: '#3730a3'}, // indigo
-    'Out of scope':     {bg: '#fee2e2', fg: '#991b1b'}, // red
-    'Employee mapped':  {bg: '#dcfce7', fg: '#166534'}, // green
-    'Employee at risk': {bg: '#fef3c7', fg: '#92400e'}, // amber
-    'Decision pending': {bg: '#fef9c3', fg: '#854d0e'}, // yellow
-};
-
 // Normalize a hierarchical short code for prefix matching (e.g. "dsg a" → "DSGA").
 function normCode(s) {
     return String(s == null ? '' : s).normalize('NFKC').replace(/\s+/g, '').toUpperCase();
@@ -246,8 +241,8 @@ function extractParentRef(record, parentField) {
 
 function buildOrg(records, cfg) {
     const {parentField, nameField, jobTitleField, departmentField, statusField,
-        locationField, uniqueIdField, employeeIdField, managerIdField, positionIdField,
-        managerPositionIdField, orgFilterField, leaderEmailField,
+        newPositionField, locationField, uniqueIdField, employeeIdField, managerIdField,
+        positionIdField, managerPositionIdField, orgFilterField, leaderEmailField,
         shortCodeField, visibleLeadersField, employeeDecisionField} = cfg;
 
     // Each record's own position id (works even for vacant seats). Prefer the
@@ -276,22 +271,21 @@ function buildOrg(records, cfg) {
         });
     }
 
-    // Status colours. Prefer the field's own single-select swatches (keyed by the
-    // NORMALISED label so it lines up with node.status); otherwise fall back to a
-    // sensible palette for the known statuses.
+    // Status chip colours, inherited from the field's single-select pills (keyed
+    // by the option name).
     const statusStyleByName = {};
     const statusChoices = statusField && statusField.options && statusField.options.choices;
     if (Array.isArray(statusChoices)) {
         statusChoices.forEach(c => {
             if (!c || !c.name) return;
-            const key = normName(normalizeStatus(c.name));
+            const key = normName(c.name);
             const hex = c.color ? colorUtils.getHexForColor(c.color) : null;
             if (hex && !statusStyleByName[key]) {
                 statusStyleByName[key] = {bg: hex, fg: colorUtils.shouldUseLightTextOnColor(c.color) ? '#ffffff' : '#1f2937'};
             }
         });
     }
-    const statusStyleFor = label => statusStyleByName[normName(label)] || STATUS_FALLBACK_STYLES[label] || null;
+    const statusStyleFor = label => statusStyleByName[normName(label)] || null;
 
     const nodeMap = {};
     const idByUniqueId = {};     // Unique ID value → record id (the CORE join)
@@ -325,8 +319,10 @@ function buildOrg(records, cfg) {
             jobTitle,
             department: readText(r, departmentField),
             org: readText(r, orgFilterField),
-            status: normalizeStatus(readText(r, statusField)),
-            statusStyle: statusStyleFor(normalizeStatus(readText(r, statusField))),
+            status: readText(r, statusField),
+            statusStyle: statusStyleFor(readText(r, statusField)),
+            // New-position seats hide their location (no incumbent/location yet).
+            isNewPosition: normalizeStatus(readText(r, newPositionField)) === STATUS_NEW_POSITION,
             location: readText(r, locationField),
             email: normName(readText(r, leaderEmailField)),
             shortCode: normCode(readText(r, shortCodeField)),
@@ -877,7 +873,7 @@ function PersonCard({node, variant, directs, total, showAvatar, expanded, onDril
                         : <span>{node.jobTitle}</span>}
                 </div>
                 <div className="person-dept"><span>{node.department}</span></div>
-                {node.location && node.status !== STATUS_NEW_POSITION && (
+                {node.location && !node.isNewPosition && (
                     <div className="person-loc">{node.location}</div>
                 )}
                 {node.status && (
@@ -1141,6 +1137,7 @@ function WorkdayChart({table}) {
     const [managerFilter, setManagerFilter] = useState(() => new Set());
     const [orgFilter, setOrgFilter] = useState(() => new Set());
     const [locationFilter, setLocationFilter] = useState(() => new Set());
+    const [statusFilter, setStatusFilter] = useState(() => new Set());
     const [showAvatars, setShowAvatars] = useState(true);
     const [showDecision, setShowDecision] = useState(true);
     // Inline expand/collapse tree: parentId → the id of its currently-open child
@@ -1161,6 +1158,8 @@ function WorkdayChart({table}) {
             jobTitleField: findFieldByName(table, FIELDS.jobTitleField),
             departmentField,
             statusField: findFieldByName(table, FIELDS.statusField)
+                || findFieldByName(table, 'Decision Status for Org'),
+            newPositionField: findFieldByName(table, FIELDS.newPositionField)
                 || findFieldByName(table, 'Position Status'),
             locationField: findFieldByName(table, FIELDS.locationField)
                 || findFieldByName(table, 'Location'),
@@ -1275,20 +1274,41 @@ function WorkdayChart({table}) {
     const orgOptions = useMemo(() => distinctFieldOptions(nodeMap, n => n.org), [nodeMap]);
     // Locations = distinct values of the location field, with a position count.
     const locationOptions = useMemo(() => distinctFieldOptions(nodeMap, n => n.location), [nodeMap]);
+    // Decision statuses = distinct values of the status field, with a count.
+    const statusOptions = useMemo(() => distinctFieldOptions(nodeMap, n => n.status), [nodeMap]);
 
-    // The Manager / Organization / Location filters are mutually exclusive —
-    // selecting in one clears the others so the board shows a single view.
+    // The Manager / Organization / Location / Decision-status filters are mutually
+    // exclusive — selecting in one clears the others so the board shows a single
+    // view.
+    const clearAllFilters = useCallback(() => {
+        setManagerFilter(new Set());
+        setOrgFilter(new Set());
+        setLocationFilter(new Set());
+        setStatusFilter(new Set());
+    }, []);
+    // Reset the leader to their own top view: clear filters, drop any drill-down,
+    // and re-root to the default focus.
+    const jumpToTop = useCallback(() => {
+        clearAllFilters();
+        setFocusIdState(null);
+        setOpenByParent({});
+    }, [clearAllFilters]);
+    // Set one filter and, if it became non-empty, clear the other three.
     const selectManagers = useCallback(next => {
         setManagerFilter(next);
-        if (next.size) { setOrgFilter(new Set()); setLocationFilter(new Set()); }
+        if (next.size) { setOrgFilter(new Set()); setLocationFilter(new Set()); setStatusFilter(new Set()); }
     }, []);
     const selectOrgs = useCallback(next => {
         setOrgFilter(next);
-        if (next.size) { setManagerFilter(new Set()); setLocationFilter(new Set()); }
+        if (next.size) { setManagerFilter(new Set()); setLocationFilter(new Set()); setStatusFilter(new Set()); }
     }, []);
     const selectLocations = useCallback(next => {
         setLocationFilter(next);
-        if (next.size) { setManagerFilter(new Set()); setOrgFilter(new Set()); }
+        if (next.size) { setManagerFilter(new Set()); setOrgFilter(new Set()); setStatusFilter(new Set()); }
+    }, []);
+    const selectStatuses = useCallback(next => {
+        setStatusFilter(next);
+        if (next.size) { setManagerFilter(new Set()); setOrgFilter(new Set()); setLocationFilter(new Set()); }
     }, []);
 
     const defaultFocusId = useMemo(() => {
@@ -1349,12 +1369,13 @@ function WorkdayChart({table}) {
     const managerActive = managerFilter.size > 0;
     const orgActive = orgFilter.size > 0;
     const locationActive = locationFilter.size > 0;
-    const filterActive = managerActive || orgActive || locationActive;
+    const statusActive = statusFilter.size > 0;
+    const filterActive = managerActive || orgActive || locationActive || statusActive;
     const selectedManagers = useMemo(
         () => [...managerFilter].filter(id => nodeMap[id]),
         [managerFilter, nodeMap],
     );
-    // A value filter (org or location) → the positions in each group.
+    // A value filter (org / location / status) → the positions in each group.
     const selectedOrgs = useMemo(
         () => (orgActive ? groupsForValues(nodeMap, orgFilter, n => n.org) : []),
         [orgActive, orgFilter, nodeMap],
@@ -1363,6 +1384,17 @@ function WorkdayChart({table}) {
         () => (locationActive ? groupsForValues(nodeMap, locationFilter, n => n.location) : []),
         [locationActive, locationFilter, nodeMap],
     );
+    const selectedStatuses = useMemo(
+        () => (statusActive ? groupsForValues(nodeMap, statusFilter, n => n.status) : []),
+        [statusActive, statusFilter, nodeMap],
+    );
+    // Which grouped (value) filter is active, if any.
+    const activeGroups = orgActive ? selectedOrgs
+        : locationActive ? selectedLocations
+        : statusActive ? selectedStatuses : null;
+    const groupNoun = orgActive ? 'organizations' : locationActive ? 'locations' : 'statuses';
+    // The leader has navigated away from their top view (drilled in or re-rooted).
+    const drilled = (!!focusId && focusId !== defaultFocusId) || Object.keys(openByParent).length > 0;
 
     // Build the sections the vector PDF draws: a manager section (manager card +
     // direct reports) per manager, OR an org section (org banner + members) per
@@ -1377,9 +1409,8 @@ function WorkdayChart({table}) {
             total: totals[n.id] || 0,
             vacant: n.vacant,
         });
-        const groups = orgActive ? selectedOrgs : locationActive ? selectedLocations : null;
-        if (groups) {
-            return groups.map(({title, members}) => ({
+        if (activeGroups) {
+            return activeGroups.map(({title, members}) => ({
                 kind: 'org',
                 header: {name: title, count: members.length},
                 reports: members.map(toCard),
@@ -1393,7 +1424,7 @@ function WorkdayChart({table}) {
             header: toCard(nodeMap[id]),
             reports: nodeMap[id].childIds.map(c => toCard(nodeMap[c])),
         }));
-    }, [orgActive, selectedOrgs, locationActive, selectedLocations, managerActive, selectedManagers, focusId, nodeMap, totals]);
+    }, [activeGroups, managerActive, selectedManagers, focusId, nodeMap, totals]);
 
     if (noView) {
         return (
@@ -1456,17 +1487,30 @@ function WorkdayChart({table}) {
                             onChange={selectLocations}
                         />
                     )}
+                    {cfg.statusField && (
+                        <CheckboxFilter
+                            label="Decision Status"
+                            options={statusOptions}
+                            selected={statusFilter}
+                            onChange={selectStatuses}
+                        />
+                    )}
                     {filterActive && (
                         <button
                             className="tb-btn tb-btn-clear"
-                            onClick={() => { setManagerFilter(new Set()); setOrgFilter(new Set()); setLocationFilter(new Set()); }}
-                            title="Clear filters"
+                            onClick={clearAllFilters}
+                            title="Clear all filters"
                         >
-                            {orgActive
-                                ? `Clear · ${selectedOrgs.length} org${selectedOrgs.length !== 1 ? 's' : ''}`
-                                : locationActive
-                                    ? `Clear · ${selectedLocations.length} location${selectedLocations.length !== 1 ? 's' : ''}`
-                                    : `Clear · ${selectedManagers.length} manager${selectedManagers.length !== 1 ? 's' : ''}`}
+                            ✕ Clear filters
+                        </button>
+                    )}
+                    {(filterActive || drilled) && (
+                        <button
+                            className="tb-btn tb-btn-top"
+                            onClick={jumpToTop}
+                            title="Clear everything and return to the top of your view"
+                        >
+                            ⤴ Jump to Top
                         </button>
                     )}
                     <SearchBox nodeMap={nodeMap} onJump={drillFromFilter} />
@@ -1508,12 +1552,12 @@ function WorkdayChart({table}) {
 
             {/* Board */}
             <div className="board-scroll">
-                {(orgActive || locationActive) ? (
+                {activeGroups ? (
                     <div className="board board-filtered" ref={boardRef}>
-                        {(orgActive ? selectedOrgs : selectedLocations).length === 0 && (
-                            <div className="no-reports">No matching {orgActive ? 'organizations' : 'locations'}.</div>
+                        {activeGroups.length === 0 && (
+                            <div className="no-reports">No matching {groupNoun}.</div>
                         )}
-                        {(orgActive ? selectedOrgs : selectedLocations).map(({title, members}) => (
+                        {activeGroups.map(({title, members}) => (
                             <GroupSection
                                 key={title}
                                 title={title}

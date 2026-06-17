@@ -81,6 +81,8 @@
 .tb-btn-active { background: #1e293b; color: white; border-color: #1e293b; }
 .tb-btn-active:hover:not(:disabled) { background: #0f172a; color: white; }
 .tb-btn-clear { border-style: dashed; color: #64748b; }
+.tb-btn-top { background: #2563eb; border-color: #2563eb; color: white; font-weight: 600; }
+.tb-btn-top:hover:not(:disabled) { background: #1d4ed8; border-color: #1d4ed8; color: white; }
 
 /* ─── Checkbox filter ──────────────────────────────────────────────────────── */
 
