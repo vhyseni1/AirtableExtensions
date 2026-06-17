@@ -70,7 +70,7 @@ const FIELDS = {
     // equals this record's "[F] Manager ID". This works for new positions too
     // (they have a Unique ID even when they have no position id).
     uniqueIdField: 'Unique ID',
-    managerIdField: '[F] Manager ID',
+    managerIdField: '[F] Manager ID 🔎',
     // ─── Legacy / fallback matching (used only if the Unique-ID join misses) ──
     employeeIdField: '[E] Employee ID',
     // Position-based linking so a VACANT manager (no incumbent, so no name or
@@ -81,7 +81,7 @@ const FIELDS = {
     // number is used. If positionIdField doesn't resolve, the record's primary
     // field is parsed for a leading id as a fallback.
     positionIdField: '[F] Position ID',
-    managerPositionIdField: '[F] Manager ID',
+    managerPositionIdField: '[F] Manager ID 🔎',
     // Field powering the "Organization" checkbox filter. Falls back to the
     // department field if this name doesn't resolve.
     orgFilterField: 'Future Organization',

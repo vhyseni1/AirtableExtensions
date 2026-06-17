@@ -32,7 +32,7 @@
 const CONFIG = {
     posTable:            'Employees & Positions',
     uniqueIdField:       'Unique ID',          // each record's own id
-    managerIdField:      '[F] Manager ID',     // the parent's Unique ID
+    managerIdField:      '[F] Manager ID 🔎',  // the parent's Unique ID (lookup)
     employeeIdField:     '[E] Employee ID',    // incumbent id, to match a leader
     visibleLeadersField: 'Visible to leaders', // Multiple collaborators (output)
 
