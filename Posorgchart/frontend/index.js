@@ -152,6 +152,24 @@ function normalizeStatus(raw) {
 }
 const STATUS_NEW_POSITION = 'New position';
 
+// Light chip colours per decision status (matched by substring so wording can
+// vary). Anything unrecognised — including "Unknown" — falls back to grey.
+const DECISION_STATUS_STYLES = [
+    [/out of scope/i,  {bg: '#eef2f6', fg: '#475569'}],   // grey
+    [/at risk/i,       {bg: '#fee2e2', fg: '#b91c1c'}],   // red
+    [/new position/i,  {bg: '#dbeafe', fg: '#1d4ed8'}],   // blue
+    [/in selection/i,  {bg: '#e0f2fe', fg: '#0369a1'}],   // lighter blue
+    [/recruit/i,       {bg: '#bbf7d0', fg: '#166534'}],   // darker green
+    [/mapp/i,          {bg: '#dcfce7', fg: '#15803d'}],   // green
+    [/unknown/i,       {bg: '#eef2f6', fg: '#475569'}],   // grey
+];
+function decisionStatusStyle(s) {
+    const v = String(s == null ? '' : s);
+    if (!v.trim()) return null;
+    for (const [re, st] of DECISION_STATUS_STYLES) if (re.test(v)) return st;
+    return {bg: '#eef2f6', fg: '#475569'};   // default grey
+}
+
 // Normalize a hierarchical short code for prefix matching (e.g. "dsg a" → "DSGA").
 function normCode(s) {
     return String(s == null ? '' : s).normalize('NFKC').replace(/\s+/g, '').toUpperCase();
@@ -271,21 +289,8 @@ function buildOrg(records, cfg) {
         });
     }
 
-    // Status chip colours, inherited from the field's single-select pills (keyed
-    // by the option name).
-    const statusStyleByName = {};
-    const statusChoices = statusField && statusField.options && statusField.options.choices;
-    if (Array.isArray(statusChoices)) {
-        statusChoices.forEach(c => {
-            if (!c || !c.name) return;
-            const key = normName(c.name);
-            const hex = c.color ? colorUtils.getHexForColor(c.color) : null;
-            if (hex && !statusStyleByName[key]) {
-                statusStyleByName[key] = {bg: hex, fg: colorUtils.shouldUseLightTextOnColor(c.color) ? '#ffffff' : '#1f2937'};
-            }
-        });
-    }
-    const statusStyleFor = label => statusStyleByName[normName(label)] || null;
+    // Status chip colours: an explicit light palette per decision status.
+    const statusStyleFor = decisionStatusStyle;
 
     const nodeMap = {};
     const idByUniqueId = {};     // Unique ID value → record id (the CORE join)

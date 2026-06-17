@@ -377,15 +377,18 @@
     padding-top: 26px;
 }
 .tree-section > .tree-level::before {
-    /* horizontal bus */
+    /* A bracket: the horizontal bus plus the two end verticals turning down into
+       the OUTER cards with rounded corners — so the line never runs past the
+       first/last box. Inner cards hang off the bus via their own stub below. */
     content: '';
     position: absolute;
     top: 0;
-    left: 128px;
-    right: 128px;
-    height: 2px;
-    background: #c2ccd8;
-    border-radius: 2px;
+    left: 128px;   /* first card's centre (half a 256px card) */
+    right: 128px;  /* last card's centre */
+    height: 26px;
+    border: 2px solid #c2ccd8;
+    border-bottom: none;
+    border-radius: 9px 9px 0 0;
 }
 .tree-section > .tree-level > .person-card::before {
     /* stub from the bus down to each card */
@@ -462,6 +465,9 @@
 .ftree-children > .ftree-node:first-child::before,
 .ftree-children > .ftree-node:last-child::after { border: 0 none; }
 .ftree-children > .ftree-node:last-child::before { border-right: 2px solid #c2ccd8; }
+/* round the corners where the bus turns down into the outer boxes */
+.ftree-children > .ftree-node:first-child::after { border-top-left-radius: 9px; }
+.ftree-children > .ftree-node:last-child::before { border-top-right-radius: 9px; }
 
 /* Connector managers kept only to hold the tree together are greyed out. */
 .person-card.dimmed {
@@ -534,7 +540,11 @@
    Name / title / department each get a FIXED two-line slot: text wraps to at
    most two lines and is vertically centered when it's only one line, so the
    card height never depends on how long these strings are. */
-.person-card-report { justify-content: flex-start; }
+/* A fixed floor so EVERY report card is the same size regardless of which
+   optional rows (location, status, decision) it has — new-position and vacant
+   cards no longer come out shorter. */
+.person-card-report { justify-content: flex-start; min-height: 292px; }
+.person-card-report.no-avatar { min-height: 224px; }
 .person-card-report .person-name,
 .person-card-report .person-title,
 .person-card-report .person-dept {
@@ -678,12 +688,10 @@
 
 /* Vacant position (no incumbent): dashed grey border + muted italic name. */
 .person-card.vacant {
-    border-style: dashed;
-    border-color: #cbd5e1;
-    background: #f8fafc;
+    background: white;
 }
-.person-card.vacant.person-card-focus { border-top-color: #cbd5e1; }
-.person-card.vacant .person-name { color: #475569; font-style: italic; font-weight: 700; }
+.person-card.vacant.person-card-focus { border-top-color: #2563eb; }
+.person-card.vacant .person-name { color: #0f172a; font-style: normal; font-weight: 700; }
 
 .vacant-badge {
     display: inline-block;
