@@ -55,6 +55,12 @@ const CONFIG = {
     // 'empty'  → use short codes only when the hierarchy found nothing (default)
     // 'always' → also UNION short-code leaders onto every record
     shortCodeMode:     'empty',
+
+    // TEST MODE: when true, IGNORE everything above and write ONLY each
+    // position's TOP-of-branch leader(s) — the leader(s) with the SHORTEST
+    // prefix short code above the record (e.g. the "DOC" leader for any DOC*
+    // record). Set back to false to restore the full chain behaviour.
+    topLeadersOnly:    true,
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -143,6 +149,29 @@ const shortCodeEmailsFor = r => {
     return out;
 };
 
+// TEST: only the TOP-of-branch leader(s) — among the prefix matches, the one(s)
+// with the SHORTEST short code (highest in the org).
+const topLeaderEmailsFor = r => {
+    const code = codeByRec[r.id];
+    if (!code) return [];
+    let minLen = Infinity;
+    const matches = [];
+    for (const L of leadersByCode) {
+        if (code.startsWith(L.code)) {
+            matches.push(L);
+            if (L.code.length < minLen) minLen = L.code.length;
+        }
+    }
+    const out = [];
+    const seen = new Set();
+    for (const L of matches) {
+        if (L.code.length !== minLen) continue;
+        const k = normEmail(L.email);
+        if (!seen.has(k)) { seen.add(k); out.push(L.email); }
+    }
+    return out;
+};
+
 const parentOf = r => {
     const raw = mgrRawByRec[r.id];
     if (!raw) return null;
@@ -175,6 +204,13 @@ function leaderEmailsFor(startRec) {
 // ── Write "[T] Email Text" for every position ───────────────────────────────
 let filledByHierarchy = 0, filledByShortCode = 0, stillEmpty = 0;
 const updates = posQ.records.map(r => {
+    // TEST MODE: only the top-of-branch leader(s).
+    if (CONFIG.topLeadersOnly) {
+        const emails = topLeaderEmailsFor(r);
+        if (emails.length > 0) filledByShortCode++; else stillEmpty++;
+        return {id: r.id, fields: {[fOut.id]: emails.join(', ')}};
+    }
+
     let emails = leaderEmailsFor(r);
     const hadHierarchy = emails.length > 0;
 
@@ -202,8 +238,12 @@ while (updates.length > 0) {
     written += batch.length;
 }
 output.markdown(
-    `Updated **"${CONFIG.outputField}"** on **${written}** position(s).\n\n` +
-    `- ${filledByHierarchy} filled via the hierarchy\n` +
-    `- ${filledByShortCode} filled via the short-code fallback\n` +
-    `- **${stillEmpty} still have no emails**`,
+    CONFIG.topLeadersOnly
+        ? `**TEST MODE — top leaders only.** Updated **"${CONFIG.outputField}"** on **${written}** position(s).\n\n` +
+          `- ${filledByShortCode} got a top leader\n` +
+          `- **${stillEmpty} got none** (no short code, or no leader at any prefix)`
+        : `Updated **"${CONFIG.outputField}"** on **${written}** position(s).\n\n` +
+          `- ${filledByHierarchy} filled via the hierarchy\n` +
+          `- ${filledByShortCode} filled via the short-code fallback\n` +
+          `- **${stillEmpty} still have no emails**`,
 );
