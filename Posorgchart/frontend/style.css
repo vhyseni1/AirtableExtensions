@@ -145,6 +145,11 @@
 
 .board-filtered { gap: 32px; }
 
+/* The drill-down can grow wider than the viewport when an expanded level is a
+   single row; sizing to its content (but at least full width) lets it center
+   when small and scroll horizontally — without clipping the leftmost cards. */
+.board-expandable { width: max-content; min-width: 100%; }
+
 .manager-section {
     display: flex;
     flex-direction: column;
@@ -327,8 +332,10 @@
     align-items: center;
 }
 
-/* One level = a row of siblings, wrapping at five across (the open one is
-   centered by reordering in JS). */
+/* One level = a row of siblings. A level with NOTHING expanded wraps at five
+   across to stay compact; the moment a card in it is expanded the level becomes
+   a single row (.tree-level-nowrap) so the expanded card sits directly above its
+   reports and the drill path is never ambiguous. */
 .tree-level {
     display: flex;
     flex-direction: row;
@@ -337,6 +344,10 @@
     justify-content: center;
     gap: 14px;
     max-width: 1380px; /* 5 × 256px card + gaps */
+}
+.tree-level-nowrap {
+    flex-wrap: nowrap;
+    max-width: none;
 }
 
 /* ─── Connectors: a vertical drop from the parent, a horizontal bus across the

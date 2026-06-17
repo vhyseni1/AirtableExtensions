@@ -878,7 +878,7 @@ function reducedMotion() {
     return typeof window !== 'undefined' && window.matchMedia
         && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
-function TreeLevel({ids, nodeMap, totals, showAvatar, openChildId, onToggle, onOpen}) {
+function TreeLevel({ids, nodeMap, totals, showAvatar, openChildId, nowrap, onToggle, onOpen}) {
     const ref = useRef(null);
     const prevRects = useRef(new Map());
     useLayoutEffect(() => {
@@ -914,7 +914,7 @@ function TreeLevel({ids, nodeMap, totals, showAvatar, openChildId, onToggle, onO
         prevRects.current = newRects;
     });
     return (
-        <div className="tree-level" ref={ref}>
+        <div className={`tree-level${nowrap ? ' tree-level-nowrap' : ''}`} ref={ref}>
             {ids.map(cid => {
                 const child = nodeMap[cid];
                 return (
@@ -968,6 +968,11 @@ function ExpandTree({focus, nodeMap, totals, showAvatar, openByParent, onToggle,
                 const openChildId = openByParent[p.id];
                 const ids = centerOrder(p.childIds, openChildId).filter(cid => nodeMap[cid]);
                 if (ids.length === 0) return null;
+                // A level that has an expanded child is laid out as a SINGLE row
+                // (no wrap) so the expanded card sits directly above its reports;
+                // a level with nothing expanded (the deepest) wraps to stay
+                // compact. This keeps the drill path unambiguous.
+                const hasOpenChild = !!(openChildId && nodeMap[openChildId]);
                 // Stable key (p.id) so the section & its cards persist across
                 // expansion changes — that persistence is what lets the cards
                 // slide (FLIP) instead of remounting.
@@ -980,6 +985,7 @@ function ExpandTree({focus, nodeMap, totals, showAvatar, openByParent, onToggle,
                             totals={totals}
                             showAvatar={showAvatar}
                             openChildId={openChildId}
+                            nowrap={hasOpenChild}
                             onToggle={onToggle}
                             onOpen={onOpen}
                         />
@@ -1477,7 +1483,7 @@ function WorkdayChart({table}) {
                             ))}
                     </div>
                 ) : (
-                    <div className="board" ref={boardRef}>
+                    <div className="board board-expandable" ref={boardRef}>
                         {focus.parentId && nodeMap[focus.parentId] && (
                             <button
                                 className="up-btn"
