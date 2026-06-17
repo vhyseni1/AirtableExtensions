@@ -918,7 +918,7 @@ function PersonCard({node, variant, directs, total, showAvatar, expanded, dimmed
                     </span>
                 </div>
             )}
-            {drillable && <div className="person-drill">{expanded ? '▴' : '▾'}</div>}
+            {drillable && <div className="person-drill">{expanded ? '−' : '+'}</div>}
         </div>
     );
 }

@@ -377,9 +377,8 @@
     padding-top: 26px;
 }
 .tree-section > .tree-level::before {
-    /* A bracket: the horizontal bus plus the two end verticals turning down into
-       the OUTER cards with rounded corners — so the line never runs past the
-       first/last box. Inner cards hang off the bus via their own stub below. */
+    /* Horizontal bus with rounded ends turning down into the outer cards — no
+       per-peer vertical stubs (they were visual clutter between the boxes). */
     content: '';
     position: absolute;
     top: 0;
@@ -389,18 +388,6 @@
     border: 2px solid #c2ccd8;
     border-bottom: none;
     border-radius: 9px 9px 0 0;
-}
-.tree-section > .tree-level > .person-card::before {
-    /* stub from the bus down to each card */
-    content: '';
-    position: absolute;
-    top: -26px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 2px;
-    height: 26px;
-    background: #c2ccd8;
-    border-radius: 2px;
 }
 
 /* ─── Filtered org chart (pruned tree, classic top-down connectors) ─────────── */
@@ -717,20 +704,24 @@
 
 .person-drill {
     position: absolute;
-    bottom: -11px;
+    bottom: -15px;
     left: 50%;
     transform: translateX(-50%);
-    width: 22px;
-    height: 22px;
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
     background: #2563eb;
     color: white;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
-    box-shadow: 0 2px 5px rgba(37, 99, 235, 0.4);
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+    border: 2px solid white;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.45);
 }
+.person-card.clickable:hover .person-drill { background: #1d4ed8; }
 
 /* ─── Empty state ──────────────────────────────────────────────────────────── */
 
