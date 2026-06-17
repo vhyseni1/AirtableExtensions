@@ -167,6 +167,17 @@ function parsePositionId(s) {
     return t;
 }
 
+// Pull the position TITLE out of a manager reference ("50692845 - Global Head …
+// (Garret Nolan)" → "global head …"). New positions have no id, so this is how
+// a child links to a new-position manager. Strips a leading id/dash and a
+// trailing "(incumbent)".
+function parseManagerTitle(s) {
+    let t = String(s == null ? '' : s).normalize('NFKC');
+    t = t.replace(/^[\s\d–-]+/, '');        // leading id, dashes, spaces
+    t = t.replace(/\s*\([^)]*\)\s*$/, '');   // trailing "(incumbent)"
+    return t.trim().toLowerCase();
+}
+
 // Emails of every collaborator in a multipleCollaborators cell (lowercased).
 function readCollaboratorEmails(record, field) {
     if (!field) return [];
@@ -280,6 +291,8 @@ function buildOrg(records, cfg) {
     const idByName = {};
     const idByEmployeeId = {};  // employee-id value → record id
     const idByPositionId = {};  // position-id value → record id (survives vacancy)
+    const idByTitle = {};       // position title → record id (for new positions w/o id)
+    const titleCount = {};      // title → how many records share it (only unique titles link)
 
     records.forEach(r => {
         const incumbent = incumbentName(r, nameField);
@@ -320,17 +333,38 @@ function buildOrg(records, cfg) {
         }
         const pid = positionIdOf(r);
         if (pid && !(pid in idByPositionId)) idByPositionId[pid] = r.id;
+        // Index by position title so a child can find a manager that has no id
+        // (a "New Position"). Only UNIQUE titles are usable, to avoid mis-links.
+        const tkey = normName(jobTitle);
+        if (tkey) {
+            titleCount[tkey] = (titleCount[tkey] || 0) + 1;
+            if (!(tkey in idByTitle)) idByTitle[tkey] = r.id;
+        }
     });
+
+    // Match a manager TITLE to a unique position (used for managers that have no
+    // id — i.e. "New Position" seats).
+    const titleParent = (rawTitle, selfId) => {
+        const k = parseManagerTitle(rawTitle);
+        if (k && titleCount[k] === 1 && idByTitle[k] && idByTitle[k] !== selfId) return idByTitle[k];
+        return null;
+    };
 
     // Prefer a true id over name matching (names are ambiguous for duplicates):
     //   0. manager POSITION id → position id (works even when the manager seat
     //      is vacant, so the branch above never gets cut off),
+    //   0b. manager TITLE → unique position title (for "New Position" managers
+    //       that have no id),
     //   1. explicit manager-id → employee-id mapping,
     //   2. linked-record id from the manager lookup/link,
-    //   3. name match as a last resort.
+    //   3. name (or title) match as a last resort.
     const resolveParentId = r => {
         const mpid = managerPositionIdOf(r);
         if (mpid && idByPositionId[mpid] && idByPositionId[mpid] !== r.id) return idByPositionId[mpid];
+        if (managerPositionIdField) {
+            const byTitle = titleParent(readText(r, managerPositionIdField), r.id);
+            if (byTitle) return byTitle;
+        }
         if (managerIdField) {
             const mid = normName(readText(r, managerIdField));
             if (mid && idByEmployeeId[mid] && idByEmployeeId[mid] !== r.id) return idByEmployeeId[mid];
@@ -340,8 +374,9 @@ function buildOrg(records, cfg) {
             if (nodeMap[id] && id !== r.id) return id;
         }
         for (const nm of names) {
-            const id = idByName[normName(nm)];
-            if (id && id !== r.id) return id;
+            const k = normName(nm);
+            if (idByName[k] && idByName[k] !== r.id) return idByName[k];
+            if (titleCount[k] === 1 && idByTitle[k] && idByTitle[k] !== r.id) return idByTitle[k];
         }
         return null;
     };
