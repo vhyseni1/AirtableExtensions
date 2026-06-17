@@ -879,11 +879,13 @@ function PersonCard({node, variant, directs, total, showAvatar, expanded, dimmed
                         : <span>{node.jobTitle}</span>}
                 </div>
                 <div className="person-dept"><span>{node.department}</span></div>
-                {node.location && !node.isNewPosition && (
-                    <div className="person-loc">{node.location}</div>
-                )}
-                {node.status && (
-                    <div className="person-status">
+                {/* Location & status slots are ALWAYS rendered (empty when absent)
+                    so every card has the same rows in the same places. */}
+                <div className="person-loc">
+                    {!node.isNewPosition ? node.location : ''}
+                </div>
+                <div className="person-status">
+                    {node.status && (
                         <span
                             className="status-chip"
                             style={node.statusStyle
@@ -892,8 +894,8 @@ function PersonCard({node, variant, directs, total, showAvatar, expanded, dimmed
                         >
                             {node.status}
                         </span>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
             <div className="person-foot">
                 {directs > 0 ? (

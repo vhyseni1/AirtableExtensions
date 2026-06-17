@@ -540,11 +540,19 @@
    Name / title / department each get a FIXED two-line slot: text wraps to at
    most two lines and is vertically centered when it's only one line, so the
    card height never depends on how long these strings are. */
-/* A fixed floor so EVERY report card is the same size regardless of which
-   optional rows (location, status, decision) it has — new-position and vacant
-   cards no longer come out shorter. */
-.person-card-report { justify-content: flex-start; min-height: 292px; }
-.person-card-report.no-avatar { min-height: 224px; }
+.person-card-report { justify-content: flex-start; }
+/* Location and status get FIXED-height slots (kept even when empty) so the rows
+   line up across every card and there's no trailing dead space. */
+.person-card-report .person-loc {
+    height: 14px;
+    margin-top: 3px;
+    line-height: 14px;
+}
+.person-card-report .person-status {
+    height: 22px;
+    margin-top: 6px;
+    align-items: center;
+}
 .person-card-report .person-name,
 .person-card-report .person-title,
 .person-card-report .person-dept {
