@@ -400,6 +400,78 @@
     border-radius: 2px;
 }
 
+/* ─── Filtered org chart (pruned tree, classic top-down connectors) ─────────── */
+.ftree {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 24px;
+}
+/* A node and, below it, the row of its kept children. */
+.ftree-node {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 8px;
+}
+/* The children row. Connectors are drawn relative to EACH child so they line up
+   even when subtrees differ in width (the classic CSS family-tree trick): a drop
+   from the parent (ul::before), a bus across the children, and a stub to each. */
+.ftree-children {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    justify-content: center;
+    align-items: flex-start;
+    padding-top: 26px;
+}
+.ftree-children::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    margin-left: -1px;
+    width: 2px;
+    height: 26px;
+    background: #c2ccd8;
+}
+.ftree-children > .ftree-node { padding-top: 26px; }
+.ftree-children > .ftree-node::before,
+.ftree-children > .ftree-node::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 50%;
+    width: 50%;
+    height: 26px;
+    border-top: 2px solid #c2ccd8;
+}
+.ftree-children > .ftree-node::after {
+    right: auto;
+    left: 50%;
+    border-left: 2px solid #c2ccd8;
+}
+/* a single child connects straight to the parent drop — no bus needed */
+.ftree-children > .ftree-node:only-child { padding-top: 0; }
+.ftree-children > .ftree-node:only-child::before,
+.ftree-children > .ftree-node:only-child::after { display: none; }
+/* trim the outer halves at the ends, but keep the end verticals */
+.ftree-children > .ftree-node:first-child::before,
+.ftree-children > .ftree-node:last-child::after { border: 0 none; }
+.ftree-children > .ftree-node:last-child::before { border-right: 2px solid #c2ccd8; }
+
+/* Connector managers kept only to hold the tree together are greyed out. */
+.person-card.dimmed {
+    opacity: 0.5;
+    filter: grayscale(0.85);
+}
+.person-card.dimmed:hover { opacity: 0.78; }
+/* The pruned tree is fully expanded, so the expand caret is meaningless here. */
+.ftree .person-drill { display: none; }
+
 /* Card entrance + the slide-to-center reorder are animated in JS (FLIP), so the
    same card elements glide between positions. Only the connector animates here:
    it unfurls downward toward a freshly revealed level. */

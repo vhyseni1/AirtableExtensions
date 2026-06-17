@@ -831,13 +831,14 @@ function SearchBox({nodeMap, onJump}) {
 // avatar toggle, which is prop-drilled). Always false during export.
 const DecisionContext = createContext(false);
 
-function PersonCard({node, variant, directs, total, showAvatar, expanded, onDrill, onOpen}) {
+function PersonCard({node, variant, directs, total, showAvatar, expanded, dimmed, onDrill, onOpen}) {
     const showDecision = useContext(DecisionContext);
     const drillable = variant === 'report' && directs > 0;
     const cls = ['person-card', `person-card-${variant}`, 'clickable'];
     if (!showAvatar) cls.push('no-avatar');
     if (node.vacant) cls.push('vacant');
     if (expanded) cls.push('expanded');
+    if (dimmed) cls.push('dimmed');
     // Reports drill into their own subtree; the focus card opens the record.
     const onClick = variant === 'report' ? () => onDrill(node.id) : () => onOpen(node);
     // `expanded` is a boolean in the inline-expand tree (▾ collapse / ▴), and
@@ -1075,31 +1076,40 @@ function ManagerSection({node, nodeMap, totals, showAvatar, onDrill, onOpen}) {
     );
 }
 
-// A flat group of positions under a header (used by the Organization and
-// Location filter views).
-function GroupSection({title, members, totals, showAvatar, onDrill, onOpen}) {
+// Filtered ORG CHART: the org tree pruned to the matching positions plus the
+// managers needed to connect them to the top. Matching positions render normally;
+// connector managers that don't match are greyed out; everything else is dropped.
+function FilterNode({node, nodeMap, keep, match, totals, showAvatar, onDrill, onOpen}) {
+    const kids = node.childIds.filter(id => keep.has(id)).map(id => nodeMap[id]);
     return (
-        <div className="manager-section">
-            <div className="org-header">
-                <span className="org-header-name">{title}</span>
-                <span className="org-header-count">
-                    {members.length} position{members.length !== 1 ? 's' : ''}
-                </span>
-            </div>
-            <div className="reports-grid">
-                {members.map(n => (
-                    <PersonCard
-                        key={n.id}
-                        node={n}
-                        variant="report"
-                        directs={n.childIds.length}
-                        total={totals[n.id] || 0}
-                        showAvatar={showAvatar}
-                        onDrill={onDrill}
-                        onOpen={onOpen}
-                    />
-                ))}
-            </div>
+        <div className="ftree-node">
+            <PersonCard
+                node={node}
+                variant="report"
+                directs={node.childIds.length}
+                total={totals[node.id] || 0}
+                showAvatar={showAvatar}
+                dimmed={!match.has(node.id)}
+                onDrill={onDrill}
+                onOpen={onOpen}
+            />
+            {kids.length > 0 && (
+                <div className="ftree-children">
+                    {kids.map(k => (
+                        <FilterNode
+                            key={k.id}
+                            node={k}
+                            nodeMap={nodeMap}
+                            keep={keep}
+                            match={match}
+                            totals={totals}
+                            showAvatar={showAvatar}
+                            onDrill={onDrill}
+                            onOpen={onOpen}
+                        />
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
@@ -1393,6 +1403,31 @@ function WorkdayChart({table}) {
         : locationActive ? selectedLocations
         : statusActive ? selectedStatuses : null;
     const groupNoun = orgActive ? 'organizations' : locationActive ? 'locations' : 'statuses';
+
+    // A value filter (org / location / decision status) prunes the ORG CHART:
+    // keep the matching positions PLUS their ancestor managers (to connect them
+    // up to the top), rooted at the top of the kept set. Non-matching ancestors
+    // are flagged so they render greyed-out.
+    const filterPrune = useMemo(() => {
+        const pick = orgActive ? (n => n.org)
+            : locationActive ? (n => n.location)
+            : statusActive ? (n => n.status) : null;
+        const sel = orgActive ? orgFilter : locationActive ? locationFilter : statusActive ? statusFilter : null;
+        if (!pick || !sel || sel.size === 0) return null;
+        const match = new Set();
+        for (const n of Object.values(nodeMap)) {
+            if (sel.has((pick(n) || '').trim())) match.add(n.id);
+        }
+        const keep = new Set(match);
+        for (const id of match) {
+            let p = nodeMap[id].parentId;
+            while (p && nodeMap[p] && !keep.has(p)) { keep.add(p); p = nodeMap[p].parentId; }
+        }
+        const roots = [...keep]
+            .filter(id => { const pid = nodeMap[id].parentId; return !pid || !keep.has(pid); })
+            .sort((a, b) => nodeMap[a].displayName.localeCompare(nodeMap[b].displayName));
+        return {match, keep, roots};
+    }, [orgActive, locationActive, statusActive, orgFilter, locationFilter, statusFilter, nodeMap]);
     // The leader has navigated away from their top view (drilled in or re-rooted).
     const drilled = (!!focusId && focusId !== defaultFocusId) || Object.keys(openByParent).length > 0;
 
@@ -1552,22 +1587,27 @@ function WorkdayChart({table}) {
 
             {/* Board */}
             <div className="board-scroll">
-                {activeGroups ? (
-                    <div className="board board-filtered" ref={boardRef}>
-                        {activeGroups.length === 0 && (
+                {filterPrune ? (
+                    <div className="board board-expandable" ref={boardRef}>
+                        {filterPrune.roots.length === 0 ? (
                             <div className="no-reports">No matching {groupNoun}.</div>
+                        ) : (
+                            <div className="ftree">
+                                {filterPrune.roots.map(id => (
+                                    <FilterNode
+                                        key={id}
+                                        node={nodeMap[id]}
+                                        nodeMap={nodeMap}
+                                        keep={filterPrune.keep}
+                                        match={filterPrune.match}
+                                        totals={totals}
+                                        showAvatar={showAvatars}
+                                        onDrill={drillFromFilter}
+                                        onOpen={openRecord}
+                                    />
+                                ))}
+                            </div>
                         )}
-                        {activeGroups.map(({title, members}) => (
-                            <GroupSection
-                                key={title}
-                                title={title}
-                                members={members}
-                                totals={totals}
-                                showAvatar={showAvatars}
-                                onDrill={drillFromFilter}
-                                onOpen={openRecord}
-                            />
-                        ))}
                     </div>
                 ) : managerActive ? (
                     <div className="board board-filtered" ref={boardRef}>
