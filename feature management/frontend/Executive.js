@@ -3,6 +3,7 @@ import {useEffect, useMemo, useRef, useState} from 'react';
 import {PHASE_GROUPS, PHASE_COLORS} from './constants';
 import {HealthDot} from './components';
 import {useDrill, DrillDrawer} from './drill';
+import Narrative from './Narrative';
 
 // UBS-leaning palette: red lead accent, then deep neutrals/jewels for initiatives.
 const INITIATIVE_COLORS = ['#E60000', '#14274E', '#0F766E', '#6D28D9', '#B45309', '#0E7490'];
@@ -172,13 +173,7 @@ export default function Executive({model}) {
 
     const blockedAttrs = attrs.filter(a => a.isBlocked);
     const overdueAttrs = attrs.filter(a => !a.isBlocked && a.dueDate && Date.parse(a.dueDate) < now && !a.isDelivered);
-    const awaitingAttrs = attrs.filter(a => a.isAwaitingReview);
-    const readyAttrs = attrs.filter(a => a.isReadyToPush);
     const returnedHandshakes = model.handshakes.filter(h => /return/i.test(h.action));
-    const rankedInit = [...byInitiative].filter(it => it.attrCount > 0).sort((a, b) => b.pct - a.pct);
-    const upcoming = features.filter(f => f.goLiveMs != null).sort((a, b) => a.goLiveMs - b.goLiveMs);
-    const nextGo = upcoming.find(f => f.goLiveMs >= now) || upcoming[0] || null;
-    const bottleneck = PHASE_GROUPS.reduce((b, p) => ((phaseCounts[p] || 0) > (phaseCounts[b] || 0) ? p : b), PHASE_GROUPS[0]);
 
     // ── Requires attention — typed across features, attributes & handshakes ──
     const attentionItems = [];
@@ -211,50 +206,6 @@ export default function Executive({model}) {
         Attribute: attentionItems.filter(i => i.type === 'Attribute').length,
         Handshake: attentionItems.filter(i => i.type === 'Handshake').length,
     };
-
-    // ── Narrative: an overview + 5–6 most-recent-and-key statements ──
-    const overdueFeat = features.filter(f => f.goLiveMs != null && f.goLiveMs < now && f.pct < 100).length;
-    const ragStatus = overdueFeat > 0 ? 'Red' : (kpis.blocked > 0 || needAttn.length > 0) ? 'Amber' : 'Green';
-    const overview = {
-        status: ragStatus,
-        text: `${kpis.overallPct}% mature across ${features.length} features in ${byInitiative.length} initiatives — ${onTrack.length} on track, ${needAttn.length} need attention, ${delivered.length} delivered.${nextGo ? ` Next go-live: ${nextGo.name} on ${fmtDate(nextGo.goLiveMs)}.` : ''}`,
-    };
-
-    const recent = model.handshakes.slice(0, 3).map(h => ({
-        badge: 'Recent',
-        text: `${h.feature}: ${h.action} at ${h.stage} — ${h.decisionMaker || 'team'} (${h.timestamp}).`,
-        drill: () => expandRecord(h.record),
-    }));
-    const key = [];
-    if (blockedAttrs.length || returnedHandshakes.length) {
-        key.push({
-            badge: 'Risk',
-            text: `${blockedAttrs.length} attribute${blockedAttrs.length === 1 ? '' : 's'} blocked${returnedHandshakes.length ? ` and ${returnedHandshakes.length} returned for rework` : ''}; ${awaitingAttrs.length} awaiting sign-off.`,
-            drill: () => openAttrs('Blocked', blockedAttrs.length ? blockedAttrs : awaitingAttrs),
-        });
-    }
-    if (nextGo) {
-        const risk = nextGo.health === 'blocked' || nextGo.health === 'at-risk';
-        key.push({
-            badge: 'Go-live',
-            text: `${nextGo.name} (${nextGo.initiative}) targets ${fmtDate(nextGo.goLiveMs)} at ${nextGo.pct}%${risk ? ' — at risk' : ' — on track'}.`,
-            drill: () => pushFeatureAttrs(nextGo),
-        });
-    }
-    if (rankedInit.length >= 2 && rankedInit[0].name !== rankedInit[rankedInit.length - 1].name) {
-        const lag = rankedInit[rankedInit.length - 1];
-        key.push({
-            badge: 'Focus',
-            text: `${rankedInit[0].name} leads at ${rankedInit[0].pct}%; ${lag.name} trails at ${lag.pct}% — the likeliest place to focus.`,
-            drill: () => openFeatures(lag.name, lag.features),
-        });
-    }
-    key.push({
-        badge: 'Flow',
-        text: `Most work sits in ${bottleneck} (${phaseCounts[bottleneck] || 0}); ${readyAttrs.length} ready to advance.`,
-        drill: () => openAttrs(`${bottleneck} phase`, attrs.filter(a => a.phase === bottleneck)),
-    });
-    const statements = [...recent, ...key].slice(0, 6);
 
     return (
         <div className="fp-exec">
@@ -386,38 +337,7 @@ export default function Executive({model}) {
 
             <DrillDrawer drill={drill} attrsOf={attrsOf} colorOf={colorOf} />
 
-            {narrativeOpen && (
-                <div className="fp-modal-backdrop" onClick={() => setNarrativeOpen(false)}>
-                    <div className="fp-narrative" onClick={e => e.stopPropagation()}>
-                        <div className="fp-narrative-head">
-                            <div>
-                                <div className="fp-narrative-eyebrow">Executive narrative</div>
-                                <h2>Portfolio at a glance</h2>
-                            </div>
-                            <button type="button" className="fp-drawer-close" onClick={() => setNarrativeOpen(false)} aria-label="Close">×</button>
-                        </div>
-                        <div className="fp-narrative-overview">
-                            <span className={`fp-rag-pill rag-${overview.status.toLowerCase()}`}>{overview.status}</span>
-                            <p>{overview.text}</p>
-                        </div>
-                        <div className="fp-narrative-subhead">Most recent &amp; key</div>
-                        <ol className="fp-narrative-list">
-                            {statements.map((s, i) => (
-                                <li
-                                    key={i}
-                                    className={s.drill ? 'clickable' : ''}
-                                    onClick={s.drill ? () => { setNarrativeOpen(false); s.drill(); } : undefined}
-                                >
-                                    <span className={`fp-narr-badge b-${s.badge.toLowerCase()}`}>{s.badge}</span>
-                                    <span className="fp-narr-text">{s.text}</span>
-                                    {s.drill && <span className="fp-narr-go" title="View details">›</span>}
-                                </li>
-                            ))}
-                        </ol>
-                        <div className="fp-narrative-foot">Click any statement to drill into the underlying features and records.</div>
-                    </div>
-                </div>
-            )}
+            {narrativeOpen && <Narrative model={model} colorOf={colorOf} onClose={() => setNarrativeOpen(false)} />}
         </div>
     );
 }
