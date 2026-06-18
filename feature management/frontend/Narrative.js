@@ -3,6 +3,7 @@ import {PHASE_GROUPS, PHASE_COLORS} from './constants';
 
 const fmtDate = ms => (ms == null ? '—' : new Date(ms).toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: 'numeric'}));
 const RAG_COLOR = {Green: '#16A34A', Amber: '#F59E0B', Red: '#E11D48'};
+const INITIATIVE_COLORS = ['#E60000', '#14274E', '#0F766E', '#6D28D9', '#B45309', '#0E7490'];
 
 function SlideDonut({pct, color = '#fff'}) {
     const size = 200, stroke = 18, r = (size - stroke) / 2, c = 2 * Math.PI * r;
@@ -170,8 +171,11 @@ function buildSlides(model, colorOf) {
     return slides;
 }
 
-export default function Narrative({model, colorOf, onClose}) {
-    const slides = buildSlides(model, colorOf || (() => '#E60000'));
+export default function Narrative({model, onClose}) {
+    const colorIndex = {};
+    model.byInitiative.forEach((it, idx) => (colorIndex[it.name] = INITIATIVE_COLORS[idx % INITIATIVE_COLORS.length]));
+    const colorOf = name => colorIndex[name] || '#E60000';
+    const slides = buildSlides(model, colorOf);
     const [i, setI] = useState(0);
     const n = slides.length;
     const go = d => setI(x => Math.max(0, Math.min(n - 1, x + d)));

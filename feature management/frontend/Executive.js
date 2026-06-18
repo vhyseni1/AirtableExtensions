@@ -3,7 +3,6 @@ import {useEffect, useMemo, useRef, useState} from 'react';
 import {PHASE_GROUPS, PHASE_COLORS} from './constants';
 import {HealthDot} from './components';
 import {useDrill, DrillDrawer} from './drill';
-import Narrative from './Narrative';
 
 // UBS-leaning palette: red lead accent, then deep neutrals/jewels for initiatives.
 const INITIATIVE_COLORS = ['#E60000', '#14274E', '#0F766E', '#6D28D9', '#B45309', '#0E7490'];
@@ -146,7 +145,6 @@ function Timeline({features, colorOf, onPick}) {
 export default function Executive({model}) {
     const {byInitiative, features, kpis, phaseCounts, attrs} = model;
     const [mounted, setMounted] = useState(false);
-    const [narrativeOpen, setNarrativeOpen] = useState(false);
     const drill = useDrill();
     useEffect(() => {
         const id = requestAnimationFrame(() => setMounted(true));
@@ -215,7 +213,6 @@ export default function Executive({model}) {
                     <div className="fp-eyebrow">UBS Switzerland · Finance Data Programme</div>
                     <h1>Programme Portfolio Overview</h1>
                     <p className="fp-hero-sub">Executive view across {byInitiative.length} initiatives and {features.length} features — accounting data maturity through to go-live.</p>
-                    <button type="button" className="fp-narrative-btn" onClick={() => setNarrativeOpen(true)}>✦ Narrative</button>
                     <div className="fp-hero-stats">
                         <button type="button" onClick={() => openFeatures('On track', onTrack)}><b><CountUp value={onTrack.length} /></b><span>On track</span></button>
                         <button type="button" onClick={() => openFeatures('Need attention', needAttn)}><b style={{color: '#ff9d57'}}><CountUp value={needAttn.length} /></b><span>Need attention</span></button>
@@ -336,8 +333,6 @@ export default function Executive({model}) {
             </div>
 
             <DrillDrawer drill={drill} attrsOf={attrsOf} colorOf={colorOf} />
-
-            {narrativeOpen && <Narrative model={model} colorOf={colorOf} onClose={() => setNarrativeOpen(false)} />}
         </div>
     );
 }

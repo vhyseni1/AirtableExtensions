@@ -7,6 +7,7 @@ import Executive from './Executive';
 import Roadmap from './Roadmap';
 import TeamView from './TeamView';
 import Workflow from './Workflow';
+import Narrative from './Narrative';
 import './style.css';
 
 const MODES = [
@@ -22,12 +23,16 @@ const MODES = [
 function Dashboard() {
     const model = useModel();
     const [mode, setMode] = useState('exec');
+    const [narrativeOpen, setNarrativeOpen] = useState(false);
 
     return (
         <>
-            <header className="fp-header">
-                <div className="fp-brand"><span className="fp-logo">UBS</span> Finance Data Programme</div>
-                <div className="fp-modeswitch" role="tablist" aria-label="View">
+            <header className="fp-nav">
+                <div className="fp-nav-left">
+                    <span className="fp-logo">UBS</span>
+                    <span className="fp-nav-title">Finance Data Programme</span>
+                </div>
+                <nav className="fp-nav-tabs" role="tablist" aria-label="View">
                     {MODES.map(m => (
                         <button
                             key={m.key}
@@ -40,6 +45,11 @@ function Dashboard() {
                             {m.label}
                         </button>
                     ))}
+                </nav>
+                <div className="fp-nav-actions">
+                    <button type="button" className="fp-nav-narrative" onClick={() => setNarrativeOpen(true)}>
+                        <span aria-hidden>✦</span> Narrative
+                    </button>
                 </div>
             </header>
 
@@ -60,6 +70,8 @@ function Dashboard() {
                     {model.missing.length} field name(s) don’t match the contract — those are read as empty. Rename in the base or in <code>constants.js</code> to fix.
                 </div>
             )}
+
+            {narrativeOpen && <Narrative model={model} onClose={() => setNarrativeOpen(false)} />}
         </>
     );
 }
