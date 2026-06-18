@@ -1,0 +1,11 @@
+Handshake ID,Attribute,Feature,Stage,From Team,To Team,Action,Decision Maker,Timestamp,Comments,Cycle Number
+HS-0001,LD-01,Loans Disbursement,9. Calculator Build,Calculate Crew,Report Crew,Approved,Clara Vogt,2026-06-18,Calc validated; handed to Report.,1
+HS-0002,LD-01,Loans Disbursement,10. Report Build,Report Crew,,Approved,Clara Vogt,2026-06-24,Report signed off — delivered.,1
+HS-0003,LD-02,Loans Disbursement,8. GR,FPSL/GL/GR Crew (Control),Calculate Crew,Approved,Pawel Nowak,2026-06-20,GR balances tie out.,1
+HS-0004,LD-03,Loans Disbursement,5c. Static / Reference Data Source Systems,Data & AI Ref Data Sourcing Crew,FPSL/GL/GR Crew (Control),Approved,Anita Desai,2026-06-25,Reference set version-pinned.,1
+HS-0005,CD-01,Customer Deposits,2. Posting Model Specifications / Data Requirements,Data & AI Modelling Crew,Accounting / Reporting COE (Control Crew),Rejected / Returned,Lena Hofmann,2026-06-22,FSDM mapping inconsistent — returned.,2
+HS-0006,CD-02,Customer Deposits,5b. MIDAS (Upstream System 2) Sourcing & VESTing,Data & AI System 2 Sourcing Crew (MIDAS),FPSL/GL/GR Crew (Control),Approved,Lukas Brandt,2026-06-26,MIDAS reconciliation signed off.,1
+HS-0007,IRS-01,Interest Rate Swaps,6. FPSL Config,FPSL/GL/GR Crew (Control),FPSL/GL/GR Crew (Control),Approved,Anita Desai,2026-06-23,Posting key configured.,1
+HS-0008,IRS-02,Interest Rate Swaps,7. GL,FPSL/GL/GR Crew (Control),FPSL/GL/GR Crew (Control),Approved,Lukas Brandt,2026-06-27,GL reconciled.,1
+HS-0009,FX-01,FX Spot & Forward,2. Posting Model Specifications / Data Requirements,Accounting / Reporting COE (Control Crew),Data & AI Modelling Crew,Approved,Tomás Silva,2026-06-24,Data requirements complete.,1
+HS-0010,REPO-01,Repurchase Agreements,1. Business Requirements,Accounting / Reporting COE (Control Crew),Accounting / Reporting COE (Control Crew),Approved,Marco Reuter,2026-06-25,Requirements signed off.,1
