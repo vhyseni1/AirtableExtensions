@@ -467,7 +467,21 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
     background: radial-gradient(120% 120% at 80% 0%, #1d3a6b 0%, #14274e 45%, #0c1730 100%);
     color: #fff; animation: fp-pop .2s ease;
 }
+.fp-ss-progress { position: absolute; top: 0; left: 0; right: 0; height: 3px; background: rgba(255,255,255,.12); }
+.fp-ss-progress i { display: block; height: 100%; width: 0; background: var(--fp-accent); animation: fp-ss-fill linear forwards; }
+@keyframes fp-ss-fill { from { width: 0; } to { width: 100%; } }
 .fp-ss-top { display: flex; align-items: center; justify-content: space-between; padding: 18px 28px; }
+.fp-ss-play { background: rgba(255,255,255,.12); border: none; color: #fff; width: 34px; height: 34px; border-radius: 50%; font-size: 12px; cursor: pointer; line-height: 1; }
+.fp-ss-play:hover { background: rgba(255,255,255,.24); }
+
+/* What · who · when table */
+.fp-ss-table { margin-top: 20px; display: flex; flex-direction: column; gap: 4px; }
+.fp-ss-trow { display: grid; grid-template-columns: 1.5fr 1.2fr .6fr; gap: 20px; align-items: center; padding: 14px 16px; border-radius: 10px; background: rgba(255,255,255,.05); }
+.fp-ss-thead { background: transparent; padding: 0 16px 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: #9fb1d0; }
+.fp-ss-what, .fp-ss-who { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.fp-ss-what b, .fp-ss-who b { font-size: 17px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fp-ss-what em, .fp-ss-who em { font-style: normal; font-size: 13px; color: #9fb1d0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fp-ss-when { font-size: 15px; color: #c5d2e8; font-variant-numeric: tabular-nums; text-align: right; }
 .fp-ss-brand { font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; gap: 10px; color: #dbe5f5; }
 .fp-ss-topright { display: flex; align-items: center; gap: 16px; }
 .fp-ss-count { font-size: 13px; color: #9fb1d0; font-variant-numeric: tabular-nums; }

@@ -130,18 +130,23 @@ function buildSlides(model, colorOf) {
         });
     }
 
-    // 6 — Recent activity
+    // 6 — Activity: what, who & when
     if (model.handshakes.length) {
         slides.push({
-            topic: 'Recent activity',
+            topic: 'Activity — what, who & when',
             node: (
                 <>
                     <h2 className="fp-ss-headline">Latest handoffs</h2>
-                    <ul className="fp-ss-list">
-                        {model.handshakes.slice(0, 5).map(h => (
-                            <li key={h.id}><b>{h.feature}</b> — {h.action} at {h.stage} <span className="fp-ss-dim">({h.timestamp})</span></li>
+                    <div className="fp-ss-table">
+                        <div className="fp-ss-trow fp-ss-thead"><span>What</span><span>Who</span><span>When</span></div>
+                        {model.handshakes.slice(0, 6).map(h => (
+                            <div className="fp-ss-trow" key={h.id}>
+                                <span className="fp-ss-what"><b>{h.feature}</b><em>{h.action} · {h.stage}</em></span>
+                                <span className="fp-ss-who"><b>{h.decisionMaker || 'Team'}</b><em>{h.fromTeam} → {h.toTeam}</em></span>
+                                <span className="fp-ss-when">{h.timestamp}</span>
+                            </div>
                         ))}
-                    </ul>
+                    </div>
                 </>
             ),
         });
@@ -171,31 +176,50 @@ function buildSlides(model, colorOf) {
     return slides;
 }
 
+const SLIDE_MS = 7000;
+
 export default function Narrative({model, onClose}) {
     const colorIndex = {};
     model.byInitiative.forEach((it, idx) => (colorIndex[it.name] = INITIATIVE_COLORS[idx % INITIATIVE_COLORS.length]));
     const colorOf = name => colorIndex[name] || '#E60000';
     const slides = buildSlides(model, colorOf);
     const [i, setI] = useState(0);
+    const [playing, setPlaying] = useState(true);
     const n = slides.length;
-    const go = d => setI(x => Math.max(0, Math.min(n - 1, x + d)));
+    const go = d => { setPlaying(false); setI(x => Math.max(0, Math.min(n - 1, x + d))); };
+
+    // Auto-advance (loops). Timer resets on each slide change, so manual nav
+    // gives a full dwell too. Pauses when `playing` is off.
+    useEffect(() => {
+        if (!playing) return undefined;
+        const t = setTimeout(() => setI(x => (x + 1) % n), SLIDE_MS);
+        return () => clearTimeout(t);
+    }, [playing, i, n]);
 
     useEffect(() => {
         const onKey = e => {
             if (e.key === 'Escape') onClose();
-            else if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); setI(x => Math.min(n - 1, x + 1)); }
-            else if (e.key === 'ArrowLeft') setI(x => Math.max(0, x - 1));
+            else if (e.key === 'ArrowRight') go(1);
+            else if (e.key === 'ArrowLeft') go(-1);
+            else if (e.key === ' ') { e.preventDefault(); setPlaying(p => !p); }
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [n, onClose]);
 
     const slide = slides[i];
     return (
         <div className="fp-ss">
+            <div className="fp-ss-progress" aria-hidden>
+                <i key={i} style={{animationDuration: `${SLIDE_MS}ms`, animationPlayState: playing ? 'running' : 'paused'}} />
+            </div>
             <div className="fp-ss-top">
                 <div className="fp-ss-brand"><span className="fp-logo">UBS</span> Finance Data Programme · Narrative</div>
                 <div className="fp-ss-topright">
+                    <button type="button" className="fp-ss-play" onClick={() => setPlaying(p => !p)} aria-label={playing ? 'Pause' : 'Play'} title={playing ? 'Pause' : 'Play'}>
+                        {playing ? '❚❚' : '▶'}
+                    </button>
                     <span className="fp-ss-count">{i + 1} / {n}</span>
                     <button type="button" className="fp-ss-close" onClick={onClose} aria-label="Close">×</button>
                 </div>
@@ -212,7 +236,7 @@ export default function Narrative({model, onClose}) {
 
             <div className="fp-ss-dots">
                 {slides.map((s, idx) => (
-                    <button type="button" key={idx} className={`fp-ss-dot${idx === i ? ' active' : ''}`} onClick={() => setI(idx)} aria-label={`Slide ${idx + 1}`} title={s.topic} />
+                    <button type="button" key={idx} className={`fp-ss-dot${idx === i ? ' active' : ''}`} onClick={() => { setPlaying(false); setI(idx); }} aria-label={`Slide ${idx + 1}`} title={s.topic} />
                 ))}
             </div>
         </div>
