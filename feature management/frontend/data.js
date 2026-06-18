@@ -143,6 +143,7 @@ export function useModel() {
         // ── Features (+ Initiative grouping) ──
         const featureList = (featureRecords || []).map(r => ({
             id: r.id,
+            record: r,
             name: str(r, features.fields.name),
             initiative: str(r, features.fields.initiative) || 'Ungrouped',
             owningTeam: str(r, features.fields.owningTeam),
