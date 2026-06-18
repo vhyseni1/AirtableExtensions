@@ -8,6 +8,7 @@ import {useDrill, DrillDrawer} from './drill';
 const INITIATIVE_COLORS = ['#E60000', '#14274E', '#0F766E', '#6D28D9', '#B45309', '#0E7490'];
 
 const fmtDate = ms => (ms == null ? '—' : new Date(ms).toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: 'numeric'}));
+const fmtShort = ms => new Date(ms).toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: '2-digit'});
 
 // ── Count-up number ───────────────────────────────────────────────────────────
 function useCountUp(target, ms = 850) {
@@ -66,7 +67,8 @@ function PhaseStrip({phase, mounted}) {
     );
 }
 
-// ── Delivery roadmap — a winding road with a map pin at each go-live ───────────
+// ── Delivery timeline — markers on a line, labels stacked in clean lanes ───────
+const TL_ROW = 46;
 function Timeline({features, colorOf, onPick}) {
     const ref = useRef(null);
     const [w, setW] = useState(0);
@@ -80,59 +82,63 @@ function Timeline({features, colorOf, onPick}) {
     }, []);
 
     const dated = features.filter(f => f.goLiveMs != null).sort((a, b) => a.goLiveMs - b.goLiveMs);
+    const now = Date.now();
     if (dated.length === 0) return <div className="fp-muted">No target go-live dates set.</div>;
 
-    // The SVG scales to fill the container (viewBox + width:100%), and pins are
-    // positioned by percentage — so the road is never skewed, even before the
-    // width is measured.
-    const W = Math.max(w || 1000, 480);
-    const H = 320;
-    const margin = Math.max(80, W * 0.08);
-    const TOP = 126;
-    const BOT = 194;
-    const N = dated.length;
-    const xAt = k => (N > 1 ? margin + k * ((W - 2 * margin) / (N - 1)) : W / 2);
-    const yAt = k => (k % 2 === 0 ? TOP : BOT);
-    const leftPct = k => `${(xAt(k) / W) * 100}%`;
+    const min = Math.min(now, dated[0].goLiveMs);
+    const max = Math.max(now, dated[dated.length - 1].goLiveMs);
+    const pad = (max - min) * 0.07 || 86400000 * 20;
+    const start = min - pad;
+    const end = max + pad;
+    const span = end - start || 1;
+    const pct = ms => ((ms - start) / span) * 100;
 
-    const pts = [{x: 0, y: yAt(0)}];
-    for (let k = 0; k < N; k++) pts.push({x: xAt(k), y: yAt(k)});
-    pts.push({x: W, y: yAt(N - 1)});
-    let d = `M ${pts[0].x} ${pts[0].y}`;
-    for (let k = 1; k < pts.length; k++) {
-        const p0 = pts[k - 1];
-        const p1 = pts[k];
-        const cx = (p0.x + p1.x) / 2;
-        d += ` C ${cx} ${p0.y}, ${cx} ${p1.y}, ${p1.x} ${p1.y}`;
-    }
+    // Greedy lane packing so labels never overlap (date-proportional positions).
+    const W = w || 900;
+    const laneRight = [];
+    const placed = dated.map(f => {
+        const cx = (pct(f.goLiveMs) / 100) * W;
+        const labelW = Math.min(200, 60 + f.name.length * 6.6);
+        const left = cx - labelW / 2;
+        let lane = 0;
+        while (lane < laneRight.length && left < laneRight[lane] + 14) lane++;
+        laneRight[lane] = cx + labelW / 2;
+        return {f, lane};
+    });
+    const rows = Math.max(1, laneRight.length);
+
+    const ticks = [];
+    const d = new Date(start);
+    d.setDate(1); d.setHours(0, 0, 0, 0);
+    while (d.getTime() <= end) { ticks.push(d.getTime()); d.setMonth(d.getMonth() + 1); }
 
     return (
-        <div className="fp-road" ref={ref} style={{height: H}}>
-            <svg className="fp-road-svg" width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden>
-                <path d={d} className="fp-road-casing" pathLength="1" />
-                <path d={d} className="fp-road-asphalt" pathLength="1" />
-                <path d={d} className="fp-road-dashes" pathLength="1" />
-            </svg>
-            <span className="fp-road-now" style={{left: 0, top: TOP}}>Now</span>
-            {dated.map((f, k) => {
-                const up = yAt(k) === TOP;
-                return (
+        <div className="fp-timeline" ref={ref} style={{minHeight: 96 + rows * TL_ROW}}>
+            <div className="fp-timeline-track">
+                {ticks.map(t => (
+                    <div key={t} className="fp-tl-tick" style={{left: `${pct(t)}%`}}>
+                        <span>{new Date(t).toLocaleDateString('en-GB', {month: 'short', year: '2-digit'})}</span>
+                    </div>
+                ))}
+                <div className="fp-tl-today" style={{left: `${pct(now)}%`, bottom: -(rows * TL_ROW + 14)}}><span>Today</span></div>
+                {placed.map(({f, lane}) => (
                     <div
                         key={f.id}
-                        className={`fp-road-stop ${up ? 'up' : 'down'}`}
-                        style={{left: leftPct(k), top: yAt(k), animationDelay: `${0.5 + k * 0.13}s`}}
+                        className="fp-tl-flag"
+                        style={{left: `${pct(f.goLiveMs)}%`}}
                         title={`${f.name} · ${f.initiative} · go-live ${fmtDate(f.goLiveMs)} · ${f.pct}%`}
                         onClick={() => onPick(f)}
                     >
-                        <span className="fp-pin" style={{'--pin': colorOf(f.initiative)}} />
-                        <span className="fp-road-card" style={{borderTopColor: colorOf(f.initiative)}}>
-                            <b>{fmtDate(f.goLiveMs)}</b>
-                            <span className="fp-road-feat">{f.name}</span>
-                            <span className="fp-road-pct">{f.pct}% · {f.initiative}</span>
+                        <span className="fp-tl-marker" style={{borderColor: colorOf(f.initiative)}} />
+                        <span className="fp-tl-connector" style={{height: lane * TL_ROW + 10}} />
+                        <span className="fp-tl-label" style={{borderLeftColor: colorOf(f.initiative)}}>
+                            <b>{fmtShort(f.goLiveMs)}</b>
+                            <span className="fp-tl-feat">{f.name}</span>
+                            <span className="fp-tl-sub">{f.pct}% · {f.initiative}</span>
                         </span>
                     </div>
-                );
-            })}
+                ))}
+            </div>
         </div>
     );
 }
@@ -271,7 +277,7 @@ export default function Executive({model}) {
             </div>
 
             {/* Timeline */}
-            <div className="fp-section-title">Delivery roadmap — target go-lives</div>
+            <div className="fp-section-title">Delivery timeline — target go-lives</div>
             <div className="fp-panel">
                 <Timeline features={features} colorOf={colorOf} onPick={pushFeatureAttrs} />
                 <div className="fp-legend">

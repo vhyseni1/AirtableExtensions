@@ -294,36 +294,23 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-panel-title { font-weight: 700; font-size: 14px; margin-bottom: 14px; }
 .fp-exec-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 
-/* Delivery roadmap — a winding road with map pins at each go-live */
-.fp-road { position: relative; width: 100%; overflow: hidden; }
-.fp-road-svg { display: block; width: 100%; }
-.fp-road-casing { fill: none; stroke: #fff; stroke-width: 40; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 8px 12px rgba(20,39,78,.2)); stroke-dasharray: 1; stroke-dashoffset: 1; animation: fp-road-draw 1.4s ease forwards; }
-.fp-road-asphalt { fill: none; stroke: #2b3442; stroke-width: 32; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: fp-road-draw 1.4s ease forwards; }
-.fp-road-dashes { fill: none; stroke: #fde36b; stroke-width: 3; stroke-linecap: round; stroke-dasharray: .014 .014; opacity: 0; animation: fp-road-fade .6s ease 1.15s forwards; }
-@keyframes fp-road-draw { to { stroke-dashoffset: 0; } }
-@keyframes fp-road-fade { to { opacity: 1; } }
-.fp-road-now { position: absolute; transform: translate(10px, -50%); background: #2b3442; color: #fff; font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap; box-shadow: 0 3px 8px rgba(20,39,78,.25); z-index: 2; }
-
-.fp-road-stop { position: absolute; display: flex; align-items: center; gap: 7px; width: 156px; cursor: pointer; opacity: 0; animation: fp-road-pop .5s cubic-bezier(.22,.9,.36,1) forwards; }
-@keyframes fp-road-pop { from { opacity: 0; } to { opacity: 1; } }
-.fp-road-stop.up { flex-direction: column-reverse; transform: translate(-50%, -100%); }
-.fp-road-stop.down { flex-direction: column; transform: translate(-50%, 0); }
-.fp-pin { position: relative; width: 30px; height: 30px; border-radius: 50% 50% 50% 0; background: var(--pin); box-shadow: 0 5px 9px rgba(20,39,78,.28); flex: 0 0 auto; }
-.fp-pin::after { content: ''; position: absolute; top: 9px; left: 9px; width: 12px; height: 12px; border-radius: 50%; background: #fff; }
-.fp-road-stop.up .fp-pin { transform: rotate(45deg); }
-.fp-road-stop.down .fp-pin { transform: rotate(225deg); }
-.fp-road-card { display: flex; flex-direction: column; gap: 2px; background: #fff; border: 1px solid var(--fp-border); border-top: 3px solid #ccc; border-radius: 10px; padding: 8px 10px; box-shadow: var(--fp-shadow); width: 156px; text-align: center; }
-.fp-road-card b { font-size: 12.5px; }
-.fp-road-feat { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.fp-road-pct { font-size: 10.5px; color: var(--fp-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.fp-road-stop:hover .fp-road-card { box-shadow: 0 10px 22px rgba(20,39,78,.2); }
-.fp-road-stop.up:hover .fp-pin { transform: rotate(45deg) scale(1.09); }
-.fp-road-stop.down:hover .fp-pin { transform: rotate(225deg) scale(1.09); }
-@media (prefers-reduced-motion: reduce) {
-    .fp-road-casing, .fp-road-asphalt { animation: none; stroke-dashoffset: 0; }
-    .fp-road-dashes { animation: none; opacity: 1; }
-    .fp-road-stop { animation: none; opacity: 1; }
-}
+/* Delivery timeline — markers on a baseline; labels stacked in clean lanes */
+.fp-timeline { position: relative; width: 100%; padding: 44px 6px 14px; }
+.fp-timeline-track { position: relative; height: 5px; border-radius: 3px; background: linear-gradient(90deg, #d8e0ec, #c3cee0); }
+.fp-tl-tick { position: absolute; top: -12px; transform: translateX(-50%); color: var(--fp-muted); font-size: 11px; }
+.fp-tl-tick::after { content: ''; position: absolute; left: 50%; top: 16px; width: 1px; height: 10px; background: #dbe2ec; }
+.fp-tl-today { position: absolute; top: -22px; width: 2px; background: var(--fp-accent); transform: translateX(-50%); border-radius: 2px; }
+.fp-tl-today span { position: absolute; top: -4px; left: 6px; font-size: 10px; font-weight: 800; color: var(--fp-accent); white-space: nowrap; }
+.fp-tl-flag { position: absolute; top: -7px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; cursor: pointer; }
+.fp-tl-flag:hover { z-index: 5; }
+.fp-tl-marker { width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 4px solid #ccc; box-shadow: 0 2px 5px rgba(20,39,78,.18); z-index: 1; flex: 0 0 auto; }
+.fp-tl-connector { width: 2px; background: rgba(20,39,78,.13); flex: 0 0 auto; }
+.fp-tl-label { background: #fff; border: 1px solid var(--fp-border); border-left: 4px solid #ccc; border-radius: 10px; padding: 9px 12px; box-shadow: var(--fp-shadow); min-width: 140px; max-width: 200px; display: flex; flex-direction: column; gap: 2px; transition: box-shadow .15s, transform .15s; }
+.fp-tl-label b { font-size: 12px; color: var(--fp-ink); }
+.fp-tl-feat { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fp-tl-sub { font-size: 11px; color: var(--fp-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fp-tl-flag:hover .fp-tl-label { box-shadow: 0 10px 22px rgba(20,39,78,.18); transform: translateY(-1px); }
+.fp-tl-flag:hover .fp-tl-marker { transform: scale(1.12); }
 .fp-legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 11px; color: var(--fp-muted); margin-top: 6px; }
 .fp-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .fp-legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
