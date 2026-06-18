@@ -1,4 +1,4 @@
-import { LayoutGrid, Network, CalendarRange, Grid3x3, Info } from 'lucide-react'
+import { LayoutGrid, CalendarRange, Grid3x3, Info, Activity, Target, Users, ArrowRight } from 'lucide-react'
 import { useDashboardState } from '../state/useDashboardState'
 import { useRecordExpander } from '../state/useAirtableRecords'
 import { TOKENS } from '../utils/colors'
@@ -12,7 +12,6 @@ import DetailDrawer from './DetailDrawer'
 // already-live CIA Control Tower interface.
 const NAV = [
   { id: 'headline', label: 'Overview', icon: LayoutGrid },
-  { id: 'flow', label: 'TNA Flow', icon: Network },
   { id: 'journey', label: 'Learning Journey', icon: CalendarRange },
   { id: 'library', label: 'Module Library', icon: Grid3x3 },
   { id: 'about', label: 'About', icon: Info },
@@ -137,10 +136,10 @@ export default function Dashboard() {
       {/* Scrollable content */}
       <main style={{ flex: 1, overflow: 'auto', padding: 24 }}>
         <div key={view} className="view-fade">
-          {view === 'headline' && <HeadlineBar state={state} full />}
-          {view === 'flow' && (
+          {view === 'headline' && (
             <>
-              <HeadlineBar state={state} compact />
+              <HeadlineBar state={state} full />
+              <NarrativeSteps />
               <TNAFlowSankey state={state} />
             </>
           )}
@@ -152,6 +151,104 @@ export default function Dashboard() {
 
       {/* Detail drawer (global) — offers native Airtable record expand when bound */}
       <DetailDrawer state={state} expandRow={expandRow} hasBinding={hasBinding} />
+    </div>
+  )
+}
+
+const STEPS = [
+  {
+    n: 1,
+    icon: Activity,
+    color: '#0A3D62',
+    title: 'How you are impacted',
+    body: 'CIA change impacts mapped to each persona — what shifts in roles, process, skills and mindset.',
+  },
+  {
+    n: 2,
+    icon: Target,
+    color: '#1A8A8F',
+    title: 'What to focus on',
+    body: 'Those impacts translated into prioritised Training Needs and the proficiency gaps to close.',
+  },
+  {
+    n: 3,
+    icon: Users,
+    color: '#6B3F5E',
+    title: 'Who to train, on what',
+    body: 'Needs clustered into Learning Modules per persona, ready to sequence into a journey.',
+  },
+]
+
+function NarrativeSteps() {
+  return (
+    <div style={{ margin: '0 0 20px' }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr auto 1fr auto 1fr',
+          alignItems: 'stretch',
+          gap: 0,
+        }}
+      >
+        {STEPS.flatMap((s, i) => {
+          const items = [<StepCard key={s.n} step={s} />]
+          if (i < STEPS.length - 1) {
+            items.push(
+              <div
+                key={`arrow-${s.n}`}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 12px' }}
+              >
+                <ArrowRight size={22} color="#c4c4ba" />
+              </div>,
+            )
+          }
+          return items
+        })}
+      </div>
+    </div>
+  )
+}
+
+function StepCard({ step }) {
+  const { icon: Icon, color, title, body, n } = step
+  return (
+    <div
+      style={{
+        background: '#fff',
+        border: `1px solid ${TOKENS.border}`,
+        borderRadius: 8,
+        padding: '16px 18px',
+        boxShadow: '0 2px 12px rgba(10,61,98,0.06)',
+        borderTop: `3px solid ${color}`,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            background: `${color}14`,
+            color,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <Icon size={17} />
+        </div>
+        <span className="font-mono-num" style={{ fontSize: 12, fontWeight: 700, color }}>
+          0{n}
+        </span>
+        <span className="font-serif-head" style={{ fontSize: 16, color: TOKENS.navy, fontWeight: 600 }}>
+          {title}
+        </span>
+      </div>
+      <p style={{ margin: 0, fontSize: 12.5, color: TOKENS.subtle, lineHeight: 1.5 }}>{body}</p>
     </div>
   )
 }
