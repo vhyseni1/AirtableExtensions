@@ -2,6 +2,7 @@ import {useSession, expandRecord} from '@airtable/blocks/interface/ui';
 import {useMemo, useRef, useState} from 'react';
 import {PHASE_GROUPS, PHASE_COLORS} from './constants';
 import {StatusChip, Tag} from './components';
+import {useDrill, DrillDrawer} from './drill';
 import {decideTask} from './actions';
 
 const ALL = '__all__';
@@ -15,6 +16,7 @@ export default function TeamView({model}) {
     const [overCol, setOverCol] = useState(null);
     const [modal, setModal] = useState(null); // {attr, text} — return comment
     const dragId = useRef(null);
+    const drill = useDrill();
 
     const scope = useMemo(
         () => (team === ALL ? attrs : attrs.filter(a => a.assignedTeamName === team)),
@@ -95,10 +97,10 @@ export default function TeamView({model}) {
             )}
 
             <div className="fp-kpis fp-kpis-sm">
-                <div className="fp-kpi"><div className="fp-kpi-value">{scope.length}</div><div className="fp-kpi-label">Attributes</div></div>
-                <div className="fp-kpi"><div className="fp-kpi-value">{scope.filter(a => a.isActive).length}</div><div className="fp-kpi-label">Active</div></div>
-                <div className="fp-kpi"><div className="fp-kpi-value" style={{color: '#e11d48'}}>{scope.filter(a => a.isBlocked).length}</div><div className="fp-kpi-label">Blocked</div></div>
-                <div className="fp-kpi"><div className="fp-kpi-value" style={{color: '#16a34a'}}>{scope.filter(a => a.isReadyToPush).length}</div><div className="fp-kpi-label">Ready to push</div></div>
+                <div className="fp-kpi clickable" onClick={() => drill.openAttrs('Attributes', scope)}><div className="fp-kpi-value">{scope.length}</div><div className="fp-kpi-label">Attributes</div></div>
+                <div className="fp-kpi clickable" onClick={() => drill.openAttrs('Active', scope.filter(a => a.isActive))}><div className="fp-kpi-value">{scope.filter(a => a.isActive).length}</div><div className="fp-kpi-label">Active</div></div>
+                <div className="fp-kpi clickable" onClick={() => drill.openAttrs('Blocked', scope.filter(a => a.isBlocked))}><div className="fp-kpi-value" style={{color: '#e11d48'}}>{scope.filter(a => a.isBlocked).length}</div><div className="fp-kpi-label">Blocked</div></div>
+                <div className="fp-kpi clickable" onClick={() => drill.openAttrs('Ready to push', scope.filter(a => a.isReadyToPush))}><div className="fp-kpi-value" style={{color: '#16a34a'}}>{scope.filter(a => a.isReadyToPush).length}</div><div className="fp-kpi-label">Ready to push</div></div>
             </div>
 
             {team !== ALL && (
@@ -106,7 +108,9 @@ export default function TeamView({model}) {
                     <div className="fp-section-title">Team &amp; load</div>
                     <div className="fp-people">
                         {(usersByTeam[team] || []).map(u => <Tag key={u} title="Team member">{u}</Tag>)}
-                        {Object.keys(perPerson).sort().map(p => <Tag key={p}>{p} · {perPerson[p]}</Tag>)}
+                        {Object.keys(perPerson).sort().map(p => (
+                            <span key={p} className="fp-tag clickable" title={`See ${p}'s attributes`} onClick={() => drill.openAttrs(p, scope.filter(a => (a.assignee || '(unassigned)') === p))}>{p} · {perPerson[p]}</span>
+                        ))}
                         {(usersByTeam[team] || []).length === 0 && Object.keys(perPerson).length === 0 && <span className="fp-muted">Nothing assigned.</span>}
                     </div>
                 </>
@@ -161,6 +165,8 @@ export default function TeamView({model}) {
                     </div>
                 </div>
             )}
+
+            <DrillDrawer drill={drill} />
         </div>
     );
 }

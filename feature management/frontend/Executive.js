@@ -1,12 +1,11 @@
 import {expandRecord} from '@airtable/blocks/interface/ui';
 import {useEffect, useMemo, useState} from 'react';
 import {PHASE_GROUPS, PHASE_COLORS} from './constants';
-import {StatusChip} from './components';
+import {HealthDot} from './components';
+import {useDrill, DrillDrawer} from './drill';
 
 // UBS-leaning palette: red lead accent, then deep neutrals/jewels for initiatives.
 const INITIATIVE_COLORS = ['#E60000', '#14274E', '#0F766E', '#6D28D9', '#B45309', '#0E7490'];
-const RAG = {delivered: '#0EA5E9', 'on-track': '#16A34A', 'at-risk': '#F59E0B', blocked: '#E11D48'};
-const RAG_LABEL = {delivered: 'Delivered', 'on-track': 'On track', 'at-risk': 'At risk', blocked: 'Blocked'};
 
 const fmtDate = ms => (ms == null ? '—' : new Date(ms).toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: 'numeric'}));
 const fmtShort = ms => new Date(ms).toLocaleDateString('en-GB', {day: '2-digit', month: 'short'});
@@ -68,10 +67,6 @@ function PhaseStrip({phase, mounted}) {
     );
 }
 
-function HealthDot({health}) {
-    return <span className="fp-rag-dot" style={{background: RAG[health] || '#94A3B8'}} title={RAG_LABEL[health] || health} />;
-}
-
 // ── Go-live milestone timeline ─────────────────────────────────────────────────
 function Timeline({features, colorOf, onPick}) {
     const dated = features.filter(f => f.goLiveMs != null).sort((a, b) => a.goLiveMs - b.goLiveMs);
@@ -119,58 +114,11 @@ function Timeline({features, colorOf, onPick}) {
     );
 }
 
-// ── Drill-down drawer (lists → records) ────────────────────────────────────────
-function Drawer({stack, onBack, onClose, onFeature, colorOf}) {
-    if (stack.length === 0) return null;
-    const frame = stack[stack.length - 1];
-    return (
-        <div className="fp-drawer-backdrop" onClick={onClose}>
-            <aside className="fp-drawer" onClick={e => e.stopPropagation()}>
-                <div className="fp-drawer-head">
-                    <div className="fp-crumbs">
-                        {stack.length > 1 && <button type="button" className="fp-crumb-back" onClick={onBack}>← Back</button>}
-                        <span className="fp-drawer-title">{frame.title}</span>
-                        <span className="fp-col-count">{frame.items.length}</span>
-                    </div>
-                    <button type="button" className="fp-drawer-close" onClick={onClose} aria-label="Close">×</button>
-                </div>
-                <div className="fp-drawer-hint">{frame.type === 'features' ? 'Click a feature to see its attributes · ↗ opens the feature record' : 'Click an attribute to open its record'}</div>
-                <ul className="fp-drawer-list">
-                    {frame.type === 'features'
-                        ? frame.items.map(f => (
-                            <li key={f.id} className="fp-drawer-row clickable" onClick={() => onFeature(f)}>
-                                <HealthDot health={f.health} />
-                                <div className="fp-dr-main">
-                                    <div className="fp-dr-title">{f.name}</div>
-                                    <div className="fp-dr-sub">{f.initiative} · {f.total} attrs · go-live {fmtDate(f.goLiveMs)}</div>
-                                </div>
-                                <span className="fp-feat-bar"><i style={{width: `${f.pct}%`, background: colorOf(f.initiative)}} /></span>
-                                <span className="fp-feat-pct">{f.pct}%</span>
-                                <button type="button" className="fp-dr-open" title="Open feature record" onClick={e => { e.stopPropagation(); expandRecord(f.record); }}>↗</button>
-                            </li>
-                        ))
-                        : frame.items.map(a => (
-                            <li key={a.id} className="fp-drawer-row clickable" onClick={() => expandRecord(a.record)} title="Open record">
-                                <HealthDot health={a.isBlocked ? 'blocked' : a.isDelivered ? 'delivered' : a.isAwaitingReview ? 'at-risk' : 'on-track'} />
-                                <div className="fp-dr-main">
-                                    <div className="fp-dr-title">{a.businessName || a.attributeId}</div>
-                                    <div className="fp-dr-sub">{a.featureName} · {a.currentStageName}{a.assignee ? ` · ${a.assignee}` : ''}</div>
-                                </div>
-                                <StatusChip status={a.status} />
-                            </li>
-                        ))}
-                    {frame.items.length === 0 && <li className="fp-muted" style={{padding: '12px'}}>Nothing here.</li>}
-                </ul>
-            </aside>
-        </div>
-    );
-}
-
 export default function Executive({model}) {
     const {byInitiative, features, kpis, phaseCounts, attrs} = model;
     const [mounted, setMounted] = useState(false);
-    const [stack, setStack] = useState([]);
     const [narrativeOpen, setNarrativeOpen] = useState(false);
+    const drill = useDrill();
     useEffect(() => {
         const id = requestAnimationFrame(() => setMounted(true));
         return () => cancelAnimationFrame(id);
@@ -182,12 +130,10 @@ export default function Executive({model}) {
 
     const attrsOf = useMemo(() => name => attrs.filter(a => a.featureName === name), [attrs]);
 
-    // Drill helpers
-    const openFeatures = (title, list) => setStack([{title, type: 'features', items: list}]);
-    const openAttrs = (title, list) => setStack([{title, type: 'attrs', items: list}]);
-    const pushFeatureAttrs = f => setStack(s => [...s, {title: `${f.name} · attributes`, type: 'attrs', items: attrsOf(f.name)}]);
-    const back = () => setStack(s => s.slice(0, -1));
-    const close = () => setStack([]);
+    // Drill helpers (shared drawer)
+    const openFeatures = (title, list) => drill.openFeatures(title, list);
+    const openAttrs = (title, list) => drill.openAttrs(title, list);
+    const pushFeatureAttrs = f => drill.pushAttrs(`${f.name} · attributes`, attrsOf(f.name));
 
     const onTrack = features.filter(f => f.health === 'on-track');
     const needAttn = features.filter(f => f.health === 'at-risk' || f.health === 'blocked');
@@ -371,7 +317,7 @@ export default function Executive({model}) {
                 </div>
             </div>
 
-            <Drawer stack={stack} onBack={back} onClose={close} onFeature={pushFeatureAttrs} colorOf={colorOf} />
+            <DrillDrawer drill={drill} attrsOf={attrsOf} colorOf={colorOf} />
 
             {narrativeOpen && (
                 <div className="fp-modal-backdrop" onClick={() => setNarrativeOpen(false)}>

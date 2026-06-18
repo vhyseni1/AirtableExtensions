@@ -1,12 +1,15 @@
+import {expandRecord} from '@airtable/blocks/interface/ui';
+import {useMemo} from 'react';
 import {PHASE_GROUPS, PHASE_COLORS} from './constants';
 import {Tag, ProgressBar, KpiCard, StatusChip} from './components';
+import {useDrill, DrillDrawer} from './drill';
 
-function PipelineRail({phaseCounts}) {
+function PipelineRail({phaseCounts, onPick}) {
     return (
         <div className="fp-rail" role="list" aria-label="Pipeline phases">
             {PHASE_GROUPS.map((p, i) => (
                 <div className="fp-rail-seg" role="listitem" key={p}>
-                    <div className="fp-rail-card" style={{borderTopColor: PHASE_COLORS[p]}}>
+                    <div className="fp-rail-card clickable" style={{borderTopColor: PHASE_COLORS[p]}} onClick={() => onPick(p)} title={`See ${p} attributes`}>
                         <div className="fp-rail-count" style={{color: PHASE_COLORS[p]}}>{phaseCounts[p] || 0}</div>
                         <div className="fp-rail-name">{p}</div>
                     </div>
@@ -27,11 +30,11 @@ function heatBg(phase, count, max) {
     return `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(2)})`;
 }
 
-function FeatureRow({feature, agg, maxCell}) {
+function FeatureRow({feature, agg, maxCell, onFeature, onCell}) {
     const furthestIdx = agg.furthest >= 0 ? agg.furthest : 0;
     return (
         <div className="fp-rm-row">
-            <div className="fp-rm-name">
+            <div className="fp-rm-name clickable" onClick={() => onFeature(feature)} title="See attributes">
                 <div className="fp-rm-feature">{feature.name}</div>
                 <div className="fp-rm-sub">
                     {feature.priority && <Tag>{feature.priority}</Tag>}
@@ -46,9 +49,10 @@ function FeatureRow({feature, agg, maxCell}) {
                     return (
                         <div
                             key={p}
-                            className={`fp-rm-cell${reached ? ' reached' : ''}`}
+                            className={`fp-rm-cell${reached ? ' reached' : ''}${c ? ' clickable' : ''}`}
                             style={{backgroundColor: heatBg(p, c, maxCell), borderBottomColor: PHASE_COLORS[p]}}
                             title={`${p}: ${c}`}
+                            onClick={c ? () => onCell(feature, p) : undefined}
                         >
                             {c || ''}
                         </div>
@@ -68,7 +72,10 @@ function FeatureRow({feature, agg, maxCell}) {
 }
 
 export default function Roadmap({model}) {
-    const {initiatives, byFeature, phaseCounts, kpis, handshakes} = model;
+    const {initiatives, byFeature, phaseCounts, kpis, handshakes, attrs, features} = model;
+    const drill = useDrill();
+    const attrsOf = useMemo(() => name => attrs.filter(a => a.featureName === name), [attrs]);
+
     let maxCell = 0;
     Object.values(byFeature).forEach(v => PHASE_GROUPS.forEach(p => (maxCell = Math.max(maxCell, v.phase[p] || 0))));
 
@@ -76,17 +83,21 @@ export default function Roadmap({model}) {
         a === 'Ungrouped' ? 1 : b === 'Ungrouped' ? -1 : a.localeCompare(b),
     );
 
+    const onFeature = f => drill.openAttrs(`${f.name} · attributes`, attrsOf(f.name));
+    const onCell = (f, p) => drill.openAttrs(`${f.name} · ${p}`, attrsOf(f.name).filter(a => a.phase === p));
+    const onPhase = p => drill.openAttrs(`${p} phase`, attrs.filter(a => a.phase === p));
+
     return (
         <div className="fp-mode">
-            <PipelineRail phaseCounts={phaseCounts} />
+            <PipelineRail phaseCounts={phaseCounts} onPick={onPhase} />
 
             <div className="fp-kpis">
-                <KpiCard label="Active" value={kpis.active} />
-                <KpiCard label="Awaiting review" value={kpis.awaitingReview} accent="#f59e0b" />
-                <KpiCard label="Blocked" value={kpis.blocked} accent="#ef4444" />
-                <KpiCard label="Ready to push" value={kpis.readyToPush} accent="#22c55e" />
-                <KpiCard label="Delivered features" value={kpis.deliveredFeatures} />
-                <KpiCard label="Overall maturity" value={`${kpis.overallPct}%`} />
+                <KpiCard label="Active" value={kpis.active} onClick={() => drill.openAttrs('Active', attrs.filter(a => a.isActive))} />
+                <KpiCard label="Awaiting review" value={kpis.awaitingReview} accent="#f59e0b" onClick={() => drill.openAttrs('Awaiting review', attrs.filter(a => a.isAwaitingReview))} />
+                <KpiCard label="Blocked" value={kpis.blocked} accent="#ef4444" onClick={() => drill.openAttrs('Blocked', attrs.filter(a => a.isBlocked))} />
+                <KpiCard label="Ready to push" value={kpis.readyToPush} accent="#22c55e" onClick={() => drill.openAttrs('Ready to push', attrs.filter(a => a.isReadyToPush))} />
+                <KpiCard label="Delivered features" value={kpis.deliveredFeatures} onClick={() => drill.openFeatures('Delivered features', features.filter(f => f.health === 'delivered'))} />
+                <KpiCard label="Overall maturity" value={`${kpis.overallPct}%`} onClick={() => drill.openFeatures('All features', features)} />
             </div>
 
             <div className="fp-section-title">Pipeline Tracker — features by initiative</div>
@@ -102,13 +113,15 @@ export default function Roadmap({model}) {
 
             {initiativeNames.map(init => (
                 <div className="fp-initiative" key={init}>
-                    <div className="fp-initiative-head">{init}</div>
+                    <div className="fp-initiative-head clickable" onClick={() => drill.openFeatures(init, initiatives[init])}>{init}</div>
                     {initiatives[init].map(f => (
                         <FeatureRow
                             key={f.id}
                             feature={f}
                             agg={byFeature[f.name] || {phase: {}, pct: 0, furthest: -1, total: 0}}
                             maxCell={maxCell}
+                            onFeature={onFeature}
+                            onCell={onCell}
                         />
                     ))}
                 </div>
@@ -119,7 +132,7 @@ export default function Roadmap({model}) {
             <div className="fp-section-title">Recent handshakes</div>
             <ul className="fp-feed fp-feed-row">
                 {handshakes.slice(0, 10).map(h => (
-                    <li key={h.id}>
+                    <li key={h.id} className="clickable" onClick={() => expandRecord(h.record)} title="Open handshake record">
                         <div className="fp-feed-top">
                             <StatusChip status={h.action} />
                             <span className="fp-feed-ts">{h.timestamp}</span>
@@ -130,6 +143,8 @@ export default function Roadmap({model}) {
                 ))}
                 {handshakes.length === 0 && <li className="fp-muted">No handshakes yet.</li>}
             </ul>
+
+            <DrillDrawer drill={drill} attrsOf={attrsOf} />
         </div>
     );
 }

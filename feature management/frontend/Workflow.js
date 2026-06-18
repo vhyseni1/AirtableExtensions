@@ -2,6 +2,7 @@ import {useSession, expandRecord} from '@airtable/blocks/interface/ui';
 import {useMemo, useRef, useState} from 'react';
 import {STATUS, APPROVAL} from './constants';
 import {StatusChip, Tag} from './components';
+import {useDrill, DrillDrawer} from './drill';
 import {promoteTask, decideTask, setStatus, remainingAcceptance} from './actions';
 
 const COLS = [
@@ -29,6 +30,8 @@ export default function Workflow({model}) {
     const [overCol, setOverCol] = useState(null);
     const [modal, setModal] = useState(null); // {kind:'block'|'return', attr, text}
     const dragId = useRef(null);
+    const drill = useDrill();
+    const attrsOf = useMemo(() => name => attrs.filter(a => a.featureName === name), [attrs]);
 
     const visible = useMemo(
         () => attrs.filter(a => a.assignedTeamName === team || (a.isAwaitingReview && a.approverTeamName === team)),
@@ -125,7 +128,8 @@ export default function Workflow({model}) {
                         onDrop={onDrop(col.key)}
                     >
                         <div className="fp-kcol-head" style={{borderTopColor: col.accent}}>
-                            <span>{col.title}</span><span className="fp-col-count">{lanes[col.key].length}</span>
+                            <span>{col.title}</span>
+                            <span className="fp-col-count clickable" title="Open as list" onClick={() => drill.openAttrs(col.title, lanes[col.key])}>{lanes[col.key].length}</span>
                         </div>
                         <div className="fp-kcol-hint">{col.hint}</div>
                         <div className="fp-kcol-body">
@@ -144,7 +148,7 @@ export default function Workflow({model}) {
                                             {a.businessName || a.attributeId}
                                         </div>
                                         <div className="fp-kcard-meta">
-                                            <Tag>{a.featureName}</Tag>
+                                            <span className="fp-tag clickable" title="See feature attributes" onClick={() => drill.openAttrs(`${a.featureName} · attributes`, attrsOf(a.featureName))}>{a.featureName}</span>
                                             {a.environment && a.environment !== 'N/A' && <Tag>{a.environment}</Tag>}
                                         </div>
                                         <div className="fp-kcard-stage">{a.currentStageName}</div>
@@ -188,6 +192,8 @@ export default function Workflow({model}) {
                     </div>
                 </div>
             )}
+
+            <DrillDrawer drill={drill} attrsOf={attrsOf} />
         </div>
     );
 }

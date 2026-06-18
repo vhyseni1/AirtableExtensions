@@ -355,8 +355,18 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 }
 
 /* ════════════════════════ INTERACTIVITY + ANIMATION ════════════════════════ */
-.clickable { cursor: pointer; transition: transform .12s ease, background .12s ease, box-shadow .12s ease; }
+.clickable { cursor: pointer; transition: transform .12s ease, background .12s ease, box-shadow .12s ease, color .12s ease, border-color .12s ease; }
 .clickable:hover { transform: translateY(-1px); }
+
+/* Clickable affordances per element */
+.fp-kpi.clickable:hover { box-shadow: 0 6px 18px rgba(20,39,78,.12); border-color: var(--fp-accent); }
+.fp-rail-card.clickable:hover { border-color: var(--fp-accent); box-shadow: 0 6px 18px rgba(20,39,78,.12); }
+.fp-feed li.clickable:hover { border-color: var(--fp-accent); }
+.fp-rm-name.clickable:hover .fp-rm-feature { color: var(--fp-accent); }
+.fp-rm-cell.clickable:hover { outline: 2px solid rgba(230,0,0,.4); outline-offset: -2px; transform: none; }
+.fp-col-count.clickable:hover { color: var(--fp-accent); transform: none; }
+.fp-initiative-head.clickable:hover { color: var(--fp-accent); }
+.fp-tag.clickable:hover { background: #ffe1e1; color: var(--fp-accent); }
 
 /* Bars + strips draw in on mount */
 .fp-feat-bar i, .fp-pb-track i, .fp-phasestrip span { transition: width .8s cubic-bezier(.22,.61,.36,1); }

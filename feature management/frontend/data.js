@@ -307,6 +307,7 @@ export function useModel() {
         const handshakeList = (handshakeRecords || [])
             .map(r => ({
                 id: r.id,
+                record: r,
                 feature: str(r, handshakes.fields.feature),
                 attribute: str(r, handshakes.fields.attribute),
                 stage: str(r, handshakes.fields.stage),
