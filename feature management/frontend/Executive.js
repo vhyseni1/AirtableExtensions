@@ -1,5 +1,5 @@
 import {expandRecord} from '@airtable/blocks/interface/ui';
-import {useEffect, useMemo, useState} from 'react';
+import {useEffect, useMemo, useRef, useState} from 'react';
 import {PHASE_GROUPS, PHASE_COLORS} from './constants';
 import {HealthDot} from './components';
 import {useDrill, DrillDrawer} from './drill';
@@ -67,8 +67,20 @@ function PhaseStrip({phase, mounted}) {
     );
 }
 
-// ── Go-live milestone timeline ─────────────────────────────────────────────────
+// ── Go-live milestone timeline (collision-free lane stacking) ──────────────────
+const TL_ROW = 32;
 function Timeline({features, colorOf, onPick}) {
+    const trackRef = useRef(null);
+    const [w, setW] = useState(0);
+    useEffect(() => {
+        const el = trackRef.current;
+        if (!el) return undefined;
+        const ro = new ResizeObserver(entries => setW(entries[0].contentRect.width));
+        ro.observe(el);
+        setW(el.clientWidth);
+        return () => ro.disconnect();
+    }, []);
+
     const dated = features.filter(f => f.goLiveMs != null).sort((a, b) => a.goLiveMs - b.goLiveMs);
     const now = Date.now();
     if (dated.length === 0) return <div className="fp-muted">No target go-live dates set.</div>;
@@ -79,7 +91,22 @@ function Timeline({features, colorOf, onPick}) {
     const start = min - pad;
     const end = max + pad;
     const span = end - start || 1;
-    const x = ms => `${((ms - start) / span) * 100}%`;
+    const pct = ms => ((ms - start) / span) * 100;
+
+    // Greedy lane packing so labels never overlap: a flag drops to the next lane
+    // whenever its label would collide with the last one placed in that lane.
+    const W = w || 720;
+    const laneRight = [];
+    const placed = dated.map(f => {
+        const cx = (pct(f.goLiveMs) / 100) * W;
+        const labelW = Math.min(168, 36 + `${fmtShort(f.goLiveMs)} ${f.name}`.length * 6.4);
+        const left = cx - labelW / 2;
+        let lane = 0;
+        while (lane < laneRight.length && left < laneRight[lane] + 10) lane++;
+        laneRight[lane] = cx + labelW / 2;
+        return {f, lane};
+    });
+    const rows = Math.max(1, laneRight.length);
 
     const ticks = [];
     const d = new Date(start);
@@ -87,23 +114,24 @@ function Timeline({features, colorOf, onPick}) {
     while (d.getTime() <= end) { ticks.push(d.getTime()); d.setMonth(d.getMonth() + 1); }
 
     return (
-        <div className="fp-timeline">
-            <div className="fp-timeline-track">
+        <div className="fp-timeline" style={{minHeight: 64 + rows * TL_ROW}}>
+            <div className="fp-timeline-track" ref={trackRef}>
                 {ticks.map(t => (
-                    <div key={t} className="fp-tl-tick" style={{left: x(t)}}>
+                    <div key={t} className="fp-tl-tick" style={{left: `${pct(t)}%`}}>
                         <span>{new Date(t).toLocaleDateString('en-GB', {month: 'short', year: '2-digit'})}</span>
                     </div>
                 ))}
-                <div className="fp-tl-today" style={{left: x(now)}} title="Today"><span>Today</span></div>
-                {dated.map((f, i) => (
+                <div className="fp-tl-today" style={{left: `${pct(now)}%`, bottom: -(rows * TL_ROW + 6)}} title="Today"><span>Today</span></div>
+                {placed.map(({f, lane}) => (
                     <div
                         key={f.id}
-                        className={`fp-tl-flag clickable ${i % 2 ? 'down' : 'up'}`}
-                        style={{left: x(f.goLiveMs)}}
+                        className="fp-tl-flag clickable"
+                        style={{left: `${pct(f.goLiveMs)}%`}}
                         title={`${f.name} · ${f.initiative} · go-live ${fmtDate(f.goLiveMs)} · ${f.pct}%`}
                         onClick={() => onPick(f)}
                     >
                         <span className="fp-tl-marker" style={{background: colorOf(f.initiative)}} />
+                        <span className="fp-tl-connector" style={{height: lane * TL_ROW + 8}} />
                         <span className="fp-tl-label" style={{borderColor: colorOf(f.initiative)}}>
                             <b>{fmtShort(f.goLiveMs)}</b> {f.name}
                         </span>
@@ -142,60 +170,91 @@ export default function Executive({model}) {
     const horizon = now + 1000 * 60 * 60 * 24 * 90;
     const goLiveSoon = features.filter(f => f.goLiveMs != null && f.goLiveMs >= now && f.goLiveMs <= horizon && f.pct < 100);
 
-    const attention = attrs
-        .filter(a => a.isBlocked || (a.dueDate && Date.parse(a.dueDate) < now && !a.isDelivered))
-        .slice(0, 6);
-
-    // ── Narrative: 5–6 data-driven key statements (each drillable) ──
     const blockedAttrs = attrs.filter(a => a.isBlocked);
+    const overdueAttrs = attrs.filter(a => !a.isBlocked && a.dueDate && Date.parse(a.dueDate) < now && !a.isDelivered);
     const awaitingAttrs = attrs.filter(a => a.isAwaitingReview);
     const readyAttrs = attrs.filter(a => a.isReadyToPush);
+    const returnedHandshakes = model.handshakes.filter(h => /return/i.test(h.action));
     const rankedInit = [...byInitiative].filter(it => it.attrCount > 0).sort((a, b) => b.pct - a.pct);
     const upcoming = features.filter(f => f.goLiveMs != null).sort((a, b) => a.goLiveMs - b.goLiveMs);
     const nextGo = upcoming.find(f => f.goLiveMs >= now) || upcoming[0] || null;
     const bottleneck = PHASE_GROUPS.reduce((b, p) => ((phaseCounts[p] || 0) > (phaseCounts[b] || 0) ? p : b), PHASE_GROUPS[0]);
 
-    const narrative = [];
-    narrative.push({
-        text: `The programme spans ${byInitiative.length} initiatives and ${features.length} features (${attrs.length} data attributes), at ${kpis.overallPct}% overall maturity.`,
-    });
-    narrative.push({
-        text: `${onTrack.length} of ${features.length} features are on track and ${delivered.length} delivered; ${needAttn.length} need attention.`,
-        drill: () => (needAttn.length ? openFeatures('Need attention', needAttn) : openFeatures('On track', onTrack)),
-    });
-    if (rankedInit.length >= 2 && rankedInit[0].name !== rankedInit[rankedInit.length - 1].name) {
-        const top = rankedInit[0];
-        const lag = rankedInit[rankedInit.length - 1];
-        narrative.push({
-            text: `${top.name} leads delivery at ${top.pct}%, while ${lag.name} trails at ${lag.pct}% — the likeliest place to focus.`,
-            drill: () => openFeatures(lag.name, lag.features),
+    // ── Requires attention — typed across features, attributes & handshakes ──
+    const attentionItems = [];
+    needAttn.forEach(f => attentionItems.push({
+        key: `f-${f.id}`, type: 'Feature', health: f.health,
+        title: f.name,
+        sub: `${f.blocked ? `${f.blocked} blocked · ` : ''}${f.pct}% mature · ${f.initiative}${f.goLiveMs != null && f.goLiveMs < now && f.pct < 100 ? ' · past go-live' : ''}`,
+        onClick: () => pushFeatureAttrs(f),
+    }));
+    blockedAttrs.forEach(a => attentionItems.push({
+        key: `a-${a.id}`, type: 'Attribute', health: 'blocked',
+        title: a.businessName || a.attributeId,
+        sub: `${a.blockedReason || 'Blocked'} · ${a.currentStageName} · ${a.featureName}`,
+        onClick: () => expandRecord(a.record),
+    }));
+    overdueAttrs.forEach(a => attentionItems.push({
+        key: `o-${a.id}`, type: 'Attribute', health: 'at-risk',
+        title: a.businessName || a.attributeId,
+        sub: `Overdue — due ${a.dueDate} · ${a.currentStageName} · ${a.featureName}`,
+        onClick: () => expandRecord(a.record),
+    }));
+    returnedHandshakes.slice(0, 4).forEach(h => attentionItems.push({
+        key: `h-${h.id}`, type: 'Handshake', health: 'at-risk',
+        title: `${h.feature} — returned for rework`,
+        sub: `${h.stage} · ${h.fromTeam} → ${h.toTeam} · ${h.timestamp}`,
+        onClick: () => expandRecord(h.record),
+    }));
+    const attnCounts = {
+        Feature: attentionItems.filter(i => i.type === 'Feature').length,
+        Attribute: attentionItems.filter(i => i.type === 'Attribute').length,
+        Handshake: attentionItems.filter(i => i.type === 'Handshake').length,
+    };
+
+    // ── Narrative: an overview + 5–6 most-recent-and-key statements ──
+    const overdueFeat = features.filter(f => f.goLiveMs != null && f.goLiveMs < now && f.pct < 100).length;
+    const ragStatus = overdueFeat > 0 ? 'Red' : (kpis.blocked > 0 || needAttn.length > 0) ? 'Amber' : 'Green';
+    const overview = {
+        status: ragStatus,
+        text: `${kpis.overallPct}% mature across ${features.length} features in ${byInitiative.length} initiatives — ${onTrack.length} on track, ${needAttn.length} need attention, ${delivered.length} delivered.${nextGo ? ` Next go-live: ${nextGo.name} on ${fmtDate(nextGo.goLiveMs)}.` : ''}`,
+    };
+
+    const recent = model.handshakes.slice(0, 3).map(h => ({
+        badge: 'Recent',
+        text: `${h.feature}: ${h.action} at ${h.stage} — ${h.decisionMaker || 'team'} (${h.timestamp}).`,
+        drill: () => expandRecord(h.record),
+    }));
+    const key = [];
+    if (blockedAttrs.length || returnedHandshakes.length) {
+        key.push({
+            badge: 'Risk',
+            text: `${blockedAttrs.length} attribute${blockedAttrs.length === 1 ? '' : 's'} blocked${returnedHandshakes.length ? ` and ${returnedHandshakes.length} returned for rework` : ''}; ${awaitingAttrs.length} awaiting sign-off.`,
+            drill: () => openAttrs('Blocked', blockedAttrs.length ? blockedAttrs : awaitingAttrs),
         });
     }
     if (nextGo) {
         const risk = nextGo.health === 'blocked' || nextGo.health === 'at-risk';
-        narrative.push({
-            text: `Next go-live: ${nextGo.name} (${nextGo.initiative}) on ${fmtDate(nextGo.goLiveMs)}, currently ${nextGo.pct}% mature${risk ? ' — at risk' : ''}.`,
+        key.push({
+            badge: 'Go-live',
+            text: `${nextGo.name} (${nextGo.initiative}) targets ${fmtDate(nextGo.goLiveMs)} at ${nextGo.pct}%${risk ? ' — at risk' : ' — on track'}.`,
             drill: () => pushFeatureAttrs(nextGo),
         });
     }
-    if (blockedAttrs.length) {
-        narrative.push({
-            text: `${blockedAttrs.length} attribute${blockedAttrs.length > 1 ? 's are' : ' is'} blocked and ${awaitingAttrs.length} await sign-off — clearing these unblocks the nearest go-lives.`,
-            drill: () => openAttrs('Blocked', blockedAttrs),
+    if (rankedInit.length >= 2 && rankedInit[0].name !== rankedInit[rankedInit.length - 1].name) {
+        const lag = rankedInit[rankedInit.length - 1];
+        key.push({
+            badge: 'Focus',
+            text: `${rankedInit[0].name} leads at ${rankedInit[0].pct}%; ${lag.name} trails at ${lag.pct}% — the likeliest place to focus.`,
+            drill: () => openFeatures(lag.name, lag.features),
         });
-    } else if (awaitingAttrs.length) {
-        narrative.push({
-            text: `${awaitingAttrs.length} attribute${awaitingAttrs.length > 1 ? 's' : ''} await approval, with no active blockers.`,
-            drill: () => openAttrs('Awaiting review', awaitingAttrs),
-        });
-    } else {
-        narrative.push({text: 'No blockers and nothing stuck in review — flow is clean.'});
     }
-    narrative.push({
-        text: `Most work sits in the ${bottleneck} phase (${phaseCounts[bottleneck] || 0} attributes); ${readyAttrs.length} ${readyAttrs.length === 1 ? 'is' : 'are'} ready to advance now.`,
+    key.push({
+        badge: 'Flow',
+        text: `Most work sits in ${bottleneck} (${phaseCounts[bottleneck] || 0}); ${readyAttrs.length} ready to advance.`,
         drill: () => openAttrs(`${bottleneck} phase`, attrs.filter(a => a.phase === bottleneck)),
     });
-    const statements = narrative.slice(0, 6);
+    const statements = [...recent, ...key].slice(0, 6);
 
     return (
         <div className="fp-exec">
@@ -281,26 +340,34 @@ export default function Executive({model}) {
 
             {/* Attention + phase distribution */}
             <div className="fp-exec-2col">
-                <div className="fp-panel">
+                <div className="fp-panel fp-panel-roomy">
                     <div className="fp-panel-title">Requires attention</div>
-                    {attention.length === 0 ? (
-                        <div className="fp-muted">Nothing blocked or overdue. 🎉</div>
+                    {attentionItems.length === 0 ? (
+                        <div className="fp-muted">Nothing blocked, overdue or returned. 🎉</div>
                     ) : (
-                        <ul className="fp-attention">
-                            {attention.map(a => (
-                                <li key={a.id} className="clickable" onClick={() => expandRecord(a.record)} title="Open record">
-                                    <HealthDot health={a.isBlocked ? 'blocked' : 'at-risk'} />
-                                    <div>
-                                        <div className="fp-att-title">{a.businessName || a.attributeId} <span className="fp-muted">· {a.featureName}</span></div>
-                                        <div className="fp-att-sub">{a.isBlocked ? (a.blockedReason || 'Blocked') : `Overdue — due ${a.dueDate}`} · {a.currentStageName}</div>
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
+                        <>
+                            <div className="fp-attn-summary">
+                                {attnCounts.Feature > 0 && <span><b>{attnCounts.Feature}</b> feature{attnCounts.Feature === 1 ? '' : 's'}</span>}
+                                {attnCounts.Attribute > 0 && <span><b>{attnCounts.Attribute}</b> attribute{attnCounts.Attribute === 1 ? '' : 's'}</span>}
+                                {attnCounts.Handshake > 0 && <span><b>{attnCounts.Handshake}</b> handoff{attnCounts.Handshake === 1 ? '' : 's'}</span>}
+                            </div>
+                            <ul className="fp-attention">
+                                {attentionItems.slice(0, 8).map(item => (
+                                    <li key={item.key} className="clickable" onClick={item.onClick} title="Open">
+                                        <HealthDot health={item.health} />
+                                        <div className="fp-att-main">
+                                            <div className="fp-att-title">{item.title}</div>
+                                            <div className="fp-att-sub">{item.sub}</div>
+                                        </div>
+                                        <span className={`fp-att-type t-${item.type.toLowerCase()}`}>{item.type}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </>
                     )}
                 </div>
 
-                <div className="fp-panel">
+                <div className="fp-panel fp-panel-roomy">
                     <div className="fp-panel-title">Where the work sits</div>
                     <ul className="fp-phasebars">
                         {PHASE_GROUPS.map(p => {
@@ -329,6 +396,11 @@ export default function Executive({model}) {
                             </div>
                             <button type="button" className="fp-drawer-close" onClick={() => setNarrativeOpen(false)} aria-label="Close">×</button>
                         </div>
+                        <div className="fp-narrative-overview">
+                            <span className={`fp-rag-pill rag-${overview.status.toLowerCase()}`}>{overview.status}</span>
+                            <p>{overview.text}</p>
+                        </div>
+                        <div className="fp-narrative-subhead">Most recent &amp; key</div>
                         <ol className="fp-narrative-list">
                             {statements.map((s, i) => (
                                 <li
@@ -336,7 +408,7 @@ export default function Executive({model}) {
                                     className={s.drill ? 'clickable' : ''}
                                     onClick={s.drill ? () => { setNarrativeOpen(false); s.drill(); } : undefined}
                                 >
-                                    <span className="fp-narr-num">{i + 1}</span>
+                                    <span className={`fp-narr-badge b-${s.badge.toLowerCase()}`}>{s.badge}</span>
                                     <span className="fp-narr-text">{s.text}</span>
                                     {s.drill && <span className="fp-narr-go" title="View details">›</span>}
                                 </li>
