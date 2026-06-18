@@ -66,6 +66,15 @@ async function updateAttribute(model, attr, obj) {
     await table.updateRecordsAsync([{id: attr.id, fields: obj}]);
 }
 
+// ── Plain status change (drag to To do / In progress / Blocked) ───────────────
+// Internal lifecycle move — no handshake (those are reserved for handoffs).
+export async function setStatus(model, attr, status, reason) {
+    const af = model.fieldsRaw.attributes;
+    const pairs = [[af.status, {name: status}]];
+    if (status === STATUS.blocked) pairs.push([af.blockedReason, {text: reason || ''}]);
+    await updateAttribute(model, attr, writeObject(pairs));
+}
+
 // ── Promote: submit current stage for review (does not advance yet) ───────────
 export async function promoteTask(model, attr, session) {
     if (!allAcceptanceMet(attr.acceptance)) {

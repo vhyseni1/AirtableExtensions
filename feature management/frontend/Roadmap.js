@@ -89,7 +89,7 @@ export default function Roadmap({model}) {
                 <KpiCard label="Overall maturity" value={`${kpis.overallPct}%`} />
             </div>
 
-            <div className="fp-section-title">Roadmap — features by initiative</div>
+            <div className="fp-section-title">Pipeline Tracker — features by initiative</div>
             <div className="fp-rm-head">
                 <div className="fp-rm-name" />
                 <div className="fp-rm-track">

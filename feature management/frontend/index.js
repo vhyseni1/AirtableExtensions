@@ -3,13 +3,15 @@ import {useState} from 'react';
 import {TABLES} from './constants';
 import {useModel} from './data';
 import {SetupBanner} from './components';
+import Executive from './Executive';
 import Roadmap from './Roadmap';
 import TeamView from './TeamView';
 import Workflow from './Workflow';
 import './style.css';
 
 const MODES = [
-    {key: 'roadmap', label: 'Roadmap'},
+    {key: 'exec', label: 'Executive overview'},
+    {key: 'roadmap', label: 'Pipeline Tracker Overview'},
     {key: 'team', label: 'By team'},
     {key: 'workflow', label: 'Workflow'},
 ];
@@ -19,12 +21,12 @@ const MODES = [
 // table.id and throws on null).
 function Dashboard() {
     const model = useModel();
-    const [mode, setMode] = useState('roadmap');
+    const [mode, setMode] = useState('exec');
 
     return (
         <>
             <header className="fp-header">
-                <div className="fp-brand">Feature Management — Pipeline Tracker</div>
+                <div className="fp-brand"><span className="fp-logo">UBS</span> Finance Data Programme</div>
                 <div className="fp-modeswitch" role="tablist" aria-label="View">
                     {MODES.map(m => (
                         <button
@@ -43,6 +45,8 @@ function Dashboard() {
 
             {model.loading ? (
                 <div className="fp-loading">Loading live data…</div>
+            ) : mode === 'exec' ? (
+                <Executive model={model} />
             ) : mode === 'roadmap' ? (
                 <Roadmap model={model} />
             ) : mode === 'team' ? (

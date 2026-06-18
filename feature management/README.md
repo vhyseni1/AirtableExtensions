@@ -1,14 +1,17 @@
 # Feature Management — Pipeline Tracker (Airtable custom extension)
 
-A single Airtable Blocks SDK extension with a three-way view toggle:
+A single Airtable Blocks SDK extension (UBS-themed) with a four-way view toggle:
 
-- **Roadmap** — bird's-eye: features grouped by **Initiative**, each with a maturity rail across
-  the 7 phases plus its Target Go-Live date and % maturity. Includes a pipeline rail, KPI strip
-  and recent-handshakes feed.
-- **By team** — concise per-team queue: roster, per-person load, and the team's attributes
-  grouped by stage/phase.
-- **Workflow** — operational lanes (Incoming / In progress / Blocked / Ready-to-push) with
-  **Promote** and **Accept / Return** actions that write to the base.
+- **Executive overview** — leadership birds-eye: a hero portfolio gauge, per-**Initiative** cards
+  (SVG maturity donut, RAG health, phase distribution, feature list), a go-live milestone
+  **timeline**, and an "attention" panel of blocked/overdue items. Dependency-free SVG visuals.
+- **Pipeline Tracker Overview** — features grouped by Initiative, each with a maturity rail across
+  the 7 phases plus its Target Go-Live date and % maturity. Pipeline rail, KPI strip, handshake feed.
+- **By team** — concise per-team queue: roster, per-person load, work grouped by stage/phase.
+- **Workflow** — a **drag-and-drop Kanban** (To do / In progress / Blocked / In review /
+  Approved·advance). Dragging a card performs the transition: dropping into **In review** promotes,
+  into **Approved·advance** accepts and advances the stage, and dragging a review card back prompts
+  a return — each handoff writes a **Handshake** audit row. Blocked/return drops prompt for a reason.
 
 The extension holds **no data** — it binds to the live base at runtime (`useBase`/`useRecords`)
 and joins/aggregates client-side. The base is small (~hundreds of rows), so no native

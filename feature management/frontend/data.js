@@ -209,7 +209,7 @@ export function useModel() {
         const byFeature = {};
         const ensureFeature = f => {
             if (!byFeature[f]) {
-                byFeature[f] = {total: 0, delivered: 0, maturitySum: 0, phase: {}, furthest: -1};
+                byFeature[f] = {total: 0, delivered: 0, blocked: 0, awaiting: 0, ready: 0, maturitySum: 0, phase: {}, furthest: -1};
                 PHASE_GROUPS.forEach(p => (byFeature[f].phase[p] = 0));
             }
             return byFeature[f];
@@ -220,6 +220,9 @@ export function useModel() {
             v.total += 1;
             v.maturitySum += a.maturity;
             if (a.isDelivered) v.delivered += 1;
+            if (a.isBlocked) v.blocked += 1;
+            if (a.isAwaitingReview) v.awaiting += 1;
+            if (a.isReadyToPush) v.ready += 1;
             if (a.phase && v.phase[a.phase] != null) {
                 v.phase[a.phase] += 1;
                 v.furthest = Math.max(v.furthest, PHASE_GROUPS.indexOf(a.phase));
@@ -230,11 +233,53 @@ export function useModel() {
             v.furthestPhase = v.furthest >= 0 ? PHASE_GROUPS[v.furthest] : null;
         });
 
+        // ── Per-feature health (drives the executive RAG status) ──
+        const todayMs = Date.now();
+        const parseDate = s => {
+            const t = s ? Date.parse(s) : NaN;
+            return Number.isNaN(t) ? null : t;
+        };
+        featureList.forEach(f => {
+            const v = byFeature[f.name] || {total: 0, pct: 0, blocked: 0, awaiting: 0, ready: 0};
+            f.pct = v.pct || 0;
+            f.total = v.total || 0;
+            f.blocked = v.blocked || 0;
+            f.awaiting = v.awaiting || 0;
+            f.ready = v.ready || 0;
+            f.goLiveMs = parseDate(f.goLive);
+            const overdue = f.goLiveMs != null && f.goLiveMs < todayMs && f.pct < 100;
+            f.health = f.pct >= 100 ? 'delivered' : f.blocked > 0 ? 'blocked' : overdue ? 'at-risk' : 'on-track';
+        });
+
         // ── Initiative → features ──
         const initiatives = {};
         featureList.forEach(f => {
             (initiatives[f.initiative] = initiatives[f.initiative] || []).push(f);
         });
+
+        // ── Per-initiative aggregates (executive view) ──
+        const byInitiative = Object.keys(initiatives).map(name => {
+            const feats = initiatives[name];
+            const featAttrTotal = feats.reduce((s, f) => s + f.total, 0);
+            const pctWeighted = featAttrTotal
+                ? Math.round(feats.reduce((s, f) => s + f.pct * f.total, 0) / featAttrTotal)
+                : Math.round(feats.reduce((s, f) => s + f.pct, 0) / (feats.length || 1));
+            const goLives = feats.map(f => f.goLiveMs).filter(x => x != null);
+            return {
+                name,
+                features: feats,
+                featureCount: feats.length,
+                attrCount: featAttrTotal,
+                pct: pctWeighted,
+                blocked: feats.reduce((s, f) => s + f.blocked, 0),
+                awaiting: feats.reduce((s, f) => s + f.awaiting, 0),
+                ready: feats.reduce((s, f) => s + f.ready, 0),
+                delivered: feats.filter(f => f.health === 'delivered').length,
+                atRisk: feats.filter(f => f.health === 'at-risk' || f.health === 'blocked').length,
+                onTrack: feats.filter(f => f.health === 'on-track').length,
+                nextGoLiveMs: goLives.length ? Math.min(...goLives) : null,
+            };
+        }).sort((a, b) => (a.name === 'Ungrouped' ? 1 : b.name === 'Ungrouped' ? -1 : a.name.localeCompare(b.name)));
 
         // ── Overall phase distribution (every attribute sits in one phase) ──
         const phaseCounts = {};
@@ -284,6 +329,7 @@ export function useModel() {
             features: featureList,
             featureOrder,
             initiatives,
+            byInitiative,
             attrs,
             byFeature,
             phaseCounts,
