@@ -176,7 +176,7 @@ function buildSlides(model, colorOf) {
     return slides;
 }
 
-const SLIDE_MS = 7000;
+const SLIDE_MS = 5000;
 
 export default function Narrative({model, onClose}) {
     const colorIndex = {};
@@ -211,8 +211,16 @@ export default function Narrative({model, onClose}) {
     const slide = slides[i];
     return (
         <div className="fp-ss">
-            <div className="fp-ss-progress" aria-hidden>
-                <i key={i} style={{animationDuration: `${SLIDE_MS}ms`, animationPlayState: playing ? 'running' : 'paused'}} />
+            <div className="fp-ss-bars" aria-hidden>
+                {slides.map((s, idx) => (
+                    <div className="fp-ss-seg" key={idx}>
+                        <i
+                            key={idx === i ? `live-${i}` : `seg-${idx}`}
+                            className={idx < i ? 'done' : idx === i ? 'live' : ''}
+                            style={idx === i ? {animationDuration: `${SLIDE_MS}ms`, animationPlayState: playing ? 'running' : 'paused'} : undefined}
+                        />
+                    </div>
+                ))}
             </div>
             <div className="fp-ss-top">
                 <div className="fp-ss-brand"><span className="fp-logo">UBS</span> Finance Data Programme · Narrative</div>
