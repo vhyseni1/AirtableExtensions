@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { TOKENS, personaColor, priorityColor } from '../utils/colors.js'
-import { lineageForNode, rowsForNode } from '../utils/aggregations.js'
+import { TOKENS, personaColor, priorityColor } from '../utils/colors'
+import { lineageForNode, rowsForNode } from '../utils/aggregations'
 
 const COL = {
   leftX: 16,
