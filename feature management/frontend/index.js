@@ -1,5 +1,6 @@
-import {initializeBlock} from '@airtable/blocks/interface/ui';
+import {initializeBlock, useBase} from '@airtable/blocks/interface/ui';
 import {useState} from 'react';
+import {TABLES} from './constants';
 import {useModel} from './data';
 import {SetupBanner} from './components';
 import Roadmap from './Roadmap';
@@ -13,20 +14,15 @@ const MODES = [
     {key: 'workflow', label: 'Workflow'},
 ];
 
-function App() {
+// The data-loading shell. Only mounted once every table exists, so useModel()'s
+// useRecords() calls never receive a null table (interface useRecords reads
+// table.id and throws on null).
+function Dashboard() {
     const model = useModel();
     const [mode, setMode] = useState('roadmap');
 
-    if (model.coreMissingTables.length > 0 || !model.ready) {
-        return (
-            <div className="fp-app">
-                <SetupBanner missing={model.missing} />
-            </div>
-        );
-    }
-
     return (
-        <div className="fp-app">
+        <>
             <header className="fp-header">
                 <div className="fp-brand">Feature Management — Pipeline Tracker</div>
                 <div className="fp-modeswitch" role="tablist" aria-label="View">
@@ -57,9 +53,27 @@ function App() {
 
             {model.missing.length > 0 && (
                 <div className="fp-foot-warn">
-                    {model.missing.length} field/table name(s) don’t match the contract — those are read as empty. Rename in the base or in <code>constants.js</code> to fix.
+                    {model.missing.length} field name(s) don’t match the contract — those are read as empty. Rename in the base or in <code>constants.js</code> to fix.
                 </div>
             )}
+        </>
+    );
+}
+
+function App() {
+    const base = useBase();
+    const get = name =>
+        typeof base.getTableByNameIfExists === 'function'
+            ? base.getTableByNameIfExists(name)
+            : base.tables.find(t => t.name === name) || null;
+
+    // Every table must exist before we mount Dashboard — see note on Dashboard.
+    const required = [TABLES.teams, TABLES.features, TABLES.attributes, TABLES.stages, TABLES.handshakes];
+    const missingTables = required.filter(n => !get(n)).map(n => ({table: n, field: null}));
+
+    return (
+        <div className="fp-app">
+            {missingTables.length > 0 ? <SetupBanner missing={missingTables} /> : <Dashboard />}
         </div>
     );
 }
