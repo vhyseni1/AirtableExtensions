@@ -399,3 +399,25 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-dr-sub { font-size: 11px; color: var(--fp-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fp-dr-open { border: 1px solid var(--fp-border); background: #fff; border-radius: 6px; width: 26px; height: 26px; cursor: pointer; color: var(--fp-ink); font-size: 13px; }
 .fp-dr-open:hover { border-color: var(--fp-accent); color: var(--fp-accent); }
+
+/* ── Narrative ── */
+.fp-narrative-btn {
+    margin-top: 16px; display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.34);
+    padding: 9px 18px; border-radius: 999px; font-weight: 600; font-size: 13.5px; cursor: pointer;
+    transition: background .15s, transform .12s;
+}
+.fp-narrative-btn:hover { background: rgba(255,255,255,.22); transform: translateY(-1px); }
+.fp-narrative { background: #fff; border-radius: 16px; padding: 0; width: min(640px, 94vw); max-height: 86vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 24px 60px rgba(20,39,78,.35); animation: fp-pop .2s ease; }
+@keyframes fp-pop { from { transform: scale(.97); opacity: .5; } to { transform: scale(1); opacity: 1; } }
+.fp-narrative-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 22px 24px 16px; border-top: 5px solid var(--fp-accent); }
+.fp-narrative-head h2 { margin: 4px 0 0; font-size: 21px; font-weight: 800; letter-spacing: -.01em; }
+.fp-narrative-eyebrow { text-transform: uppercase; letter-spacing: .14em; font-size: 10.5px; font-weight: 700; color: var(--fp-accent); }
+.fp-narrative-list { list-style: none; margin: 0; padding: 0 18px 6px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.fp-narrative-list li { display: flex; gap: 14px; align-items: flex-start; padding: 14px 16px; border: 1px solid var(--fp-border); border-radius: 12px; background: #fff; }
+.fp-narrative-list li.clickable:hover { border-color: var(--fp-accent); background: #fff6f6; }
+.fp-narr-num { flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%; background: var(--fp-ink); color: #fff; font-weight: 700; font-size: 13px; display: grid; place-items: center; }
+.fp-narrative-list li.clickable .fp-narr-num { background: var(--fp-accent); }
+.fp-narr-text { flex: 1; font-size: 14.5px; line-height: 1.5; }
+.fp-narr-go { align-self: center; color: var(--fp-accent); font-size: 22px; font-weight: 700; line-height: 1; }
+.fp-narrative-foot { padding: 12px 24px 20px; font-size: 11.5px; color: var(--fp-muted); }

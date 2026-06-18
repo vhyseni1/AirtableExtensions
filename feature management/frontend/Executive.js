@@ -170,6 +170,7 @@ export default function Executive({model}) {
     const {byInitiative, features, kpis, phaseCounts, attrs} = model;
     const [mounted, setMounted] = useState(false);
     const [stack, setStack] = useState([]);
+    const [narrativeOpen, setNarrativeOpen] = useState(false);
     useEffect(() => {
         const id = requestAnimationFrame(() => setMounted(true));
         return () => cancelAnimationFrame(id);
@@ -199,6 +200,57 @@ export default function Executive({model}) {
         .filter(a => a.isBlocked || (a.dueDate && Date.parse(a.dueDate) < now && !a.isDelivered))
         .slice(0, 6);
 
+    // ── Narrative: 5–6 data-driven key statements (each drillable) ──
+    const blockedAttrs = attrs.filter(a => a.isBlocked);
+    const awaitingAttrs = attrs.filter(a => a.isAwaitingReview);
+    const readyAttrs = attrs.filter(a => a.isReadyToPush);
+    const rankedInit = [...byInitiative].filter(it => it.attrCount > 0).sort((a, b) => b.pct - a.pct);
+    const upcoming = features.filter(f => f.goLiveMs != null).sort((a, b) => a.goLiveMs - b.goLiveMs);
+    const nextGo = upcoming.find(f => f.goLiveMs >= now) || upcoming[0] || null;
+    const bottleneck = PHASE_GROUPS.reduce((b, p) => ((phaseCounts[p] || 0) > (phaseCounts[b] || 0) ? p : b), PHASE_GROUPS[0]);
+
+    const narrative = [];
+    narrative.push({
+        text: `The programme spans ${byInitiative.length} initiatives and ${features.length} features (${attrs.length} data attributes), at ${kpis.overallPct}% overall maturity.`,
+    });
+    narrative.push({
+        text: `${onTrack.length} of ${features.length} features are on track and ${delivered.length} delivered; ${needAttn.length} need attention.`,
+        drill: () => (needAttn.length ? openFeatures('Need attention', needAttn) : openFeatures('On track', onTrack)),
+    });
+    if (rankedInit.length >= 2 && rankedInit[0].name !== rankedInit[rankedInit.length - 1].name) {
+        const top = rankedInit[0];
+        const lag = rankedInit[rankedInit.length - 1];
+        narrative.push({
+            text: `${top.name} leads delivery at ${top.pct}%, while ${lag.name} trails at ${lag.pct}% — the likeliest place to focus.`,
+            drill: () => openFeatures(lag.name, lag.features),
+        });
+    }
+    if (nextGo) {
+        const risk = nextGo.health === 'blocked' || nextGo.health === 'at-risk';
+        narrative.push({
+            text: `Next go-live: ${nextGo.name} (${nextGo.initiative}) on ${fmtDate(nextGo.goLiveMs)}, currently ${nextGo.pct}% mature${risk ? ' — at risk' : ''}.`,
+            drill: () => pushFeatureAttrs(nextGo),
+        });
+    }
+    if (blockedAttrs.length) {
+        narrative.push({
+            text: `${blockedAttrs.length} attribute${blockedAttrs.length > 1 ? 's are' : ' is'} blocked and ${awaitingAttrs.length} await sign-off — clearing these unblocks the nearest go-lives.`,
+            drill: () => openAttrs('Blocked', blockedAttrs),
+        });
+    } else if (awaitingAttrs.length) {
+        narrative.push({
+            text: `${awaitingAttrs.length} attribute${awaitingAttrs.length > 1 ? 's' : ''} await approval, with no active blockers.`,
+            drill: () => openAttrs('Awaiting review', awaitingAttrs),
+        });
+    } else {
+        narrative.push({text: 'No blockers and nothing stuck in review — flow is clean.'});
+    }
+    narrative.push({
+        text: `Most work sits in the ${bottleneck} phase (${phaseCounts[bottleneck] || 0} attributes); ${readyAttrs.length} ${readyAttrs.length === 1 ? 'is' : 'are'} ready to advance now.`,
+        drill: () => openAttrs(`${bottleneck} phase`, attrs.filter(a => a.phase === bottleneck)),
+    });
+    const statements = narrative.slice(0, 6);
+
     return (
         <div className="fp-exec">
             {/* Hero */}
@@ -207,6 +259,7 @@ export default function Executive({model}) {
                     <div className="fp-eyebrow">UBS Switzerland · Finance Data Programme</div>
                     <h1>Programme Portfolio Overview</h1>
                     <p className="fp-hero-sub">Executive view across {byInitiative.length} initiatives and {features.length} features — accounting data maturity through to go-live.</p>
+                    <button type="button" className="fp-narrative-btn" onClick={() => setNarrativeOpen(true)}>✦ Narrative</button>
                     <div className="fp-hero-stats">
                         <button type="button" onClick={() => openFeatures('On track', onTrack)}><b><CountUp value={onTrack.length} /></b><span>On track</span></button>
                         <button type="button" onClick={() => openFeatures('Need attention', needAttn)}><b style={{color: '#ff9d57'}}><CountUp value={needAttn.length} /></b><span>Need attention</span></button>
@@ -319,6 +372,34 @@ export default function Executive({model}) {
             </div>
 
             <Drawer stack={stack} onBack={back} onClose={close} onFeature={pushFeatureAttrs} colorOf={colorOf} />
+
+            {narrativeOpen && (
+                <div className="fp-modal-backdrop" onClick={() => setNarrativeOpen(false)}>
+                    <div className="fp-narrative" onClick={e => e.stopPropagation()}>
+                        <div className="fp-narrative-head">
+                            <div>
+                                <div className="fp-narrative-eyebrow">Executive narrative</div>
+                                <h2>Portfolio at a glance</h2>
+                            </div>
+                            <button type="button" className="fp-drawer-close" onClick={() => setNarrativeOpen(false)} aria-label="Close">×</button>
+                        </div>
+                        <ol className="fp-narrative-list">
+                            {statements.map((s, i) => (
+                                <li
+                                    key={i}
+                                    className={s.drill ? 'clickable' : ''}
+                                    onClick={s.drill ? () => { setNarrativeOpen(false); s.drill(); } : undefined}
+                                >
+                                    <span className="fp-narr-num">{i + 1}</span>
+                                    <span className="fp-narr-text">{s.text}</span>
+                                    {s.drill && <span className="fp-narr-go" title="View details">›</span>}
+                                </li>
+                            ))}
+                        </ol>
+                        <div className="fp-narrative-foot">Click any statement to drill into the underlying features and records.</div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
