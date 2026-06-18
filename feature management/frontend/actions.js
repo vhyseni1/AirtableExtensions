@@ -1,27 +1,20 @@
 import {STATUS, APPROVAL, HANDSHAKE_ACTION} from './constants';
 import {allAcceptanceMet} from './data';
 
-// Build a cell value matching a field's type. Returns undefined when the field
-// is missing or no usable value was supplied (caller skips undefined entries).
-function cellFor(field, {linkId, name, text, dateISO}) {
+// Build a cell value matching a field's type. Undefined → caller skips it.
+function cellFor(field, {linkId, name, text, dateISO, number}) {
     if (!field) return undefined;
     const type = field.type || '';
     if (type === 'multipleRecordLinks' || type === 'singleRecordLink') {
         return linkId ? [{id: linkId}] : undefined;
     }
-    if (type === 'singleSelect') {
-        return name ? {name} : undefined;
-    }
-    if (type === 'date' || type === 'dateTime') {
-        return dateISO || undefined;
-    }
-    // text / number / anything else → plain string
+    if (type === 'singleSelect') return name ? {name} : undefined;
+    if (type === 'date' || type === 'dateTime') return dateISO || undefined;
+    if (type === 'number' || type === 'autoNumber') return number != null ? number : undefined;
     const v = text != null ? text : name;
     return v != null && v !== '' ? String(v) : undefined;
 }
 
-// Assemble a {fieldId: value} write object from a list of [field, spec] pairs,
-// dropping anything undefined so we never touch fields the base doesn't have.
 function writeObject(pairs) {
     const out = {};
     for (const [field, spec] of pairs) {
@@ -32,134 +25,101 @@ function writeObject(pairs) {
     return out;
 }
 
-function todayISO() {
-    return new Date().toISOString().slice(0, 10);
-}
+const todayISO = () => new Date().toISOString().slice(0, 10);
 
 function decisionMakerName(session) {
     const u = session && session.currentUser;
     return (u && (u.name || u.email)) || 'Current user';
 }
 
-// Items in the task's acceptance checklist that are still not done.
-export function remainingAcceptance(task) {
-    return task.acceptance.filter(i => !i.done).map(i => i.text);
+export function remainingAcceptance(attr) {
+    return attr.acceptance.filter(i => !i.done).map(i => i.text);
 }
 
-async function createHandshake(model, fields, session, {task, action, fromTeamId, toTeamId, comment, cycleNumber}) {
-    const hs = model.fieldsRaw.handshakes;
+async function createHandshake(model, session, {attr, action, fromTeamId, toTeamId, stage, comment, cycle}) {
     const table = model.tablesRaw.handshakes;
-    if (!table) return;
-    const pairs = [
-        [hs.stageTask, {linkId: task.id, text: task.taskId}],
-        [hs.feature, {text: task.featureName, name: task.featureName}],
-        [hs.attribute, {text: task.attr ? task.attr.attributeId : '', name: task.attr ? task.attr.attributeId : ''}],
-        [hs.stage, {text: task.stageName, name: task.stageName}],
-        [hs.fromTeam, {linkId: fromTeamId, text: task.assignedTeamName}],
-        [hs.toTeam, {linkId: toTeamId}],
-        [hs.action, {name: action}],
-        [hs.decisionMaker, {text: decisionMakerName(session)}],
-        [hs.timestamp, {dateISO: todayISO()}],
-        [hs.comments, {text: comment || ''}],
-        [hs.cycleNumber, {text: cycleNumber != null ? String(cycleNumber) : undefined}],
-    ];
-    const obj = writeObject(pairs);
+    const hf = model.fieldsRaw.handshakes;
+    if (!table) return; // audit table optional — skip silently if absent
+    const obj = writeObject([
+        [hf.attribute, {linkId: attr.id, text: attr.attributeId, name: attr.attributeId}],
+        [hf.feature, {text: attr.featureName, name: attr.featureName}],
+        [hf.stage, {linkId: stage ? stage.id : null, text: stage ? stage.name : attr.currentStageName, name: stage ? stage.name : attr.currentStageName}],
+        [hf.fromTeam, {linkId: fromTeamId, text: attr.assignedTeamName}],
+        [hf.toTeam, {linkId: toTeamId}],
+        [hf.action, {name: action}],
+        [hf.decisionMaker, {text: decisionMakerName(session)}],
+        [hf.timestamp, {dateISO: todayISO()}],
+        [hf.comments, {text: comment || ''}],
+        [hf.cycleNumber, {number: cycle != null ? cycle : undefined, text: cycle != null ? String(cycle) : undefined}],
+    ]);
     if (typeof table.hasPermissionToCreateRecords === 'function' && !table.hasPermissionToCreateRecords([{fields: obj}])) {
-        throw new Error('You do not have permission to create Handshake records in this base.');
+        throw new Error('You do not have permission to create Handshake records.');
     }
     await table.createRecordsAsync([{fields: obj}]);
 }
 
-// Activate (or create) the next stage's task as Not Started.
-async function upsertNextTask(model, task, nextStage) {
-    const stTable = model.tablesRaw.stageTasks;
-    const stf = model.fieldsRaw.stageTasks;
-    if (!stTable || !nextStage) return;
-
-    const existing = model.tasksByKey[`${task.attrKey}|${nextStage.code}`];
-    if (existing) {
-        const obj = writeObject([[stf.status, {name: STATUS.notStarted}]]);
-        if (typeof stTable.hasPermissionToUpdateRecord === 'function' && !stTable.hasPermissionToUpdateRecord(existing.record, obj)) {
-            throw new Error('No permission to update the next Stage Task.');
-        }
-        await stTable.updateRecordsAsync([{id: existing.id, fields: obj}]);
-        return;
+async function updateAttribute(model, attr, obj) {
+    const table = model.tablesRaw.attributes;
+    if (typeof table.hasPermissionToUpdateRecord === 'function' && !table.hasPermissionToUpdateRecord(attr.record, obj)) {
+        throw new Error('You do not have permission to update this attribute.');
     }
-    // Create a fresh Not Started task for the next stage in the path.
-    const attrId = task.attr ? task.attr.attributeId : '';
-    const obj = writeObject([
-        [stf.taskId, {text: `${attrId} / ${nextStage.code}`}],
-        [stf.attribute, {linkId: task.attr ? task.attr.recordId : null, text: attrId}],
-        [stf.feature, {text: task.featureName, name: task.featureName}],
-        [stf.stage, {linkId: nextStage.id, text: nextStage.name}],
-        [stf.stageCode, {text: nextStage.code}],
-        [stf.phaseGroup, {name: nextStage.phaseGroup, text: nextStage.phaseGroup}],
-        [stf.assignedTeam, {linkId: nextStage.responsibleTeamId, text: nextStage.responsibleTeamName}],
-        [stf.status, {name: STATUS.notStarted}],
-        [stf.approvalStatus, {name: APPROVAL.notRequired}],
-    ]);
-    if (typeof stTable.hasPermissionToCreateRecords === 'function' && !stTable.hasPermissionToCreateRecords([{fields: obj}])) {
-        throw new Error('No permission to create the next Stage Task.');
-    }
-    await stTable.createRecordsAsync([{fields: obj}]);
+    await table.updateRecordsAsync([{id: attr.id, fields: obj}]);
 }
 
-// ── Promote / Push to next phase (§6) ─────────────────────────────────────────
-export async function promoteTask(model, task, session) {
-    if (!allAcceptanceMet(task.acceptance)) {
-        const remaining = remainingAcceptance(task);
+// ── Promote: submit current stage for review (does not advance yet) ───────────
+export async function promoteTask(model, attr, session) {
+    if (!allAcceptanceMet(attr.acceptance)) {
         const err = new Error('Acceptance criteria not yet met.');
-        err.remaining = remaining;
+        err.remaining = remainingAcceptance(attr);
         throw err;
     }
-    const nextStage = task.nextCode ? model.stagesByCode[task.nextCode] : null;
-    const stTable = model.tablesRaw.stageTasks;
-    const stf = model.fieldsRaw.stageTasks;
+    const af = model.fieldsRaw.attributes;
+    const nextStage = attr.nextCode ? model.stagesByCode[attr.nextCode] : null;
 
-    // 1) Mark this task Submitted for Review (+ Pending approval).
-    const upd = writeObject([
-        [stf.status, {name: STATUS.submitted}],
-        [stf.approvalStatus, {name: APPROVAL.pending}],
-    ]);
-    if (typeof stTable.hasPermissionToUpdateRecord === 'function' && !stTable.hasPermissionToUpdateRecord(task.record, upd)) {
-        throw new Error('You do not have permission to update this Stage Task.');
-    }
-    await stTable.updateRecordsAsync([{id: task.id, fields: upd}]);
+    await updateAttribute(model, attr, writeObject([
+        [af.status, {name: STATUS.submitted}],
+        [af.approvalStatus, {name: APPROVAL.pending}],
+    ]));
 
-    // 2) Post the handshake to the next stage's responsible team.
-    await createHandshake(model, model.fieldsRaw.handshakes, session, {
-        task,
+    await createHandshake(model, session, {
+        attr,
         action: HANDSHAKE_ACTION.submitted,
-        fromTeamId: task.assignedTeamId,
-        toTeamId: nextStage ? nextStage.responsibleTeamId : null,
-        cycleNumber: 1,
+        fromTeamId: attr.assignedTeamId,
+        toTeamId: (nextStage && nextStage.responsibleTeamId) || attr.approverTeamId,
+        stage: attr.stage,
+        cycle: 1,
     });
-
-    // 3) Activate/create the next stage task.
-    if (nextStage) await upsertNextTask(model, task, nextStage);
 }
 
-// ── Accept / Return (§6) ──────────────────────────────────────────────────────
-export async function decideTask(model, task, decision, comment, session) {
-    const stTable = model.tablesRaw.stageTasks;
-    const stf = model.fieldsRaw.stageTasks;
-    const nextStage = task.nextCode ? model.stagesByCode[task.nextCode] : null;
+// ── Accept / Return ───────────────────────────────────────────────────────────
+export async function decideTask(model, attr, decision, comment, session) {
+    const af = model.fieldsRaw.attributes;
+    const nextStage = attr.nextCode ? model.stagesByCode[attr.nextCode] : null;
 
     if (decision === 'accept') {
-        const upd = writeObject([
-            [stf.status, {name: STATUS.approved}],
-            [stf.approvalStatus, {name: APPROVAL.approved}],
-        ]);
-        if (typeof stTable.hasPermissionToUpdateRecord === 'function' && !stTable.hasPermissionToUpdateRecord(task.record, upd)) {
-            throw new Error('You do not have permission to approve this Stage Task.');
+        if (nextStage) {
+            // Advance the attribute into the next maturity stage.
+            await updateAttribute(model, attr, writeObject([
+                [af.currentStage, {linkId: nextStage.id}],
+                [af.status, {name: STATUS.notStarted}],
+                [af.approvalStatus, {name: APPROVAL.notRequired}],
+                [af.assignedTeam, {linkId: nextStage.responsibleTeamId}],
+                [af.approverTeam, {linkId: nextStage.approverTeamId}],
+            ]));
+        } else {
+            // No further stage — delivered.
+            await updateAttribute(model, attr, writeObject([
+                [af.status, {name: STATUS.done}],
+                [af.approvalStatus, {name: APPROVAL.approved}],
+            ]));
         }
-        await stTable.updateRecordsAsync([{id: task.id, fields: upd}]);
-        await createHandshake(model, model.fieldsRaw.handshakes, session, {
-            task,
+        await createHandshake(model, session, {
+            attr,
             action: HANDSHAKE_ACTION.approved,
-            fromTeamId: task.assignedTeamId,
-            toTeamId: nextStage ? nextStage.responsibleTeamId : null,
-            cycleNumber: 1,
+            fromTeamId: attr.assignedTeamId,
+            toTeamId: (nextStage && nextStage.responsibleTeamId) || attr.assignedTeamId,
+            stage: attr.stage,
+            cycle: 1,
         });
         return;
     }
@@ -170,30 +130,24 @@ export async function decideTask(model, task, decision, comment, session) {
     }
     let cycle = 1;
     try {
-        const c = task.record.getCellValue(stf.cycleNumber && stf.cycleNumber.id);
+        const c = af.cycleNumber && attr.record.getCellValue(af.cycleNumber.id);
         if (typeof c === 'number') cycle = c + 1;
     } catch {
         cycle = 1;
     }
-    const upd = writeObject([
-        [stf.status, {name: STATUS.returned}],
-        [stf.approvalStatus, {name: APPROVAL.returned}],
-        [stf.comments, {text: comment.trim()}],
-        [stf.cycleNumber, {text: undefined}], // number field set below if present
-    ]);
-    if (stf.cycleNumber && (stf.cycleNumber.type === 'number' || stf.cycleNumber.type === 'autoNumber')) {
-        upd[stf.cycleNumber.id] = cycle;
-    }
-    if (typeof stTable.hasPermissionToUpdateRecord === 'function' && !stTable.hasPermissionToUpdateRecord(task.record, upd)) {
-        throw new Error('You do not have permission to return this Stage Task.');
-    }
-    await stTable.updateRecordsAsync([{id: task.id, fields: upd}]);
-    await createHandshake(model, model.fieldsRaw.handshakes, session, {
-        task,
+    await updateAttribute(model, attr, writeObject([
+        [af.status, {name: STATUS.returned}],
+        [af.approvalStatus, {name: APPROVAL.returned}],
+        [af.comments, {text: comment.trim()}],
+        [af.cycleNumber, {number: cycle, text: String(cycle)}],
+    ]));
+    await createHandshake(model, session, {
+        attr,
         action: HANDSHAKE_ACTION.returned,
-        fromTeamId: task.assignedTeamId,
-        toTeamId: task.assignedTeamId,
+        fromTeamId: attr.approverTeamId || attr.assignedTeamId,
+        toTeamId: attr.assignedTeamId,
+        stage: attr.stage,
         comment: comment.trim(),
-        cycleNumber: cycle,
+        cycle,
     });
 }

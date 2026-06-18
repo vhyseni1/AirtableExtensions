@@ -164,3 +164,47 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
     .fp-kpis { grid-template-columns: repeat(2, 1fr); }
     .fp-board, .fp-lanes { grid-template-columns: 1fr; }
 }
+
+/* ── Roadmap ── */
+.fp-rm-head, .fp-rm-row {
+    display: grid;
+    grid-template-columns: 220px 1fr 200px;
+    gap: 10px;
+    align-items: center;
+}
+.fp-rm-head { padding: 0 0 4px; }
+.fp-rm-row { background: var(--fp-card); border: 1px solid var(--fp-border); border-radius: var(--fp-radius); padding: 8px 10px; margin-bottom: 6px; }
+.fp-rm-name { min-width: 0; }
+.fp-rm-feature { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fp-rm-sub { display: flex; gap: 4px; margin-top: 3px; }
+.fp-rm-track { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.fp-rm-colhead { font-size: 10px; text-align: center; font-weight: 700; }
+.fp-rm-cell {
+    text-align: center; font-size: 11px; padding: 8px 0; border-radius: 4px;
+    border-bottom: 3px solid transparent; color: #334155; background: #f8fafc;
+}
+.fp-rm-cell.reached { font-weight: 700; }
+.fp-rm-meta { display: flex; flex-direction: column; gap: 4px; }
+.fp-rm-figures { display: flex; justify-content: space-between; align-items: center; font-size: 11px; }
+.fp-rm-pct { font-weight: 700; }
+.fp-rm-date { color: var(--fp-muted); }
+
+.fp-initiative { margin-bottom: 16px; }
+.fp-initiative-head {
+    font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: .04em;
+    color: #475569; background: #eef2f7; border-radius: 6px; padding: 5px 10px; margin-bottom: 6px;
+}
+
+/* ── Team view extras ── */
+.fp-roster { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.fp-people { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.fp-kpis-sm { grid-template-columns: repeat(4, 1fr); }
+
+/* Recent-handshakes feed rendered as a horizontal strip on the roadmap. */
+.fp-feed-row { flex-direction: row; flex-wrap: wrap; }
+.fp-feed-row li { flex: 1 1 220px; }
+
+@media (max-width: 1100px) {
+    .fp-rm-head, .fp-rm-row { grid-template-columns: 160px 1fr 150px; }
+    .fp-kpis-sm { grid-template-columns: repeat(2, 1fr); }
+}

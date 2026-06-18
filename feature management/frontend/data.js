@@ -7,8 +7,9 @@ import {
     APPROVAL,
     PHASE_GROUPS,
     ACTIVE_STATUSES,
+    attributePath,
     nextStageCode,
-    prevStageCode,
+    maturityFraction,
 } from './constants';
 
 // ─── Cell readers (defensive — a missing field never throws) ──────────────────
@@ -29,7 +30,6 @@ export function bool(record, field) {
         return false;
     }
 }
-// Linked-record cell → array of {id, name}. Empty array when unset/missing.
 export function links(record, field) {
     if (!record || !field) return [];
     try {
@@ -43,9 +43,12 @@ export function firstLinkId(record, field) {
     const l = links(record, field);
     return l.length ? l[0].id : null;
 }
+// Collaborator / linked names → array of display strings.
+export function names(record, field) {
+    return links(record, field).map(x => x && (x.name || x.email)).filter(Boolean);
+}
 
-// Acceptance Criteria: a JSON array stored as a string in a long-text cell (§2).
-// Returns [{text, done}]. Tolerant of empty / malformed cells.
+// Acceptance Criteria: JSON array stored as a string in a long-text cell.
 export function parseAcceptance(raw) {
     if (!raw) return [];
     try {
@@ -62,7 +65,6 @@ export function allAcceptanceMet(items) {
     return items.length > 0 && items.every(i => i.done);
 }
 
-// Resolve a table + the subset of FIELDS we use; record anything missing.
 function bindTable(base, tableName, fieldSpec, missing) {
     const table =
         typeof base.getTableByNameIfExists === 'function'
@@ -85,182 +87,180 @@ function bindTable(base, tableName, fieldSpec, missing) {
 }
 
 // ─── The model hook ───────────────────────────────────────────────────────────
-// Binds everything, loads all six tables, and returns plain JS objects + the
-// derived aggregates the dashboards need. One hook, called once at the top.
 export function useModel() {
     const base = useBase();
 
     const missing = [];
     const teams = bindTable(base, TABLES.teams, FIELDS.teams, missing);
-    const stages = bindTable(base, TABLES.stages, FIELDS.stages, missing);
     const features = bindTable(base, TABLES.features, FIELDS.features, missing);
     const attributes = bindTable(base, TABLES.attributes, FIELDS.attributes, missing);
-    const stageTasks = bindTable(base, TABLES.stageTasks, FIELDS.stageTasks, missing);
+    const stages = bindTable(base, TABLES.stages, FIELDS.stages, missing);
     const handshakes = bindTable(base, TABLES.handshakes, FIELDS.handshakes, missing);
 
-    // Hooks must run unconditionally and in stable order — load every table
-    // (null tables yield null record sets, handled below).
     const teamRecords = useRecords(teams.table);
-    const stageRecords = useRecords(stages.table);
     const featureRecords = useRecords(features.table);
     const attributeRecords = useRecords(attributes.table);
-    const taskRecords = useRecords(stageTasks.table);
+    const stageRecords = useRecords(stages.table);
     const handshakeRecords = useRecords(handshakes.table);
 
     return useMemo(() => {
-        const coreMissingTables = missing.filter(m => m.field === null);
-        const ready =
-            stageTasks.table && stages.table && attributes.table && features.table;
+        const coreMissingTables = missing.filter(
+            m => m.field === null && m.table !== TABLES.handshakes,
+        );
+        const ready = attributes.table && features.table && stages.table;
 
-        // ── Stages keyed by code ──
+        // ── Stages reference ──
         const stagesByCode = {};
+        const stagesByRecordId = {};
+        const stagesByName = {};
         (stageRecords || []).forEach(r => {
-            const code = str(r, stages.fields.code);
-            stagesByCode[code] = {
+            const s = {
                 id: r.id,
                 record: r,
                 name: str(r, stages.fields.name),
-                code,
+                code: str(r, stages.fields.code),
                 phaseGroup: str(r, stages.fields.phaseGroup),
                 responsibleTeamId: firstLinkId(r, stages.fields.responsibleTeam),
                 responsibleTeamName: str(r, stages.fields.responsibleTeam),
+                approverTeamId: firstLinkId(r, stages.fields.approverTeam),
                 approverTeamName: str(r, stages.fields.approverTeam),
             };
+            if (s.code) stagesByCode[s.code] = s;
+            stagesByRecordId[r.id] = s;
+            if (s.name) stagesByName[s.name] = s;
         });
 
-        // ── Attributes keyed by record id (and by Attribute ID string) ──
-        const attrByRecordId = {};
-        const attrByAttrId = {};
-        (attributeRecords || []).forEach(r => {
+        // ── Teams (+ user rosters) ──
+        const teamList = (teamRecords || []).map(r => ({
+            id: r.id,
+            name: str(r, teams.fields.name),
+            users: names(r, teams.fields.users),
+        }));
+        const teamNames = teamList.map(t => t.name).filter(Boolean).sort();
+        const usersByTeam = {};
+        teamList.forEach(t => (usersByTeam[t.name] = t.users));
+
+        // ── Features (+ Initiative grouping) ──
+        const featureList = (featureRecords || []).map(r => ({
+            id: r.id,
+            name: str(r, features.fields.name),
+            initiative: str(r, features.fields.initiative) || 'Ungrouped',
+            owningTeam: str(r, features.fields.owningTeam),
+            status: str(r, features.fields.status),
+            priority: str(r, features.fields.priority),
+            goLive: str(r, features.fields.goLive),
+        }));
+        const featureOrder = featureList.map(f => f.name).filter(Boolean);
+
+        // ── Attributes = work items ──
+        const attrs = (attributeRecords || []).map(r => {
+            const stageLinkId = firstLinkId(r, attributes.fields.currentStage);
+            const stage =
+                (stageLinkId && stagesByRecordId[stageLinkId]) ||
+                stagesByName[str(r, attributes.fields.currentStage)] ||
+                null;
+            const sourcingType = str(r, attributes.fields.sourcingType);
+            const requiresGateway = bool(r, attributes.fields.requiresGateway);
+            const currentCode = stage ? stage.code : '';
+            const status = str(r, attributes.fields.status);
+            const approvalStatus = str(r, attributes.fields.approvalStatus);
+            const acceptance = parseAcceptance(str(r, attributes.fields.acceptanceCriteria));
+            const pathAttr = {sourcingType, requiresGateway};
             const a = {
-                recordId: r.id,
+                id: r.id,
+                record: r,
                 attributeId: str(r, attributes.fields.attributeId),
                 businessName: str(r, attributes.fields.businessName),
                 featureName: str(r, attributes.fields.feature),
-                sourcingType: str(r, attributes.fields.sourcingType),
+                sourcingType,
+                requiresGateway,
                 isReferenceData: bool(r, attributes.fields.isReferenceData),
-                requiresGateway: bool(r, attributes.fields.requiresGateway),
-            };
-            attrByRecordId[r.id] = a;
-            if (a.attributeId) attrByAttrId[a.attributeId] = a;
-        });
-
-        // ── Teams ──
-        const teamNames = (teamRecords || []).map(r => str(r, teams.fields.name)).filter(Boolean).sort();
-
-        // ── Stage Tasks → rich objects ──
-        const tasks = [];
-        const tasksByKey = {}; // `${attrKey}|${code}` → task
-        (taskRecords || []).forEach(r => {
-            const attrLinkId = firstLinkId(r, stageTasks.fields.attribute);
-            const attrIdStr = str(r, stageTasks.fields.attribute);
-            const attr =
-                (attrLinkId && attrByRecordId[attrLinkId]) ||
-                attrByAttrId[attrIdStr] ||
-                null;
-            const featureName =
-                str(r, stageTasks.fields.feature) || (attr ? attr.featureName : '');
-            const acceptance = parseAcceptance(str(r, stageTasks.fields.acceptanceCriteria));
-            const status = str(r, stageTasks.fields.status);
-            const approvalStatus = str(r, stageTasks.fields.approvalStatus);
-            const stageCode = str(r, stageTasks.fields.stageCode);
-            const t = {
-                id: r.id,
-                record: r,
-                taskId: str(r, stageTasks.fields.taskId),
-                attrKey: attr ? attr.recordId : attrIdStr,
-                attr,
-                attributeBusinessName: attr ? attr.businessName : str(r, stageTasks.fields.attribute),
-                featureName,
-                stageCode,
-                stageName: str(r, stageTasks.fields.stage),
-                phaseGroup: str(r, stageTasks.fields.phaseGroup) || (stagesByCode[stageCode] || {}).phaseGroup || '',
-                assignedTeamName: str(r, stageTasks.fields.assignedTeam),
-                assignedTeamId: firstLinkId(r, stageTasks.fields.assignedTeam),
-                assignee: str(r, stageTasks.fields.assignee),
+                stage,
+                currentCode,
+                currentStageName: stage ? stage.name : str(r, attributes.fields.currentStage),
+                phase: stage ? stage.phaseGroup : '',
                 status,
-                environment: str(r, stageTasks.fields.environment),
-                acceptance,
-                acceptanceMet: bool(r, stageTasks.fields.acceptanceMet),
-                approverTeamName: str(r, stageTasks.fields.approverTeam),
+                assignee: str(r, attributes.fields.assignee),
+                assignedTeamName: str(r, attributes.fields.assignedTeam),
+                assignedTeamId: firstLinkId(r, attributes.fields.assignedTeam),
+                approverTeamName: str(r, attributes.fields.approverTeam),
+                approverTeamId: firstLinkId(r, attributes.fields.approverTeam),
                 approvalStatus,
-                comments: str(r, stageTasks.fields.comments),
-                blockedReason: str(r, stageTasks.fields.blockedReason),
-                dueDate: str(r, stageTasks.fields.dueDate),
+                acceptance,
+                acceptanceMet: bool(r, attributes.fields.acceptanceMet) || allAcceptanceMet(acceptance),
+                environment: str(r, attributes.fields.environment),
+                dueDate: str(r, attributes.fields.dueDate),
+                blockedReason: str(r, attributes.fields.blockedReason),
             };
-            // Path-derived flags.
-            t.nextCode = attr ? nextStageCode(attr, stageCode) : null;
-            t.prevCode = attr ? prevStageCode(attr, stageCode) : null;
-            t.hasNext = !!t.nextCode;
-            t.isActive = ACTIVE_STATUSES.includes(status);
-            t.isBlocked = status === STATUS.blocked;
-            t.isAwaitingReview =
-                status === STATUS.submitted || approvalStatus === APPROVAL.pending;
-            t.isReadyToPush = status === STATUS.approved && t.hasNext;
-            tasks.push(t);
-            tasksByKey[`${t.attrKey}|${stageCode}`] = t;
+            a.nextCode = nextStageCode(pathAttr, currentCode);
+            a.hasNext = !!a.nextCode;
+            a.maturity = maturityFraction(pathAttr, currentCode);
+            a.isActive = ACTIVE_STATUSES.includes(status);
+            a.isBlocked = status === STATUS.blocked;
+            a.isAwaitingReview = status === STATUS.submitted || approvalStatus === APPROVAL.pending;
+            a.isReadyToPush =
+                a.hasNext &&
+                (status === STATUS.approved || (status === STATUS.inProgress && a.acceptanceMet));
+            a.isDelivered = !a.hasNext && status === STATUS.done;
+            return a;
         });
 
-        // Dependency validator (§9): derive "upstream" from path order since
-        // Upstream Task isn't seeded. Flag when this task is active/in-progress
-        // but its predecessor in the attribute path isn't Done.
-        tasks.forEach(t => {
-            t.dependencyWarning = false;
-            if (!t.attr || !t.prevCode) return;
-            if (t.status !== STATUS.inProgress && t.status !== STATUS.submitted) return;
-            const up = tasksByKey[`${t.attrKey}|${t.prevCode}`];
-            if (up && up.status !== STATUS.done && up.status !== STATUS.approved) {
-                t.dependencyWarning = true;
-            }
-        });
-
-        // ── Feature aggregates + Feature×Phase matrix (§4/§5) ──
-        const featureOrder = (featureRecords || [])
-            .map(r => str(r, features.fields.name))
-            .filter(Boolean);
+        // ── Per-feature aggregates + maturity ──
         const byFeature = {};
-        featureOrder.forEach(f => {
-            byFeature[f] = {total: 0, done: 0, phase: {}};
-            PHASE_GROUPS.forEach(p => (byFeature[f].phase[p] = 0));
-        });
-        tasks.forEach(t => {
-            const f = t.featureName;
+        const ensureFeature = f => {
             if (!byFeature[f]) {
-                byFeature[f] = {total: 0, done: 0, phase: {}};
+                byFeature[f] = {total: 0, delivered: 0, maturitySum: 0, phase: {}, furthest: -1};
                 PHASE_GROUPS.forEach(p => (byFeature[f].phase[p] = 0));
             }
-            byFeature[f].total += 1;
-            if (t.status === STATUS.done) byFeature[f].done += 1;
-            if (t.phaseGroup && byFeature[f].phase[t.phaseGroup] != null) {
-                byFeature[f].phase[t.phaseGroup] += 1;
+            return byFeature[f];
+        };
+        featureOrder.forEach(ensureFeature);
+        attrs.forEach(a => {
+            const v = ensureFeature(a.featureName || 'Unassigned');
+            v.total += 1;
+            v.maturitySum += a.maturity;
+            if (a.isDelivered) v.delivered += 1;
+            if (a.phase && v.phase[a.phase] != null) {
+                v.phase[a.phase] += 1;
+                v.furthest = Math.max(v.furthest, PHASE_GROUPS.indexOf(a.phase));
             }
         });
         Object.values(byFeature).forEach(v => {
-            v.pct = v.total ? Math.round((v.done / v.total) * 100) : 0;
+            v.pct = v.total ? Math.round((v.maturitySum / v.total) * 100) : 0;
+            v.furthestPhase = v.furthest >= 0 ? PHASE_GROUPS[v.furthest] : null;
         });
 
-        // ── KPI strip (§5) ──
+        // ── Initiative → features ──
+        const initiatives = {};
+        featureList.forEach(f => {
+            (initiatives[f.initiative] = initiatives[f.initiative] || []).push(f);
+        });
+
+        // ── Overall phase distribution (every attribute sits in one phase) ──
         const phaseCounts = {};
         PHASE_GROUPS.forEach(p => (phaseCounts[p] = 0));
-        tasks.forEach(t => {
-            if (t.isActive && phaseCounts[t.phaseGroup] != null) phaseCounts[t.phaseGroup] += 1;
+        attrs.forEach(a => {
+            if (a.phase && phaseCounts[a.phase] != null) phaseCounts[a.phase] += 1;
         });
-        const deliveredFeatures = Object.values(byFeature).filter(v => v.total && v.pct === 100).length;
-        const totalDone = tasks.filter(t => t.status === STATUS.done).length;
+
+        // ── KPIs ──
+        const maturityAvg = attrs.length
+            ? attrs.reduce((s, a) => s + a.maturity, 0) / attrs.length
+            : 0;
+        const deliveredFeatures = Object.values(byFeature).filter(v => v.total && v.pct >= 100).length;
         const kpis = {
-            active: tasks.filter(t => t.isActive).length,
-            awaitingReview: tasks.filter(t => t.isAwaitingReview).length,
-            blocked: tasks.filter(t => t.isBlocked).length,
-            readyToPush: tasks.filter(t => t.isReadyToPush).length,
+            active: attrs.filter(a => a.isActive).length,
+            awaitingReview: attrs.filter(a => a.isAwaitingReview).length,
+            blocked: attrs.filter(a => a.isBlocked).length,
+            readyToPush: attrs.filter(a => a.isReadyToPush).length,
             deliveredFeatures,
-            overallPct: tasks.length ? Math.round((totalDone / tasks.length) * 100) : 0,
+            overallPct: Math.round(maturityAvg * 100),
         };
 
         // ── Handshakes, newest first ──
         const handshakeList = (handshakeRecords || [])
             .map(r => ({
                 id: r.id,
-                handshakeId: str(r, handshakes.fields.handshakeId),
                 feature: str(r, handshakes.fields.feature),
                 attribute: str(r, handshakes.fields.attribute),
                 stage: str(r, handshakes.fields.stage),
@@ -276,45 +276,37 @@ export function useModel() {
             ready,
             missing,
             coreMissingTables,
-            // raw tables + resolved fields for write actions
-            tablesRaw: {
-                stageTasks: stageTasks.table,
-                handshakes: handshakes.table,
-            },
-            fieldsRaw: {
-                stageTasks: stageTasks.fields,
-                handshakes: handshakes.fields,
-            },
+            tablesRaw: {attributes: attributes.table, handshakes: handshakes.table},
+            fieldsRaw: {attributes: attributes.fields, handshakes: handshakes.fields},
             stagesByCode,
-            attrByRecordId,
             teamNames,
+            usersByTeam,
+            features: featureList,
             featureOrder,
-            tasks,
-            tasksByKey,
+            initiatives,
+            attrs,
             byFeature,
             phaseCounts,
             kpis,
             handshakes: handshakeList,
-            loading: ready && taskRecords === null,
+            loading: ready && attributeRecords === null,
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [
-        teamRecords,
-        stageRecords,
-        featureRecords,
-        attributeRecords,
-        taskRecords,
-        handshakeRecords,
-    ]);
+    }, [teamRecords, featureRecords, attributeRecords, stageRecords, handshakeRecords]);
 }
 
-// Convenience: tasks for a given team (assigned to them).
-export function tasksForTeam(tasks, teamName) {
-    return tasks.filter(t => t.assignedTeamName === teamName);
+// Attributes whose work currently sits with this team.
+export function attrsForTeam(attrs, teamName) {
+    return attrs.filter(a => a.assignedTeamName === teamName);
 }
-// Tasks where this team is the approver and a decision is pending.
-export function pendingApprovalsForTeam(tasks, teamName) {
-    return tasks.filter(
-        t => t.approverTeamName === teamName && t.approvalStatus === APPROVAL.pending,
-    );
+// Attributes pending this team's approval.
+export function pendingApprovalsForTeam(attrs, teamName) {
+    return attrs.filter(a => a.approverTeamName === teamName && a.approvalStatus === APPROVAL.pending);
+}
+
+// Build an attribute's ordered stage path as Stage objects (for promote/next).
+export function pathStages(model, attr) {
+    return attributePath({sourcingType: attr.sourcingType, requiresGateway: attr.requiresGateway})
+        .map(code => model.stagesByCode[code])
+        .filter(Boolean);
 }
