@@ -296,14 +296,16 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 
 /* Delivery roadmap — a winding road with map pins at each go-live */
 .fp-road { position: relative; width: 100%; overflow: hidden; }
-.fp-road-svg { display: block; }
-.fp-road-casing { fill: none; stroke: #fff; stroke-width: 38; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 7px 10px rgba(20,39,78,.18)); }
-.fp-road-asphalt { fill: none; stroke: #2b3442; stroke-width: 30; stroke-linecap: round; stroke-linejoin: round; }
-.fp-road-dashes { fill: none; stroke: #fff; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 16 16; }
-.fp-road-start { fill: #2b3442; }
-.fp-road-now { position: absolute; transform: translate(10px, -50%); background: #2b3442; color: #fff; font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+.fp-road-svg { display: block; width: 100%; }
+.fp-road-casing { fill: none; stroke: #fff; stroke-width: 40; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 8px 12px rgba(20,39,78,.2)); stroke-dasharray: 1; stroke-dashoffset: 1; animation: fp-road-draw 1.4s ease forwards; }
+.fp-road-asphalt { fill: none; stroke: #2b3442; stroke-width: 32; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: fp-road-draw 1.4s ease forwards; }
+.fp-road-dashes { fill: none; stroke: #fde36b; stroke-width: 3; stroke-linecap: round; stroke-dasharray: .014 .014; opacity: 0; animation: fp-road-fade .6s ease 1.15s forwards; }
+@keyframes fp-road-draw { to { stroke-dashoffset: 0; } }
+@keyframes fp-road-fade { to { opacity: 1; } }
+.fp-road-now { position: absolute; transform: translate(10px, -50%); background: #2b3442; color: #fff; font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap; box-shadow: 0 3px 8px rgba(20,39,78,.25); z-index: 2; }
 
-.fp-road-stop { position: absolute; display: flex; align-items: center; gap: 7px; width: 156px; }
+.fp-road-stop { position: absolute; display: flex; align-items: center; gap: 7px; width: 156px; cursor: pointer; opacity: 0; animation: fp-road-pop .5s cubic-bezier(.22,.9,.36,1) forwards; }
+@keyframes fp-road-pop { from { opacity: 0; } to { opacity: 1; } }
 .fp-road-stop.up { flex-direction: column-reverse; transform: translate(-50%, -100%); }
 .fp-road-stop.down { flex-direction: column; transform: translate(-50%, 0); }
 .fp-pin { position: relative; width: 30px; height: 30px; border-radius: 50% 50% 50% 0; background: var(--pin); box-shadow: 0 5px 9px rgba(20,39,78,.28); flex: 0 0 auto; }
@@ -317,6 +319,11 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-road-stop:hover .fp-road-card { box-shadow: 0 10px 22px rgba(20,39,78,.2); }
 .fp-road-stop.up:hover .fp-pin { transform: rotate(45deg) scale(1.09); }
 .fp-road-stop.down:hover .fp-pin { transform: rotate(225deg) scale(1.09); }
+@media (prefers-reduced-motion: reduce) {
+    .fp-road-casing, .fp-road-asphalt { animation: none; stroke-dashoffset: 0; }
+    .fp-road-dashes { animation: none; opacity: 1; }
+    .fp-road-stop { animation: none; opacity: 1; }
+}
 .fp-legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 11px; color: var(--fp-muted); margin-top: 6px; }
 .fp-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .fp-legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }

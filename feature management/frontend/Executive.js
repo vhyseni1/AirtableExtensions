@@ -8,7 +8,6 @@ import {useDrill, DrillDrawer} from './drill';
 const INITIATIVE_COLORS = ['#E60000', '#14274E', '#0F766E', '#6D28D9', '#B45309', '#0E7490'];
 
 const fmtDate = ms => (ms == null ? '—' : new Date(ms).toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: 'numeric'}));
-const fmtShort = ms => new Date(ms).toLocaleDateString('en-GB', {day: '2-digit', month: 'short'});
 
 // ── Count-up number ───────────────────────────────────────────────────────────
 function useCountUp(target, ms = 850) {
@@ -83,17 +82,19 @@ function Timeline({features, colorOf, onPick}) {
     const dated = features.filter(f => f.goLiveMs != null).sort((a, b) => a.goLiveMs - b.goLiveMs);
     if (dated.length === 0) return <div className="fp-muted">No target go-live dates set.</div>;
 
-    const W = Math.max(w || 760, 360);
+    // The SVG scales to fill the container (viewBox + width:100%), and pins are
+    // positioned by percentage — so the road is never skewed, even before the
+    // width is measured.
+    const W = Math.max(w || 1000, 480);
     const H = 320;
-    const margin = 96;
-    const TOP = 122;
-    const BOT = 198;
+    const margin = Math.max(80, W * 0.08);
+    const TOP = 126;
+    const BOT = 194;
     const N = dated.length;
     const xAt = k => (N > 1 ? margin + k * ((W - 2 * margin) / (N - 1)) : W / 2);
     const yAt = k => (k % 2 === 0 ? TOP : BOT);
+    const leftPct = k => `${(xAt(k) / W) * 100}%`;
 
-    // Smooth serpentine path through a virtual edge point, every stop, and a
-    // virtual edge point — control points at segment midpoints give clean S-curves.
     const pts = [{x: 0, y: yAt(0)}];
     for (let k = 0; k < N; k++) pts.push({x: xAt(k), y: yAt(k)});
     pts.push({x: W, y: yAt(N - 1)});
@@ -107,26 +108,25 @@ function Timeline({features, colorOf, onPick}) {
 
     return (
         <div className="fp-road" ref={ref} style={{height: H}}>
-            <svg className="fp-road-svg" width={W} height={H} aria-hidden>
-                <path d={d} className="fp-road-casing" />
-                <path d={d} className="fp-road-asphalt" />
-                <path d={d} className="fp-road-dashes" />
-                <circle cx={2} cy={yAt(0)} r={7} className="fp-road-start" />
+            <svg className="fp-road-svg" width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden>
+                <path d={d} className="fp-road-casing" pathLength="1" />
+                <path d={d} className="fp-road-asphalt" pathLength="1" />
+                <path d={d} className="fp-road-dashes" pathLength="1" />
             </svg>
-            <span className="fp-road-now" style={{left: 4, top: yAt(0)}}>Now</span>
+            <span className="fp-road-now" style={{left: 0, top: TOP}}>Now</span>
             {dated.map((f, k) => {
                 const up = yAt(k) === TOP;
                 return (
                     <div
                         key={f.id}
-                        className={`fp-road-stop ${up ? 'up' : 'down'} clickable`}
-                        style={{left: xAt(k), top: yAt(k)}}
+                        className={`fp-road-stop ${up ? 'up' : 'down'}`}
+                        style={{left: leftPct(k), top: yAt(k), animationDelay: `${0.5 + k * 0.13}s`}}
                         title={`${f.name} · ${f.initiative} · go-live ${fmtDate(f.goLiveMs)} · ${f.pct}%`}
                         onClick={() => onPick(f)}
                     >
                         <span className="fp-pin" style={{'--pin': colorOf(f.initiative)}} />
                         <span className="fp-road-card" style={{borderTopColor: colorOf(f.initiative)}}>
-                            <b>{fmtShort(f.goLiveMs)}</b>
+                            <b>{fmtDate(f.goLiveMs)}</b>
                             <span className="fp-road-feat">{f.name}</span>
                             <span className="fp-road-pct">{f.pct}% · {f.initiative}</span>
                         </span>
