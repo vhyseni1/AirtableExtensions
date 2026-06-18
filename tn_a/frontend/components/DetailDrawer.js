@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { X, Quote, ChevronDown, ChevronRight } from 'lucide-react'
+import { X, Quote, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
 import { TOKENS, personaColor } from '../utils/colors'
 import { parseTags, tagColorSafe } from '../utils/drawerHelpers'
 import PersonaChip from './PersonaChip'
 import PriorityBadge from './PriorityBadge'
 
-export default function DetailDrawer({ state }) {
+export default function DetailDrawer({ state, expandRow, hasBinding }) {
   const { drawer, closeDrawer } = state
   if (!drawer) return null
 
@@ -107,7 +107,13 @@ export default function DetailDrawer({ state }) {
           </SectionLabel>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {rows.map((row, i) => (
-              <LineageCard key={row.Row_ID || i} row={row} defaultOpen={rows.length <= 2} />
+              <LineageCard
+                key={row.Row_ID || i}
+                row={row}
+                defaultOpen={rows.length <= 2}
+                expandRow={expandRow}
+                hasBinding={hasBinding}
+              />
             ))}
           </div>
         </div>
@@ -152,10 +158,16 @@ function ModuleSummary({ module }) {
   )
 }
 
-function LineageCard({ row, defaultOpen }) {
+function LineageCard({ row, defaultOpen, expandRow, hasBinding }) {
   const [open, setOpen] = useState(defaultOpen)
   const tags = parseTags(row.Tags)
   const color = row.Persona_Color || personaColor(row.Persona)
+  const canExpand = hasBinding && typeof expandRow === 'function'
+
+  const openNative = (e) => {
+    e.stopPropagation()
+    expandRow(row)
+  }
 
   return (
     <div
@@ -166,22 +178,27 @@ function LineageCard({ row, defaultOpen }) {
         borderLeft: `4px solid ${color}`,
       }}
     >
-      <button
-        onClick={() => setOpen((o) => !o)}
+      <div
         style={{
-          width: '100%',
           display: 'flex',
           alignItems: 'center',
           gap: 8,
           padding: '10px 12px',
           background: '#fff',
-          border: 'none',
-          cursor: 'pointer',
-          textAlign: 'left',
         }}
       >
-        {open ? <ChevronDown size={16} color={TOKENS.subtle} /> : <ChevronRight size={16} color={TOKENS.subtle} />}
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <button
+          onClick={() => setOpen((o) => !o)}
+          title={open ? 'Collapse lineage' : 'Expand lineage'}
+          style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, display: 'flex', flexShrink: 0 }}
+        >
+          {open ? <ChevronDown size={16} color={TOKENS.subtle} /> : <ChevronRight size={16} color={TOKENS.subtle} />}
+        </button>
+        <div
+          onClick={canExpand ? openNative : () => setOpen((o) => !o)}
+          title={canExpand ? 'Open record in Airtable' : undefined}
+          style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+        >
           <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a', lineHeight: 1.25 }}>
             {row.Module_Name}
           </div>
@@ -189,8 +206,29 @@ function LineageCard({ row, defaultOpen }) {
             {row.Change_Category} · {row.Role}
           </div>
         </div>
+        {canExpand && (
+          <button
+            onClick={openNative}
+            title="Open record in Airtable"
+            style={{
+              border: `1px solid ${TOKENS.border}`,
+              background: '#fff',
+              borderRadius: 6,
+              width: 28,
+              height: 28,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: TOKENS.navy,
+              flexShrink: 0,
+            }}
+          >
+            <ExternalLink size={14} />
+          </button>
+        )}
         <PriorityBadge priority={row.Priority} />
-      </button>
+      </div>
 
       {open && (
         <div style={{ padding: '0 14px 14px', background: '#fff' }}>

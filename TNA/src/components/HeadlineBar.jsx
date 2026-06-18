@@ -5,7 +5,7 @@ export default function HeadlineBar({ state, full = false, compact = false }) {
   const { metrics, setView } = state
 
   const tiles = [
-    { label: 'Total CIA Impacts', value: metrics.ciaImpacts, accent: '#0A3D62', nav: 'heatmap', note: 'upstream extraction' },
+    { label: 'Total CIA Impacts', value: metrics.ciaImpacts, accent: '#0A3D62', nav: null, note: 'upstream · CIA Control Tower' },
     { label: 'Training Needs Derived', value: metrics.trainingNeeds, accent: '#2C5F8D', nav: 'flow' },
     { label: 'Learning Modules', value: metrics.learningModules, accent: '#1A8A8F', nav: 'library' },
     { label: 'Persona Journeys', value: metrics.personaJourneys, accent: '#8B5A3C', nav: 'journey' },
