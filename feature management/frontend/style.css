@@ -294,19 +294,29 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-panel-title { font-weight: 700; font-size: 14px; margin-bottom: 14px; }
 .fp-exec-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 
-/* Timeline (markers on the line; labels stack into collision-free lanes below) */
-.fp-timeline { padding: 34px 8px 18px; overflow-x: auto; }
-.fp-timeline-track { position: relative; height: 4px; background: #e3e8ef; border-radius: 2px; min-width: 680px; }
-.fp-tl-tick { position: absolute; top: -10px; transform: translateX(-50%); color: var(--fp-muted); font-size: 10px; }
-.fp-tl-tick::after { content: ''; position: absolute; left: 50%; top: 14px; width: 1px; height: 8px; background: #e3e8ef; }
-.fp-tl-today { position: absolute; top: -18px; width: 2px; background: var(--fp-accent); transform: translateX(-50%); }
-.fp-tl-today span { position: absolute; top: -2px; left: 5px; font-size: 9.5px; font-weight: 700; color: var(--fp-accent); white-space: nowrap; }
-.fp-tl-flag { position: absolute; top: -4px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; }
-.fp-tl-marker { width: 13px; height: 13px; border-radius: 50%; border: 2.5px solid #fff; box-shadow: 0 0 0 1px rgba(20,39,78,.15); z-index: 1; flex: 0 0 auto; }
-.fp-tl-connector { width: 2px; background: rgba(20,39,78,.14); flex: 0 0 auto; }
-.fp-tl-label { background: #fff; border: 1px solid; border-radius: 7px; padding: 3px 9px; font-size: 11px; white-space: nowrap; box-shadow: var(--fp-shadow); max-width: 170px; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-.fp-tl-flag:hover { z-index: 5; }
-.fp-tl-flag:hover .fp-tl-label { box-shadow: 0 6px 16px rgba(20,39,78,.2); }
+/* Delivery roadmap — a winding road with map pins at each go-live */
+.fp-road { position: relative; width: 100%; overflow: hidden; }
+.fp-road-svg { display: block; }
+.fp-road-casing { fill: none; stroke: #fff; stroke-width: 38; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 7px 10px rgba(20,39,78,.18)); }
+.fp-road-asphalt { fill: none; stroke: #2b3442; stroke-width: 30; stroke-linecap: round; stroke-linejoin: round; }
+.fp-road-dashes { fill: none; stroke: #fff; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 16 16; }
+.fp-road-start { fill: #2b3442; }
+.fp-road-now { position: absolute; transform: translate(10px, -50%); background: #2b3442; color: #fff; font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+
+.fp-road-stop { position: absolute; display: flex; align-items: center; gap: 7px; width: 156px; }
+.fp-road-stop.up { flex-direction: column-reverse; transform: translate(-50%, -100%); }
+.fp-road-stop.down { flex-direction: column; transform: translate(-50%, 0); }
+.fp-pin { position: relative; width: 30px; height: 30px; border-radius: 50% 50% 50% 0; background: var(--pin); box-shadow: 0 5px 9px rgba(20,39,78,.28); flex: 0 0 auto; }
+.fp-pin::after { content: ''; position: absolute; top: 9px; left: 9px; width: 12px; height: 12px; border-radius: 50%; background: #fff; }
+.fp-road-stop.up .fp-pin { transform: rotate(45deg); }
+.fp-road-stop.down .fp-pin { transform: rotate(225deg); }
+.fp-road-card { display: flex; flex-direction: column; gap: 2px; background: #fff; border: 1px solid var(--fp-border); border-top: 3px solid #ccc; border-radius: 10px; padding: 8px 10px; box-shadow: var(--fp-shadow); width: 156px; text-align: center; }
+.fp-road-card b { font-size: 12.5px; }
+.fp-road-feat { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fp-road-pct { font-size: 10.5px; color: var(--fp-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fp-road-stop:hover .fp-road-card { box-shadow: 0 10px 22px rgba(20,39,78,.2); }
+.fp-road-stop.up:hover .fp-pin { transform: rotate(45deg) scale(1.09); }
+.fp-road-stop.down:hover .fp-pin { transform: rotate(225deg) scale(1.09); }
 .fp-legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 11px; color: var(--fp-muted); margin-top: 6px; }
 .fp-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .fp-legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }

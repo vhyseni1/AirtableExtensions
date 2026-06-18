@@ -67,13 +67,12 @@ function PhaseStrip({phase, mounted}) {
     );
 }
 
-// ── Go-live milestone timeline (collision-free lane stacking) ──────────────────
-const TL_ROW = 32;
+// ── Delivery roadmap — a winding road with a map pin at each go-live ───────────
 function Timeline({features, colorOf, onPick}) {
-    const trackRef = useRef(null);
+    const ref = useRef(null);
     const [w, setW] = useState(0);
     useEffect(() => {
-        const el = trackRef.current;
+        const el = ref.current;
         if (!el) return undefined;
         const ro = new ResizeObserver(entries => setW(entries[0].contentRect.width));
         ro.observe(el);
@@ -82,62 +81,58 @@ function Timeline({features, colorOf, onPick}) {
     }, []);
 
     const dated = features.filter(f => f.goLiveMs != null).sort((a, b) => a.goLiveMs - b.goLiveMs);
-    const now = Date.now();
     if (dated.length === 0) return <div className="fp-muted">No target go-live dates set.</div>;
 
-    const min = Math.min(now, dated[0].goLiveMs);
-    const max = Math.max(now, dated[dated.length - 1].goLiveMs);
-    const pad = (max - min) * 0.06 || 86400000 * 15;
-    const start = min - pad;
-    const end = max + pad;
-    const span = end - start || 1;
-    const pct = ms => ((ms - start) / span) * 100;
+    const W = Math.max(w || 760, 360);
+    const H = 320;
+    const margin = 96;
+    const TOP = 122;
+    const BOT = 198;
+    const N = dated.length;
+    const xAt = k => (N > 1 ? margin + k * ((W - 2 * margin) / (N - 1)) : W / 2);
+    const yAt = k => (k % 2 === 0 ? TOP : BOT);
 
-    // Greedy lane packing so labels never overlap: a flag drops to the next lane
-    // whenever its label would collide with the last one placed in that lane.
-    const W = w || 720;
-    const laneRight = [];
-    const placed = dated.map(f => {
-        const cx = (pct(f.goLiveMs) / 100) * W;
-        const labelW = Math.min(168, 36 + `${fmtShort(f.goLiveMs)} ${f.name}`.length * 6.4);
-        const left = cx - labelW / 2;
-        let lane = 0;
-        while (lane < laneRight.length && left < laneRight[lane] + 10) lane++;
-        laneRight[lane] = cx + labelW / 2;
-        return {f, lane};
-    });
-    const rows = Math.max(1, laneRight.length);
-
-    const ticks = [];
-    const d = new Date(start);
-    d.setDate(1); d.setHours(0, 0, 0, 0);
-    while (d.getTime() <= end) { ticks.push(d.getTime()); d.setMonth(d.getMonth() + 1); }
+    // Smooth serpentine path through a virtual edge point, every stop, and a
+    // virtual edge point — control points at segment midpoints give clean S-curves.
+    const pts = [{x: 0, y: yAt(0)}];
+    for (let k = 0; k < N; k++) pts.push({x: xAt(k), y: yAt(k)});
+    pts.push({x: W, y: yAt(N - 1)});
+    let d = `M ${pts[0].x} ${pts[0].y}`;
+    for (let k = 1; k < pts.length; k++) {
+        const p0 = pts[k - 1];
+        const p1 = pts[k];
+        const cx = (p0.x + p1.x) / 2;
+        d += ` C ${cx} ${p0.y}, ${cx} ${p1.y}, ${p1.x} ${p1.y}`;
+    }
 
     return (
-        <div className="fp-timeline" style={{minHeight: 64 + rows * TL_ROW}}>
-            <div className="fp-timeline-track" ref={trackRef}>
-                {ticks.map(t => (
-                    <div key={t} className="fp-tl-tick" style={{left: `${pct(t)}%`}}>
-                        <span>{new Date(t).toLocaleDateString('en-GB', {month: 'short', year: '2-digit'})}</span>
-                    </div>
-                ))}
-                <div className="fp-tl-today" style={{left: `${pct(now)}%`, bottom: -(rows * TL_ROW + 6)}} title="Today"><span>Today</span></div>
-                {placed.map(({f, lane}) => (
+        <div className="fp-road" ref={ref} style={{height: H}}>
+            <svg className="fp-road-svg" width={W} height={H} aria-hidden>
+                <path d={d} className="fp-road-casing" />
+                <path d={d} className="fp-road-asphalt" />
+                <path d={d} className="fp-road-dashes" />
+                <circle cx={2} cy={yAt(0)} r={7} className="fp-road-start" />
+            </svg>
+            <span className="fp-road-now" style={{left: 4, top: yAt(0)}}>Now</span>
+            {dated.map((f, k) => {
+                const up = yAt(k) === TOP;
+                return (
                     <div
                         key={f.id}
-                        className="fp-tl-flag clickable"
-                        style={{left: `${pct(f.goLiveMs)}%`}}
+                        className={`fp-road-stop ${up ? 'up' : 'down'} clickable`}
+                        style={{left: xAt(k), top: yAt(k)}}
                         title={`${f.name} · ${f.initiative} · go-live ${fmtDate(f.goLiveMs)} · ${f.pct}%`}
                         onClick={() => onPick(f)}
                     >
-                        <span className="fp-tl-marker" style={{background: colorOf(f.initiative)}} />
-                        <span className="fp-tl-connector" style={{height: lane * TL_ROW + 8}} />
-                        <span className="fp-tl-label" style={{borderColor: colorOf(f.initiative)}}>
-                            <b>{fmtShort(f.goLiveMs)}</b> {f.name}
+                        <span className="fp-pin" style={{'--pin': colorOf(f.initiative)}} />
+                        <span className="fp-road-card" style={{borderTopColor: colorOf(f.initiative)}}>
+                            <b>{fmtShort(f.goLiveMs)}</b>
+                            <span className="fp-road-feat">{f.name}</span>
+                            <span className="fp-road-pct">{f.pct}% · {f.initiative}</span>
                         </span>
                     </div>
-                ))}
-            </div>
+                );
+            })}
         </div>
     );
 }
@@ -276,7 +271,7 @@ export default function Executive({model}) {
             </div>
 
             {/* Timeline */}
-            <div className="fp-section-title">Delivery timeline — target go-lives</div>
+            <div className="fp-section-title">Delivery roadmap — target go-lives</div>
             <div className="fp-panel">
                 <Timeline features={features} colorOf={colorOf} onPick={pushFeatureAttrs} />
                 <div className="fp-legend">
