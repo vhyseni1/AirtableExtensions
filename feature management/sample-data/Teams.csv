@@ -1,0 +1,11 @@
+Team Name,Users,Domain,Tool / Environment,Email
+Accounting / Reporting COE (Control Crew),"Priya Anand, Marco Reuter",Control,"Excel, DRA",coe@bankdemo.internal
+Data & AI Modelling Crew,"Lena Hofmann, Tomás Silva",Data & AI,"DRA, Enterprise Architect",modelling@bankdemo.internal
+Data & AI Gateway Crew,"Ravi Menon, Sofia Costa",Data & AI,ampliFi gateway,gateway@bankdemo.internal
+Data & AI Feed-agnostic Crew,"Jan Vermeer, Aisha Khan",Data & AI,ASD tenant,feedagnostic@bankdemo.internal
+Data & AI System 1 Sourcing Crew (MOR),"Kenji Tan, Olga Petrova",Data & AI,ACD tenant,mor@bankdemo.internal
+Data & AI System 2 Sourcing Crew (MIDAS),"David Okoro, Mei Lin",Data & AI,ARD tenant,midas@bankdemo.internal
+Data & AI Ref Data Sourcing Crew,"Hugo Bernard, Sara Galli",Data & AI,ASD tenant,refdata@bankdemo.internal
+FPSL/GL/GR Crew (Control),"Anita Desai, Lukas Brandt",Calculate,SAP / Fioneer,fpsl@bankdemo.internal
+Calculate Crew,"Yuki Mori, Pawel Nowak",Calculate,SAP / Fioneer,calculate@bankdemo.internal
+Report Crew,"Clara Vogt, Sam Ito",Report,ARD tenant,report@bankdemo.internal

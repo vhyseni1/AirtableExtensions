@@ -1,0 +1,15 @@
+Stage Name,Stage Code,Order,Phase Group,Responsible Team,Approver Team
+1. Business Requirements,1,1,Requirements,Accounting / Reporting COE (Control Crew),Accounting / Reporting COE (Control Crew)
+2. Posting Model Specifications / Data Requirements,2,2,Requirements,Accounting / Reporting COE (Control Crew),Data & AI Modelling Crew
+3. Data Modelling,3,3,Modelling,Data & AI Modelling Crew,Data & AI Gateway Crew
+4. Gateway Derivation,4,4,Transformation,Data & AI Gateway Crew,Data & AI Feed-agnostic Crew
+5a. System / Feed-agnostic Sourcing,5a,5,Sourcing,Data & AI Feed-agnostic Crew,FPSL/GL/GR Crew (Control)
+5b. MOR (Upstream System 1) Sourcing & VESTing,5b-MOR,6,Sourcing,Data & AI System 1 Sourcing Crew (MOR),FPSL/GL/GR Crew (Control)
+5b. MIDAS (Upstream System 2) Sourcing & VESTing,5b-MIDAS,7,Sourcing,Data & AI System 2 Sourcing Crew (MIDAS),FPSL/GL/GR Crew (Control)
+5b. Other Systems Sourcing & VESTing,5b-Other,8,Sourcing,Data & AI System 2 Sourcing Crew (MIDAS),FPSL/GL/GR Crew (Control)
+5c. Static / Reference Data Source Systems,5c,9,Sourcing,Data & AI Ref Data Sourcing Crew,FPSL/GL/GR Crew (Control)
+6. FPSL Config,6,10,Sub-ledger,FPSL/GL/GR Crew (Control),FPSL/GL/GR Crew (Control)
+7. GL,7,11,Sub-ledger,FPSL/GL/GR Crew (Control),FPSL/GL/GR Crew (Control)
+8. GR,8,12,Sub-ledger,FPSL/GL/GR Crew (Control),Calculate Crew
+9. Calculator Build,9,13,Calculate,Calculate Crew,Report Crew
+10. Report Build,10,14,Report,Report Crew,
