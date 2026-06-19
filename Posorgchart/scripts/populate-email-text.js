@@ -48,13 +48,16 @@ const CONFIG = {
     // reports only".
     includeSelf:       true,
 
-    // FALLBACK: when the hierarchy walk finds no leaders for a record (e.g. a
-    // broken chain), grant every leader whose SHORT CODE is a prefix of the
-    // record's short code (a "DSG" leader covers DSG, DSGA, DSGAB, …).
+    // SHORT CODE drives access: every leader whose short code is a PREFIX of a
+    // record's short code gets that record, listed TOP-FIRST (a "DOS" leader is
+    // first on every DOS* record, then DOSN, then DOSNPT, …). This is reliable
+    // even where the manager chain is broken/vacant.
     shortCodeField:    'Short Code (from [F] Supervisory Organization 🔗)',
-    // 'empty'  → use short codes only when the hierarchy found nothing (default)
-    // 'always' → also UNION short-code leaders onto every record
-    shortCodeMode:     'empty',
+    // 'only'   → use ONLY short codes (recommended; hierarchy only when a record
+    //            has no short code)
+    // 'empty'  → hierarchy first, short codes only when the chain found nothing
+    // 'always' → hierarchy plus a UNION of short-code leaders
+    shortCodeMode:     'only',
 
     // TEST MODE: when true, IGNORE everything above and write ONLY each
     // position's TOP-of-branch leader(s) — the leader(s) with the SHORTEST
@@ -217,21 +220,30 @@ const updates = posQ.records.map(r => {
         return {id: r.id, fields: {[fOut.id]: emails.join(', ')}};
     }
 
-    let emails = leaderEmailsFor(r);
-    const hadHierarchy = emails.length > 0;
-
-    if (CONFIG.shortCodeMode === 'always') {
-        const seen = new Set(emails.map(normEmail));
-        for (const e of shortCodeEmailsFor(r)) {
-            const k = normEmail(e);
-            if (!seen.has(k)) { seen.add(k); emails.push(e); }
+    let emails, via;
+    if (CONFIG.shortCodeMode === 'only') {
+        // Short code is the source of truth (top-first). Fall back to the
+        // hierarchy only for records that have no short code at all.
+        emails = shortCodeEmailsFor(r);
+        via = emails.length ? 'shortcode' : null;
+        if (!emails.length) { emails = leaderEmailsFor(r); via = emails.length ? 'hierarchy' : null; }
+    } else {
+        emails = leaderEmailsFor(r);
+        via = emails.length ? 'hierarchy' : null;
+        if (CONFIG.shortCodeMode === 'always') {
+            const seen = new Set(emails.map(normEmail));
+            for (const e of shortCodeEmailsFor(r)) {
+                const k = normEmail(e);
+                if (!seen.has(k)) { seen.add(k); emails.push(e); }
+            }
+        } else if (!emails.length) {
+            emails = shortCodeEmailsFor(r);   // fallback only when the chain found nothing
+            via = emails.length ? 'shortcode' : null;
         }
-    } else if (!hadHierarchy) {
-        emails = shortCodeEmailsFor(r);   // fallback only when the chain found nothing
     }
 
-    if (hadHierarchy) filledByHierarchy++;
-    else if (emails.length > 0) filledByShortCode++;
+    if (via === 'hierarchy') filledByHierarchy++;
+    else if (via === 'shortcode') filledByShortCode++;
     else stillEmpty++;
 
     return {id: r.id, fields: {[fOut.id]: emails.join(', ')}};
