@@ -266,13 +266,32 @@ while (updates.length > 0) {
     await posTable.updateRecordsAsync(batch);
     written += batch.length;
 }
+
+// ── Summary: layers (by short-code depth) and employees per layer ────────────
+const codes = posQ.records.map(r => codeByRec[r.id]).filter(Boolean);
+
+// Positions per layer = per short-code length (DOS = layer 3, DOSN = 4, …).
+const perLayer = {};
+for (const c of codes) perLayer[c.length] = (perLayer[c.length] || 0) + 1;
+const layerLines = Object.keys(perLayer).map(Number).sort((a, b) => a - b)
+    .map(len => `- **Layer ${len}**: ${perLayer[len]} position(s)`);
+
+// Each leader and how many positions sit in their subtree (code prefix), TOP
+// (shortest code) first.
+const leaderCounts = leadersByCode.map(L => ({
+    code: L.code,
+    email: L.email,
+    n: codes.reduce((s, c) => s + (c.startsWith(L.code) ? 1 : 0), 0),
+})).sort((a, b) => a.code.length - b.code.length || b.n - a.n);
+const topLines = leaderCounts.slice(0, 25)
+    .map(L => `- \`${L.code}\` (layer ${L.code.length}) — ${L.email} — **${L.n}** position(s)`);
+
 output.markdown(
-    CONFIG.topLeadersOnly
-        ? `**TEST MODE — top leaders only.** Updated **"${CONFIG.outputField}"** on **${written}** position(s).\n\n` +
-          `- ${filledByShortCode} got a top leader\n` +
-          `- **${stillEmpty} got none** (no short code, or no leader at any prefix)`
-        : `Updated **"${CONFIG.outputField}"** on **${written}** position(s).\n\n` +
-          `- ${filledByHierarchy} filled via the hierarchy\n` +
-          `- ${filledByShortCode} filled via the short-code fallback\n` +
-          `- **${stillEmpty} still have no emails**`,
+    `### Updated "${CONFIG.outputField}" on ${written} position(s)\n` +
+    `- ${filledByShortCode} via short code · ${filledByHierarchy} via hierarchy · **${stillEmpty} empty**\n\n` +
+    `### Positions per layer (short-code depth)\n` +
+    layerLines.join('\n') + `\n\n` +
+    `### Top leaders (top layer first) — employees in their subtree\n` +
+    topLines.join('\n') +
+    (leaderCounts.length > 25 ? `\n- … and ${leaderCounts.length - 25} more leaders` : ''),
 );
