@@ -37,7 +37,7 @@ const CONFIG = {
     uniqueIdField:     'Unique ID',          // each record's own id
     managerIdField:    '[F] Manager ID 🔎',  // the parent's Unique ID (lookup)
     employeeIdField:   '[E] Employee ID',    // incumbent id, to match a leader
-    outputField:       '[T] Email Text',     // comma-separated emails (output)
+    outputField:       '[T] Email Text (Future Leaders)',  // comma-separated emails (output)
 
     leadersTable:      'Future Leaders list',
     leadersEmpIdField: 'Employee ID',
@@ -60,7 +60,7 @@ const CONFIG = {
     // position's TOP-of-branch leader(s) — the leader(s) with the SHORTEST
     // prefix short code above the record (e.g. the "DOC" leader for any DOC*
     // record). Set back to false to restore the full chain behaviour.
-    topLeadersOnly:    true,
+    topLeadersOnly:    false,
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
