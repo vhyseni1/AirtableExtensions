@@ -40,13 +40,12 @@ const CONFIG = {
     outputField:       '[T] Email Text (Future Leaders)',  // comma-separated emails (output)
 
     leadersTable:      'Future Leaders list',
-    leadersEmpIdField: 'Employee ID',
+    leadersEmpIdField: 'Leader ID',
     leadersEmailField: 'Email',
-    // The leader's OWN short code on the Future Leaders list (the org they lead,
-    // e.g. "DOS"). This is the reliable source for prefix matching — set it to
-    // the exact column name. Leave '' to fall back to inferring it from each
-    // leader's position row instead.
-    leadersShortCodeField: 'Short Code',
+    // The leader's short code lives as the LEADING token of "Managing
+    // Organization" (e.g. "DOC Sensor & Cartridge Manufacturing" → DOC). The
+    // script parses that leading code automatically.
+    leadersShortCodeField: 'Managing Organization',
 
     // Also stamp a leader's OWN email on their OWN seat (so they can see
     // themselves at the top of their branch). Set false for "managers see
@@ -76,6 +75,11 @@ const norm      = s => String(s == null ? '' : s).normalize('NFKC').trim();
 const normKey   = s => norm(s).toUpperCase();      // id matching (case-tolerant)
 const normEmail = s => norm(s).toLowerCase();
 const normCode  = s => norm(s).replace(/\s+/g, '').toUpperCase();  // short codes
+// Leading code token of a string, e.g. "DOCAA Production Rotkreuz" → "DOCAA".
+const parseCode = s => {
+    const m = norm(s).match(/^[A-Za-z0-9]+/);
+    return m ? m[0].toUpperCase() : '';
+};
 
 // Parent-id key: the first run of 3+ digits ("12345 - Title" → "12345"), else
 // the whole normalized value. Mirrors the org-chart's matching.
@@ -107,7 +111,7 @@ for (const r of leadersQ.records) {
     const id = normKey(readText(r, lEmpField));
     const email = norm(readText(r, lMailField));
     if (id && email && !(id in emailByEmpId)) emailByEmpId[id] = email;
-    const code = lCodeField ? normCode(readText(r, lCodeField)) : '';
+    const code = lCodeField ? parseCode(readText(r, lCodeField)) : '';
     if (email && code) {
         const key = code + '|' + normEmail(email);
         if (!seenLeaderCode.has(key)) { seenLeaderCode.add(key); leadersByCode.push({code, email}); }
