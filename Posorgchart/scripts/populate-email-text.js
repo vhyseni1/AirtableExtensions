@@ -42,6 +42,11 @@ const CONFIG = {
     leadersTable:      'Future Leaders list',
     leadersEmpIdField: 'Employee ID',
     leadersEmailField: 'Email',
+    // The leader's OWN short code on the Future Leaders list (the org they lead,
+    // e.g. "DOS"). This is the reliable source for prefix matching — set it to
+    // the exact column name. Leave '' to fall back to inferring it from each
+    // leader's position row instead.
+    leadersShortCodeField: 'Short Code',
 
     // Also stamp a leader's OWN email on their OWN seat (so they can see
     // themselves at the top of their branch). Set false for "managers see
@@ -86,19 +91,32 @@ function readText(record, field) {
     return (s || '').trim();
 }
 
-// ── Leaders: Employee ID → email ────────────────────────────────────────────
+// ── Leaders: from the Future Leaders list — email + (its own) short code ─────
 const leadersTable = base.getTable(CONFIG.leadersTable);
 const lEmpField  = leadersTable.getField(CONFIG.leadersEmpIdField);
 const lMailField = leadersTable.getField(CONFIG.leadersEmailField);
-const leadersQ = await leadersTable.selectRecordsAsync({fields: [lEmpField, lMailField]});
+const lCodeField = CONFIG.leadersShortCodeField ? leadersTable.getField(CONFIG.leadersShortCodeField) : null;
+const leadersQ = await leadersTable.selectRecordsAsync({
+    fields: lCodeField ? [lEmpField, lMailField, lCodeField] : [lEmpField, lMailField],
+});
 
-const emailByEmpId = {};
+const emailByEmpId = {};            // Employee ID → email (for the hierarchy fallback)
+const leadersByCode = [];           // {code, email} from the leaders list itself
+const seenLeaderCode = new Set();
 for (const r of leadersQ.records) {
     const id = normKey(readText(r, lEmpField));
     const email = norm(readText(r, lMailField));
     if (id && email && !(id in emailByEmpId)) emailByEmpId[id] = email;
+    const code = lCodeField ? normCode(readText(r, lCodeField)) : '';
+    if (email && code) {
+        const key = code + '|' + normEmail(email);
+        if (!seenLeaderCode.has(key)) { seenLeaderCode.add(key); leadersByCode.push({code, email}); }
+    }
 }
-output.text(`Loaded ${Object.keys(emailByEmpId).length} leader email(s) from "${CONFIG.leadersTable}".`);
+output.text(
+    `Loaded ${Object.keys(emailByEmpId).length} leader email(s); ` +
+    `${leadersByCode.length} have a short code on "${CONFIG.leadersTable}".`,
+);
 
 // ── Positions: index by Unique ID; read manager pointer + employee id ───────
 const posTable = base.getTable(CONFIG.posTable);
@@ -125,19 +143,8 @@ for (const r of posQ.records) {
     codeByRec[r.id]   = fCode ? normCode(readText(r, fCode)) : '';
 }
 
-// Leaders that have a short code → {code, email}. A record inherits every leader
-// whose code is a PREFIX of the record's code.
-const leadersByCode = [];
-const seenLeaderCode = new Set();
-for (const r of posQ.records) {
-    const email = emailByEmpId[empKeyByRec[r.id]];
-    const code = codeByRec[r.id];
-    if (!email || !code) continue;
-    const key = code + '|' + normEmail(email);
-    if (seenLeaderCode.has(key)) continue;
-    seenLeaderCode.add(key);
-    leadersByCode.push({code, email});
-}
+// A record inherits every leader (from the Future Leaders list) whose short code
+// is a PREFIX of the record's code.
 const shortCodeEmailsFor = r => {
     const code = codeByRec[r.id];
     if (!code) return [];
