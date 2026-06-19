@@ -138,13 +138,15 @@ for (const r of posQ.records) {
 const shortCodeEmailsFor = r => {
     const code = codeByRec[r.id];
     if (!code) return [];
+    // shortest code = highest in the org → list top leaders first.
+    const matches = leadersByCode
+        .filter(L => code.startsWith(L.code))
+        .sort((a, b) => a.code.length - b.code.length);
     const out = [];
     const seen = new Set();
-    for (const L of leadersByCode) {
-        if (code.startsWith(L.code)) {
-            const k = normEmail(L.email);
-            if (!seen.has(k)) { seen.add(k); out.push(L.email); }
-        }
+    for (const L of matches) {
+        const k = normEmail(L.email);
+        if (!seen.has(k)) { seen.add(k); out.push(L.email); }
     }
     return out;
 };
@@ -179,7 +181,10 @@ const parentOf = r => {
     return (p && p.id !== r.id) ? p : null;
 };
 
-// Leader emails for the chain starting at the record itself, climbing to the root.
+// Leader emails for the chain, ORDERED TOP-FIRST: the top leader, then the next
+// one down, … all the way to the position's direct manager (and the position
+// itself last when includeSelf). We climb from the record up to the root, then
+// reverse so the top of the org comes first.
 function leaderEmailsFor(startRec) {
     const out = [];
     const seen = new Set();    // dedupe emails
@@ -198,6 +203,7 @@ function leaderEmailsFor(startRec) {
         isSelf = false;
         r = parentOf(r);   // climb the hierarchy — straight through vacant seats
     }
+    out.reverse();   // top leader first → … → direct manager (→ self if included)
     return out;
 }
 
