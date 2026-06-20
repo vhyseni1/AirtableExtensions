@@ -253,9 +253,17 @@ const updates = posQ.records.map(r => {
         }
     }
 
-    if (via === 'hierarchy') filledByHierarchy++;
-    else if (via === 'shortcode') filledByShortCode++;
-    else stillEmpty++;
+    // SELF: if this position's incumbent IS a leader (its [E] Employee ID matches
+    // a Leader ID), make sure their own email is on their own seat — even when
+    // their position sits in a different org than the one they lead.
+    if (CONFIG.includeSelf) {
+        const self = emailByEmpId[empKeyByRec[r.id]];
+        if (self && !emails.some(e => normEmail(e) === normEmail(self))) emails.push(self);
+    }
+
+    if (emails.length === 0) stillEmpty++;
+    else if (via === 'hierarchy') filledByHierarchy++;
+    else filledByShortCode++;
 
     return {id: r.id, fields: {[fOut.id]: emails.join(', ')}};
 });

@@ -193,9 +193,16 @@ const updates = posQ.records.map(r => {
         } else if (!emails.length) { emails = shortCodeEmailsFor(r); via = emails.length ? 'shortcode' : null; }
     }
 
-    if (via === 'shortcode') filledByShortCode++;
+    // SELF: if this position's incumbent IS a leader (its [E] Employee ID matches
+    // a Leader ID), ensure their own email is on their own seat.
+    if (CONFIG.includeSelf) {
+        const self = emailByEmpId[empKeyByRec[r.id]];
+        if (self && !emails.some(e => normEmail(e) === normEmail(self))) emails.push(self);
+    }
+
+    if (emails.length === 0) stillEmpty++;
     else if (via === 'hierarchy') filledByHierarchy++;
-    else stillEmpty++;
+    else filledByShortCode++;
 
     return {id: r.id, fields: {[fOut.id]: emails.join(', ')}};
 });
