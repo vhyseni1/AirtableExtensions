@@ -17,11 +17,12 @@
 const CONFIG = {
     posTable:          'Employees & Positions',
     uniqueIdField:     'Unique ID',          // each record's own id (child)
-    managerIdField:    '[E] Manager ID',     // the EXISTING manager's id (parent)  ← CONFIRM name
+    managerIdField:    '[E] Manager ID',     // the EXISTING manager's id (parent)
     employeeIdField:   '[E] Employee ID',    // incumbent id (hierarchy fallback)
     outputField:       '[T] Email Text (Current Leaders)',
-    // POSITION short code for the CURRENT/supervisory org.                       ← CONFIRM name
-    shortCodeField:    'Short Code (from [F] Supervisory Organization 🔗)',
+    // POSITION's current supervisory org; its LEADING token is the short code
+    // (e.g. "DOAEC Consumables Support (…)" → DOAEC).
+    shortCodeField:    '[E] Supervisory Organization',
 
     leadersTable:          'Current Leaders List',
     leadersEmpIdField:     'Leader ID',
@@ -104,7 +105,7 @@ for (const r of posQ.records) {
     }
     mgrRawByRec[r.id] = readText(r, fMgr);
     empKeyByRec[r.id] = normKey(readText(r, fEmp));
-    codeByRec[r.id]   = fCode ? normCode(readText(r, fCode)) : '';
+    codeByRec[r.id]   = fCode ? parseCode(readText(r, fCode)) : '';   // leading token = code
 }
 
 // A position inherits every leader whose code is a PREFIX of its short code.
