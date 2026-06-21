@@ -258,18 +258,27 @@ if (CONFIG.flagMissingLeaders) {
         if (!managerRecByEmpId[mid]) managerRecByEmpId[mid] = m;
     }
 
-    // 1) Update EXISTING leaders: Level + a situational Status.
+    // Short-code subtree size: positions strictly BELOW a leader's code — the
+    // reliable signal (same as the email branch) when the manager-pointer
+    // hierarchy doesn't resolve.
+    const allCodes = posQ.records.map(r => codeByRec[r.id]).filter(Boolean);
+    const subtreeBelow = C => C ? allCodes.reduce((s, c) => (c.length > C.length && c.startsWith(C) ? s + 1 : s), 0) : 0;
+
+    // 1) Update EXISTING leaders: Level + a situational Status. "Active" is
+    //    decided by direct reports (hierarchy) OR a non-empty short-code subtree.
     const toUpdate = [];
     for (const r of leadersQ.records) {
         const mid = normKey(readText(r, lEmpField));
         const code = lCodeField ? parseCode(readText(r, lCodeField)) : '';
-        const n = mid ? (reportsByEmpId[mid] || 0) : 0;
+        const direct = mid ? (reportsByEmpId[mid] || 0) : 0;
+        const below = subtreeBelow(code);
         const fields = {};
         if (lLevelField && code) fields[CONFIG.leadersLevelField] = levelFor(code);
         if (lStatusField) {
             let status;
             if (mid && !(mid in emailByEmpId)) status = CONFIG.statusMissingEmail;
-            else if (n > 0) status = `${CONFIG.statusUpdate} (${n} direct report${n !== 1 ? 's' : ''})`;
+            else if (direct > 0) status = `${CONFIG.statusUpdate} (${direct} direct report${direct !== 1 ? 's' : ''})`;
+            else if (below > 0)  status = `${CONFIG.statusUpdate} (${below} in org)`;
             else status = CONFIG.statusNotLeader;
             fields[CONFIG.leadersStatusField] = status;
         }
