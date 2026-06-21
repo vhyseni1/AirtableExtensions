@@ -52,14 +52,18 @@ const CONFIG = {
     // reports only".
     includeSelf:       true,
 
-    // RECONCILE: any manager with at least one direct report who is NOT on the
-    // leaders list gets ADDED to it with Email = "MISSING", so the gap is
-    // visible. (Optional name/org fields are only written if they resolve.)
+    // RECONCILE: write to the leaders list's Status/Level columns (NEVER Email).
+    // A manager (≥1 direct report) not on the list is ADDED with Status =
+    // "Leader missing"; a leader on the list with no email gets Status =
+    // "Leader missing email". Level is set from the short-code length.
     flagMissingLeaders: true,
-    missingEmailMarker: 'MISSING',
     posNameField:       '[E] First Name, Last Name',     // → Leader Name (optional)
     posOrgField:        '[F] Supervisory Organization',  // → Managing Organization (optional)
     leadersNameField:   'Leader Name',                   // name column on the leaders list
+    leadersLevelField:  'Level',
+    leadersStatusField: 'Status',
+    statusMissing:      'Leader missing',
+    statusMissingEmail: 'Leader missing email',
 
     // SHORT CODE drives access: every leader whose short code is a PREFIX of a
     // record's short code gets that record, listed TOP-FIRST (a "DOS" leader is
@@ -104,6 +108,15 @@ function readText(record, field) {
     return (s || '').trim();
 }
 const fieldOrNull = (table, name) => { try { return name ? table.getField(name) : null; } catch (e) { return null; } };
+// Level from a short code's length: 2→GOLT, 3→GOLT-1, 4→GOLT-2, 5+→Below Golt-2.
+const levelFor = code => {
+    const n = (code || '').length;
+    if (n === 2) return 'GOLT';
+    if (n === 3) return 'GOLT-1';
+    if (n === 4) return 'GOLT-2';
+    if (n >= 5) return 'Below Golt-2';
+    return '';
+};
 
 // ── Leaders: from the Future Leaders list — email + (its own) short code ─────
 const leadersTable = base.getTable(CONFIG.leadersTable);
@@ -116,12 +129,13 @@ const leadersQ = await leadersTable.selectRecordsAsync({
 
 const emailByEmpId = {};            // Employee ID → email (for the hierarchy fallback)
 const leaderIdSet = new Set();      // every Leader ID already on the list (to avoid re-adding)
+const leaderRecByEmpId = {};        // Leader ID → leaders-list record (to update Level/Status)
 const leadersByCode = [];           // {code, email} from the leaders list itself
 const seenLeaderCode = new Set();
 for (const r of leadersQ.records) {
     const id = normKey(readText(r, lEmpField));
     const email = norm(readText(r, lMailField));
-    if (id) leaderIdSet.add(id);
+    if (id) { leaderIdSet.add(id); if (!leaderRecByEmpId[id]) leaderRecByEmpId[id] = r; }
     if (id && email && !(id in emailByEmpId)) emailByEmpId[id] = email;
     const code = lCodeField ? parseCode(readText(r, lCodeField)) : '';
     if (email && code) {
@@ -289,34 +303,48 @@ while (updates.length > 0) {
     written += batch.length;
 }
 
-// ── Reconcile: add managers (with direct reports) missing from the leaders list ─
-let flagged = 0;
+// ── Reconcile the leaders list (Status + Level columns; never Email) ─────────
+let added = 0, updated = 0;
 if (CONFIG.flagMissingLeaders) {
-    // A record is a manager if some position's parent resolves to it.
-    const managerRecIds = new Set();
-    for (const r of posQ.records) { const m = parentOf(r); if (m) managerRecIds.add(m.id); }
+    const lLevelField  = fieldOrNull(leadersTable, CONFIG.leadersLevelField);
+    const lStatusField = fieldOrNull(leadersTable, CONFIG.leadersStatusField);
 
-    const toAdd = [];
-    const addedIds = new Set();
+    // Managers = the records that some position resolves to as a parent.
+    const managerRecByEmpId = {};
     for (const r of posQ.records) {
-        if (!managerRecIds.has(r.id)) continue;        // not a manager (no direct reports)
-        const empId = empKeyByRec[r.id];
-        if (!empId) continue;                          // vacant manager → no Leader ID to add
-        if (leaderIdSet.has(empId) || addedIds.has(empId)) continue;  // already a leader / dedupe
-        addedIds.add(empId);
-        const fields = {
-            [CONFIG.leadersEmpIdField]: readText(r, fEmp),
-            [CONFIG.leadersEmailField]: CONFIG.missingEmailMarker,
-        };
-        if (fName) fields[CONFIG.leadersNameField] = readText(r, fName);
-        if (fOrg)  fields[CONFIG.leadersShortCodeField] = readText(r, fOrg);
+        const m = parentOf(r);
+        if (!m) continue;
+        const mid = empKeyByRec[m.id];
+        if (mid && !managerRecByEmpId[mid]) managerRecByEmpId[mid] = m;
+    }
+
+    // 1) Update EXISTING leaders: Level (from their Managing-Org code), and
+    //    Status = "Leader missing email" when they have no email.
+    const toUpdate = [];
+    for (const r of leadersQ.records) {
+        const mid = normKey(readText(r, lEmpField));
+        const code = lCodeField ? parseCode(readText(r, lCodeField)) : '';
+        const fields = {};
+        if (lLevelField && code) fields[CONFIG.leadersLevelField] = levelFor(code);
+        if (lStatusField && mid && !(mid in emailByEmpId)) fields[CONFIG.leadersStatusField] = CONFIG.statusMissingEmail;
+        if (Object.keys(fields).length) toUpdate.push({id: r.id, fields});
+    }
+
+    // 2) ADD managers not on the list, Status = "Leader missing".
+    const toAdd = [];
+    for (const mid of Object.keys(managerRecByEmpId)) {
+        if (leaderIdSet.has(mid)) continue;            // already a leader
+        const m = managerRecByEmpId[mid];
+        const fields = {[CONFIG.leadersEmpIdField]: readText(m, fEmp)};
+        if (fName) fields[CONFIG.leadersNameField] = readText(m, fName);
+        if (fOrg)  fields[CONFIG.leadersShortCodeField] = readText(m, fOrg);
+        if (lLevelField)  fields[CONFIG.leadersLevelField]  = levelFor(codeByRec[m.id]);
+        if (lStatusField) fields[CONFIG.leadersStatusField] = CONFIG.statusMissing;
         toAdd.push({fields});
     }
-    while (toAdd.length > 0) {
-        const batch = toAdd.splice(0, 50);
-        await leadersTable.createRecordsAsync(batch);
-        flagged += batch.length;
-    }
+
+    while (toUpdate.length > 0) { const b = toUpdate.splice(0, 50); await leadersTable.updateRecordsAsync(b); updated += b.length; }
+    while (toAdd.length > 0)    { const b = toAdd.splice(0, 50);    await leadersTable.createRecordsAsync(b); added += b.length; }
 }
 
 // ── Summary: layers (by short-code depth) and employees per layer ────────────
@@ -341,7 +369,7 @@ const topLines = leaderCounts.slice(0, 25)
 output.markdown(
     `### Updated "${CONFIG.outputField}" on ${written} position(s)\n` +
     `- ${filledByShortCode} via short code · ${filledByHierarchy} via hierarchy · **${stillEmpty} empty**\n` +
-    `- **${flagged} manager(s) added to "${CONFIG.leadersTable}" with Email = "${CONFIG.missingEmailMarker}"**\n\n` +
+    `- leaders list: **${added} added** (Status "${CONFIG.statusMissing}") · **${updated} updated** (Level / "${CONFIG.statusMissingEmail}")\n\n` +
     `### Positions per layer (short-code depth)\n` +
     layerLines.join('\n') + `\n\n` +
     `### Top leaders (top layer first) — employees in their subtree\n` +
