@@ -42,6 +42,8 @@ const CONFIG = {
     leadersStatusField: 'Status',
     statusMissing:      'Leader missing',
     statusMissingEmail: 'Leader missing email',
+    statusUpdate:       'Leader update',
+    statusNotLeader:    'Leader not marked as leader',
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -245,22 +247,32 @@ if (CONFIG.flagMissingLeaders) {
     const lLevelField  = fieldOrNull(leadersTable, CONFIG.leadersLevelField);
     const lStatusField = fieldOrNull(leadersTable, CONFIG.leadersStatusField);
 
+    const reportsByEmpId = {};
     const managerRecByEmpId = {};
     for (const r of posQ.records) {
         const m = parentOf(r);
         if (!m) continue;
         const mid = empKeyByRec[m.id];
-        if (mid && !managerRecByEmpId[mid]) managerRecByEmpId[mid] = m;
+        if (!mid) continue;
+        reportsByEmpId[mid] = (reportsByEmpId[mid] || 0) + 1;
+        if (!managerRecByEmpId[mid]) managerRecByEmpId[mid] = m;
     }
 
-    // 1) Update EXISTING leaders: Level + Status = "Leader missing email" when blank.
+    // 1) Update EXISTING leaders: Level + a situational Status.
     const toUpdate = [];
     for (const r of leadersQ.records) {
         const mid = normKey(readText(r, lEmpField));
         const code = lCodeField ? parseCode(readText(r, lCodeField)) : '';
+        const n = mid ? (reportsByEmpId[mid] || 0) : 0;
         const fields = {};
         if (lLevelField && code) fields[CONFIG.leadersLevelField] = levelFor(code);
-        if (lStatusField && mid && !(mid in emailByEmpId)) fields[CONFIG.leadersStatusField] = CONFIG.statusMissingEmail;
+        if (lStatusField) {
+            let status;
+            if (mid && !(mid in emailByEmpId)) status = CONFIG.statusMissingEmail;
+            else if (n > 0) status = `${CONFIG.statusUpdate} (${n} direct report${n !== 1 ? 's' : ''})`;
+            else status = CONFIG.statusNotLeader;
+            fields[CONFIG.leadersStatusField] = status;
+        }
         if (Object.keys(fields).length) toUpdate.push({id: r.id, fields});
     }
 
