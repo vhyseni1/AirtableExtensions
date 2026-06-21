@@ -10,7 +10,26 @@
  *             short code, top leaders first.
  *   Output  : "[T] Email Text (Current Leaders)".
  *
- * Writes ONLY the output field. Safe to re-run.
+ * ── TWO-PASS WORKFLOW (set CONFIG.phase) ─────────────────────────────────────
+ *   phase: 'reconcile'  (run FIRST)
+ *     • For every manager referenced by [E] Manager ID that is NOT already on
+ *       the Current Leaders List, CREATE a row carrying:
+ *         Leader ID            = the manager's employee id
+ *         Leader Name          = the manager's name (if their position exists)
+ *         Managing Organization = the org they MANAGE (their reports' supervisory
+ *                                 org — NOT the manager's own org)
+ *       Status = "Leader missing".  The Email column is left blank for you.
+ *     • Existing leaders get Level + a situational Status (incl. "Leader missing
+ *       email" so you can see which rows still need an email).
+ *     • The email-text output field is NOT written in this phase.
+ *   → Then YOU fill in the Email column on the new rows.
+ *
+ *   phase: 'emails'  (run SECOND)
+ *     • Populates "[T] Email Text (Current Leaders)" from the now-complete
+ *       leader emails, and refreshes Level/Status.
+ *
+ * Writes ONLY the output field + the leaders list's Status/Level (NEVER Email).
+ * Safe to re-run.
  */
 
 // ─── CONFIG — edit to match your base ────────────────────────────────────────
@@ -28,6 +47,11 @@ const CONFIG = {
     leadersEmpIdField:     'Leader ID',
     leadersEmailField:     'Email',
     leadersShortCodeField: 'Managing Organization',   // leader code = its leading token
+
+    // TWO-PASS: 'reconcile' = create missing manager rows only (no email text);
+    //           'emails'    = populate the email-text output (run after you fill
+    //                         in the Email column on the new rows).
+    phase:          'reconcile',
 
     includeSelf:    true,
     // 'always' = manager-ID chain FIRST (handles multi-org managers) then UNION
@@ -208,48 +232,55 @@ function leaderEmailsFor(startRec) {
     return out;
 }
 
-// ── Write ─────────────────────────────────────────────────────────────────────
-let filledByShortCode = 0, filledByHierarchy = 0, stillEmpty = 0;
-const updates = posQ.records.map(r => {
-    if (CONFIG.topLeadersOnly) {
-        const emails = topLeaderEmailsFor(r);
-        if (emails.length > 0) filledByShortCode++; else stillEmpty++;
+// ── Write email text (PHASE 'emails' ONLY) ───────────────────────────────────
+let filledByShortCode = 0, filledByHierarchy = 0, stillEmpty = 0, written = 0;
+if (CONFIG.phase === 'emails') {
+    const updates = posQ.records.map(r => {
+        if (CONFIG.topLeadersOnly) {
+            const emails = topLeaderEmailsFor(r);
+            if (emails.length > 0) filledByShortCode++; else stillEmpty++;
+            return {id: r.id, fields: {[fOut.id]: emails.join(', ')}};
+        }
+
+        let emails, via;
+        if (CONFIG.shortCodeMode === 'only') {
+            emails = shortCodeEmailsFor(r);
+            via = emails.length ? 'shortcode' : null;
+            if (!emails.length) { emails = leaderEmailsFor(r); via = emails.length ? 'hierarchy' : null; }
+        } else {
+            emails = leaderEmailsFor(r);
+            via = emails.length ? 'hierarchy' : null;
+            if (CONFIG.shortCodeMode === 'always') {
+                const seen = new Set(emails.map(normEmail));
+                for (const e of shortCodeEmailsFor(r)) { const k = normEmail(e); if (!seen.has(k)) { seen.add(k); emails.push(e); } }
+            } else if (!emails.length) { emails = shortCodeEmailsFor(r); via = emails.length ? 'shortcode' : null; }
+        }
+
+        // SELF: if this position's incumbent IS a leader (its [E] Employee ID
+        // matches a Leader ID), ensure their own email is on their own seat.
+        if (CONFIG.includeSelf) {
+            const self = emailByEmpId[empKeyByRec[r.id]];
+            if (self && !emails.some(e => normEmail(e) === normEmail(self))) emails.push(self);
+        }
+
+        if (emails.length === 0) stillEmpty++;
+        else if (via === 'hierarchy') filledByHierarchy++;
+        else filledByShortCode++;
+
         return {id: r.id, fields: {[fOut.id]: emails.join(', ')}};
+    });
+
+    while (updates.length > 0) {
+        const batch = updates.splice(0, 50);
+        await posTable.updateRecordsAsync(batch);
+        written += batch.length;
     }
-
-    let emails, via;
-    if (CONFIG.shortCodeMode === 'only') {
-        emails = shortCodeEmailsFor(r);
-        via = emails.length ? 'shortcode' : null;
-        if (!emails.length) { emails = leaderEmailsFor(r); via = emails.length ? 'hierarchy' : null; }
-    } else {
-        emails = leaderEmailsFor(r);
-        via = emails.length ? 'hierarchy' : null;
-        if (CONFIG.shortCodeMode === 'always') {
-            const seen = new Set(emails.map(normEmail));
-            for (const e of shortCodeEmailsFor(r)) { const k = normEmail(e); if (!seen.has(k)) { seen.add(k); emails.push(e); } }
-        } else if (!emails.length) { emails = shortCodeEmailsFor(r); via = emails.length ? 'shortcode' : null; }
-    }
-
-    // SELF: if this position's incumbent IS a leader (its [E] Employee ID matches
-    // a Leader ID), ensure their own email is on their own seat.
-    if (CONFIG.includeSelf) {
-        const self = emailByEmpId[empKeyByRec[r.id]];
-        if (self && !emails.some(e => normEmail(e) === normEmail(self))) emails.push(self);
-    }
-
-    if (emails.length === 0) stillEmpty++;
-    else if (via === 'hierarchy') filledByHierarchy++;
-    else filledByShortCode++;
-
-    return {id: r.id, fields: {[fOut.id]: emails.join(', ')}};
-});
-
-let written = 0;
-while (updates.length > 0) {
-    const batch = updates.splice(0, 50);
-    await posTable.updateRecordsAsync(batch);
-    written += batch.length;
+} else {
+    output.markdown(
+        `**Phase \`reconcile\`** — skipping the email-text write. ` +
+        `Fill in the **Email** column on the newly-added leader rows, then re-run with ` +
+        `\`phase: 'emails'\`.`,
+    );
 }
 
 // ── Reconcile the leaders list (Status + Level columns; never Email) ─────────
@@ -260,14 +291,30 @@ if (CONFIG.flagMissingLeaders) {
 
     // Direct reports per manager, keyed by [E] Manager ID (the manager's employee
     // id) directly — robust even if the manager's own position isn't in the table.
+    // Also capture the org each manager MANAGES = their reports' supervisory org
+    // (NOT the manager's own supervisory org, which is their boss's org).
     const reportsByEmpId = {};
     const managerRecByEmpId = {};
+    const orgCountByEmpId = {};   // mid → { supervisoryOrgString: count }
     for (const r of posQ.records) {
         const mid = mgrEmpIdOf(r);
         if (!mid) continue;
         reportsByEmpId[mid] = (reportsByEmpId[mid] || 0) + 1;
         if (!managerRecByEmpId[mid] && recByEmpId[mid]) managerRecByEmpId[mid] = recByEmpId[mid];
+        if (fOrg) {
+            const org = readText(r, fOrg);
+            if (org) {
+                const m = (orgCountByEmpId[mid] = orgCountByEmpId[mid] || {});
+                m[org] = (m[org] || 0) + 1;
+            }
+        }
     }
+    // Most common supervisory org among a manager's reports = the org they manage.
+    const managedOrgOf = mid => {
+        const m = orgCountByEmpId[mid];
+        if (!m) return '';
+        return Object.keys(m).sort((a, b) => m[b] - m[a])[0] || '';
+    };
 
     // Short-code subtree size: positions strictly BELOW a leader's code — the
     // reliable signal (same as the email branch) when the manager-pointer
@@ -296,15 +343,19 @@ if (CONFIG.flagMissingLeaders) {
         if (Object.keys(fields).length) toUpdate.push({id: r.id, fields});
     }
 
-    // 2) ADD managers not on the list, Status = "Leader missing".
+    // 2) ADD every manager (referenced by [E] Manager ID) not already on the
+    //    list. Key off the REPORTS so managers without their own position row are
+    //    still captured. Bring in ID, Name (if the manager's own row exists), and
+    //    the org they MANAGE; Status = "Leader missing"; Email left blank for you.
     const toAdd = [];
-    for (const mid of Object.keys(managerRecByEmpId)) {
+    for (const mid of Object.keys(reportsByEmpId)) {
         if (leaderIdSet.has(mid)) continue;
-        const m = managerRecByEmpId[mid];
-        const fields = {[CONFIG.leadersEmpIdField]: readText(m, fEmp)};
-        if (fName) fields[CONFIG.leadersNameField] = readText(m, fName);
-        if (fOrg)  fields[CONFIG.leadersShortCodeField] = readText(m, fOrg);
-        if (lLevelField)  fields[CONFIG.leadersLevelField]  = levelFor(codeByRec[m.id]);
+        const m = managerRecByEmpId[mid];          // may be undefined (no own row)
+        const managedOrg = managedOrgOf(mid);
+        const fields = {[CONFIG.leadersEmpIdField]: m ? readText(m, fEmp) : mid};
+        if (fName && m) fields[CONFIG.leadersNameField] = readText(m, fName);
+        if (CONFIG.leadersShortCodeField && managedOrg) fields[CONFIG.leadersShortCodeField] = managedOrg;
+        if (lLevelField)  fields[CONFIG.leadersLevelField]  = levelFor(parseCode(managedOrg));
         if (lStatusField) fields[CONFIG.leadersStatusField] = CONFIG.statusMissing;
         toAdd.push({fields});
     }
@@ -328,9 +379,14 @@ const leaderCounts = leadersByCode.map(L => ({
 const topLines = leaderCounts.slice(0, 25)
     .map(L => `- \`${L.code}\` (layer ${L.code.length}) — ${L.email} — **${L.n}** position(s)`);
 
+const emailLine = CONFIG.phase === 'emails'
+    ? `### Updated "${CONFIG.outputField}" on ${written} position(s)\n` +
+      `- ${filledByShortCode} via short code · ${filledByHierarchy} via hierarchy · **${stillEmpty} empty**\n`
+    : `### Phase \`reconcile\` — email text NOT written\n` +
+      `- fill in **Email** on the **${added}** newly-added row(s), then re-run with \`phase: 'emails'\`\n`;
+
 output.markdown(
-    `### Updated "${CONFIG.outputField}" on ${written} position(s)\n` +
-    `- ${filledByShortCode} via short code · ${filledByHierarchy} via hierarchy · **${stillEmpty} empty**\n` +
+    emailLine +
     `- leaders list: **${added} added** (Status "${CONFIG.statusMissing}") · **${updated} updated** (Level / "${CONFIG.statusMissingEmail}")\n\n` +
     `### Positions per layer (short-code depth)\n` +
     layerLines.join('\n') + `\n\n` +
