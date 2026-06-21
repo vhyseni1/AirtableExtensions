@@ -256,15 +256,15 @@ if (CONFIG.flagMissingLeaders) {
     const lLevelField  = fieldOrNull(leadersTable, CONFIG.leadersLevelField);
     const lStatusField = fieldOrNull(leadersTable, CONFIG.leadersStatusField);
 
+    // Direct reports per manager, keyed by [E] Manager ID (the manager's employee
+    // id) directly — robust even if the manager's own position isn't in the table.
     const reportsByEmpId = {};
     const managerRecByEmpId = {};
     for (const r of posQ.records) {
-        const m = parentOf(r);
-        if (!m) continue;
-        const mid = empKeyByRec[m.id];
+        const mid = mgrEmpIdOf(r);
         if (!mid) continue;
         reportsByEmpId[mid] = (reportsByEmpId[mid] || 0) + 1;
-        if (!managerRecByEmpId[mid]) managerRecByEmpId[mid] = m;
+        if (!managerRecByEmpId[mid] && recByEmpId[mid]) managerRecByEmpId[mid] = recByEmpId[mid];
     }
 
     // Short-code subtree size: positions strictly BELOW a leader's code — the
