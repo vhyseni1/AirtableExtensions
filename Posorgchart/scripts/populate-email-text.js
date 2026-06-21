@@ -3,32 +3,34 @@
  * ----------------------------------------------------------------------------
  * One-off (re-runnable) Airtable **Scripting extension** script.
  *
- * For every position it writes into "[T] Email Text" the emails of every LEADER
- * in that position's management chain — INCLUDING the position itself — by
- * climbing the real parent→child relationship: a record's parent is the record
- * whose "Unique ID" equals this record's "[F] Manager ID" (the SAME join the
- * org-chart extension uses).
+ * For every position it writes into "[T] Email Text (Future Leaders)" the emails
+ * of every LEADER in that position's management chain — INCLUDING the position
+ * itself — by climbing the real parent→child relationship: a record's parent is
+ * the record whose "Unique ID" equals this record's "[F] Manager ID" (the SAME
+ * join the org-chart extension uses), then unioning in short-code matches.
  *
- * WHY THIS (vs. climbing by Employee ID): a VACANT or NEW manager has no
- * incumbent and therefore no employee id / email. Climbing by employee id
- * dead-ends there and the records beneath lose access to the leaders ABOVE the
- * vacant seat. Climbing by the hierarchy instead, a vacant manager still has a
- * Unique ID, so we walk straight THROUGH it and keep collecting the leaders
- * higher up — access is never lost beneath a vacant seat.
+ * SOURCE OF TRUTH = the Employees & Positions table. Each manager (parent of ≥1
+ * position) manages the set of supervisory orgs their DIRECT reports sit in. The
+ * reconcile step makes the "Future Leaders list" reflect that:
+ *   • if a leader's "Managing Organization" code doesn't match an org they
+ *     actually manage → it is OVERWRITTEN with the real one from the table;
+ *   • a manager who manages MORE THAN ONE org gets ONE ROW PER ORG (so short-code
+ *     matching covers every org — e.g. a DOAD+DOAB manager gets a DOAD row and a
+ *     DOAB row, and every report under either org receives their email);
+ *   • a brand-new org row copies the manager's KNOWN email from their primary row
+ *     (it only ever fills a BLANK email — it never overwrites a curated one).
+ * Reconcile runs BEFORE the email-text write and the list is re-read in between,
+ * so corrected orgs + copied emails take effect in a SINGLE run.
  *
  *   Hierarchy : parent(record) = the record whose "Unique ID" == record's
- *               "[F] Manager ID"  (tolerates "12345 - Title (Name)" — the
- *               leading number, or the whole value, is matched).
- *   Leaders   : "Future Leaders list" maps an Employee ID → Email. A position
- *               is a leader's seat when its "[E] Employee ID" is in that list;
- *               a vacant seat has none, so it contributes no email (but is still
- *               walked through).
- *   Output    : comma-separated leader emails written to "[T] Email Text".
+ *               "[F] Manager ID"  (tolerates "12345 - Title (Name)").
+ *   Leaders   : "Future Leaders list" maps a Leader ID → Email, with a
+ *               "Managing Organization" whose leading token is the short code.
+ *   Output    : comma-separated leader emails written to the output field.
  *
- * HOW TO RUN
- *   Extensions → add a "Scripting" extension → paste this in → set CONFIG to
- *   match your field names → Run. Re-run whenever the org or leaders change.
- *   Safe to re-run; it only writes "[T] Email Text".
+ * Writes the output field, plus the leaders list's Status / Level / Managing
+ * Organization, and (only on rows where it is BLANK) the copied Email. Safe to
+ * re-run.
  */
 
 // ─── CONFIG — edit to match your base ────────────────────────────────────────
@@ -43,49 +45,40 @@ const CONFIG = {
     leadersEmpIdField: 'Leader ID',
     leadersEmailField: 'Email',
     // The leader's short code lives as the LEADING token of "Managing
-    // Organization" (e.g. "DOC Sensor & Cartridge Manufacturing" → DOC). The
-    // script parses that leading code automatically.
+    // Organization" (e.g. "DOC Sensor & Cartridge Manufacturing" → DOC).
     leadersShortCodeField: 'Managing Organization',
 
     // Also stamp a leader's OWN email on their OWN seat (so they can see
-    // themselves at the top of their branch). Set false for "managers see
-    // reports only".
+    // themselves at the top of their branch). Set false for "reports only".
     includeSelf:       true,
 
-    // RECONCILE: write to the leaders list's Status/Level columns (NEVER Email).
-    // A manager (≥1 direct report) not on the list is ADDED with Status =
-    // "Leader missing"; a leader on the list with no email gets Status =
-    // "Leader missing email". Level is set from the short-code length.
+    // RECONCILE the leaders list against the positions table (source of truth):
+    // overwrite mismatched "Managing Organization" values and split a multi-org
+    // manager into one row per org. Status / Level are (re)written too.
     flagMissingLeaders: true,
     posNameField:       '[E] First Name, Last Name',     // → Leader Name (optional)
-    posOrgField:        '[F] Supervisory Organization',  // → Managing Organization (optional)
-    leadersNameField:   'Leader Name',                   // name column on the leaders list
+    posOrgField:        '[F] Supervisory Organization',  // the org a report SITS in
+    leadersNameField:   'Leader Name',
     leadersLevelField:  'Level',
     leadersStatusField: 'Status',
     statusMissing:      'Leader missing',
     statusMissingEmail: 'Leader missing email',
-    statusUpdate:       'Leader update',                 // active leader: "Leader update (N direct reports)"
-    statusNotLeader:    'Leader not marked as leader',   // on the list but no direct reports
+    statusUpdate:       'Leader update',                 // "Leader update (N direct reports)"
+    statusNotLeader:    'Leader not marked as leader',   // on the list but manages nothing now
+    // Copy the manager's known email into an ADDITIONAL org row (only fills a
+    // BLANK email; never overwrites an existing/curated one).
+    copyEmailToNewRows: true,
 
     // SHORT CODE drives access: every leader whose short code is a PREFIX of a
-    // record's short code gets that record, listed TOP-FIRST (a "DOS" leader is
-    // first on every DOS* record, then DOSN, then DOSNPT, …). This is reliable
-    // even where the manager chain is broken/vacant.
+    // record's short code gets that record, listed TOP-FIRST.
     shortCodeField:    'Short Code (from [F] Supervisory Organization 🔗)',
-    // 'only'   → use ONLY short codes (recommended; hierarchy only when a record
-    //            has no short code)
-    // 'empty'  → hierarchy first, short codes only when the chain found nothing
-    // 'always' → hierarchy plus a UNION of short-code leaders
     // 'always' = manager-ID chain FIRST (handles managers who run more than one
     // org), then UNION short-code leaders (fills gaps where the chain breaks at a
     // vacant manager). 'only' = short code only. 'empty' = chain, short code only
     // when the chain found nothing.
     shortCodeMode:     'always',
 
-    // TEST MODE: when true, IGNORE everything above and write ONLY each
-    // position's TOP-of-branch leader(s) — the leader(s) with the SHORTEST
-    // prefix short code above the record (e.g. the "DOC" leader for any DOC*
-    // record). Set back to false to restore the full chain behaviour.
+    // TEST MODE: when true, write ONLY each position's TOP-of-branch leader(s).
     topLeadersOnly:    false,
 };
 // ─────────────────────────────────────────────────────────────────────────────
@@ -129,26 +122,33 @@ const leadersTable = base.getTable(CONFIG.leadersTable);
 const lEmpField  = leadersTable.getField(CONFIG.leadersEmpIdField);
 const lMailField = leadersTable.getField(CONFIG.leadersEmailField);
 const lCodeField = CONFIG.leadersShortCodeField ? leadersTable.getField(CONFIG.leadersShortCodeField) : null;
-const leadersQ = await leadersTable.selectRecordsAsync({
-    fields: lCodeField ? [lEmpField, lMailField, lCodeField] : [lEmpField, lMailField],
-});
 
-const emailByEmpId = {};            // Employee ID → email (for the hierarchy fallback)
-const leaderIdSet = new Set();      // every Leader ID already on the list (to avoid re-adding)
-const leaderRecByEmpId = {};        // Leader ID → leaders-list record (to update Level/Status)
-const leadersByCode = [];           // {code, email} from the leaders list itself
-const seenLeaderCode = new Set();
-for (const r of leadersQ.records) {
-    const id = normKey(readText(r, lEmpField));
-    const email = norm(readText(r, lMailField));
-    if (id) { leaderIdSet.add(id); if (!leaderRecByEmpId[id]) leaderRecByEmpId[id] = r; }
-    if (id && email && !(id in emailByEmpId)) emailByEmpId[id] = email;
-    const code = lCodeField ? parseCode(readText(r, lCodeField)) : '';
-    if (email && code) {
-        const key = code + '|' + normEmail(email);
-        if (!seenLeaderCode.has(key)) { seenLeaderCode.add(key); leadersByCode.push({code, email}); }
+const emailByEmpId = {};            // Leader ID → email (mutated by reloadLeaders)
+const leadersByCode = [];           // {code, email} (mutated by reloadLeaders)
+
+// Rebuild emailByEmpId + leadersByCode IN PLACE from the current leaders list, so
+// reconcile's writes are visible to the email-text write within the same run.
+async function reloadLeaders() {
+    const q = await leadersTable.selectRecordsAsync({
+        fields: lCodeField ? [lEmpField, lMailField, lCodeField] : [lEmpField, lMailField],
+    });
+    for (const k of Object.keys(emailByEmpId)) delete emailByEmpId[k];
+    leadersByCode.length = 0;
+    const seen = new Set();
+    for (const r of q.records) {
+        const id = normKey(readText(r, lEmpField));
+        const email = norm(readText(r, lMailField));
+        if (id && email && !(id in emailByEmpId)) emailByEmpId[id] = email;
+        const code = lCodeField ? parseCode(readText(r, lCodeField)) : '';
+        if (email && code) {
+            const key = code + '|' + normEmail(email);
+            if (!seen.has(key)) { seen.add(key); leadersByCode.push({code, email}); }
+        }
     }
+    return q;
 }
+
+let leadersQ = await reloadLeaders();
 output.text(
     `Loaded ${Object.keys(emailByEmpId).length} leader email(s); ` +
     `${leadersByCode.length} have a short code on "${CONFIG.leadersTable}".`,
@@ -181,12 +181,18 @@ for (const r of posQ.records) {
     codeByRec[r.id]   = fCode ? normCode(readText(r, fCode)) : '';
 }
 
+const parentOf = r => {
+    const raw = mgrRawByRec[r.id];
+    if (!raw) return null;
+    const p = recByUid[normKey(raw)] || recByUid[idKey(raw)] || null;
+    return (p && p.id !== r.id) ? p : null;
+};
+
 // A record inherits every leader (from the Future Leaders list) whose short code
-// is a PREFIX of the record's code.
+// is a PREFIX of the record's code. Shortest code = highest → top leaders first.
 const shortCodeEmailsFor = r => {
     const code = codeByRec[r.id];
     if (!code) return [];
-    // shortest code = highest in the org → list top leaders first.
     const matches = leadersByCode
         .filter(L => code.startsWith(L.code))
         .sort((a, b) => a.code.length - b.code.length);
@@ -199,8 +205,8 @@ const shortCodeEmailsFor = r => {
     return out;
 };
 
-// TEST: only the TOP-of-branch leader(s) — among the prefix matches, the one(s)
-// with the SHORTEST short code (highest in the org).
+// TEST: only the TOP-of-branch leader(s) — the prefix match(es) with the SHORTEST
+// short code (highest in the org).
 const topLeaderEmailsFor = r => {
     const code = codeByRec[r.id];
     if (!code) return [];
@@ -222,17 +228,9 @@ const topLeaderEmailsFor = r => {
     return out;
 };
 
-const parentOf = r => {
-    const raw = mgrRawByRec[r.id];
-    if (!raw) return null;
-    const p = recByUid[normKey(raw)] || recByUid[idKey(raw)] || null;
-    return (p && p.id !== r.id) ? p : null;
-};
-
 // Leader emails for the chain, ORDERED TOP-FIRST: the top leader, then the next
-// one down, … all the way to the position's direct manager (and the position
-// itself last when includeSelf). We climb from the record up to the root, then
-// reverse so the top of the org comes first.
+// one down, … to the position's direct manager (and the position itself last when
+// includeSelf). Climb to the root, then reverse.
 function leaderEmailsFor(startRec) {
     const out = [];
     const seen = new Set();    // dedupe emails
@@ -255,10 +253,158 @@ function leaderEmailsFor(startRec) {
     return out;
 }
 
-// ── Write "[T] Email Text" for every position ───────────────────────────────
+// ── Reconcile the leaders list to the positions table (SOURCE OF TRUTH) ──────
+// Runs BEFORE the email-text write; the list is re-read afterward so the writes
+// take effect this run.
+let orgsOverwritten = 0, rowsCreated = 0, emailsCopied = 0, rowsFlagged = 0, rowsRefreshed = 0;
+if (CONFIG.flagMissingLeaders) {
+    const lLevelField  = fieldOrNull(leadersTable, CONFIG.leadersLevelField);
+    const lStatusField = fieldOrNull(leadersTable, CONFIG.leadersStatusField);
+
+    // Managed orgs per manager: the distinct supervisory-org CODES their direct
+    // reports sit in (dedup by leading token), with a representative full string
+    // and a per-(manager, code) direct-report count.
+    const reportsByMidCode = {};   // mid → { code → count }
+    const orgStrCount      = {};   // code → { fullString → count }
+    const managerRecByMid  = {};   // mid → manager position record (for name / id)
+    for (const r of posQ.records) {
+        const m = parentOf(r);
+        if (!m) continue;
+        const mid = empKeyByRec[m.id];
+        if (!mid) continue;
+        if (!managerRecByMid[mid]) managerRecByMid[mid] = m;
+        const orgStr = fOrg ? readText(r, fOrg) : '';
+        const code = parseCode(orgStr);
+        if (!code) continue;
+        (reportsByMidCode[mid] = reportsByMidCode[mid] || {});
+        reportsByMidCode[mid][code] = (reportsByMidCode[mid][code] || 0) + 1;
+        (orgStrCount[code] = orgStrCount[code] || {});
+        if (orgStr) orgStrCount[code][orgStr] = (orgStrCount[code][orgStr] || 0) + 1;
+    }
+    const orgStrByCode = {};   // code → most common full supervisory-org string
+    for (const code of Object.keys(orgStrCount)) {
+        orgStrByCode[code] = Object.keys(orgStrCount[code])
+            .sort((a, b) => orgStrCount[code][b] - orgStrCount[code][a])[0] || code;
+    }
+
+    // Group the EXISTING leader rows by Leader ID.
+    const rowsByMid = {};
+    for (const r of leadersQ.records) {
+        const mid = normKey(readText(r, lEmpField));
+        if (!mid) continue;
+        (rowsByMid[mid] = rowsByMid[mid] || []).push(r);
+    }
+
+    // Short-code subtree size, for leaders we can't resolve via the hierarchy.
+    const allCodes = posQ.records.map(r => codeByRec[r.id]).filter(Boolean);
+    const subtreeBelow = C => C ? allCodes.reduce((s, c) => (c.length > C.length && c.startsWith(C) ? s + 1 : s), 0) : 0;
+
+    const toUpdate = [];
+    const toAdd = [];
+    const handledRowIds = new Set();
+
+    // Build the fields for a row that should represent (mid, code).
+    const buildFields = (mid, code, row) => {
+        const direct   = reportsByMidCode[mid][code];
+        const orgStr   = orgStrByCode[code] || code;
+        const rowEmail = row ? norm(readText(row, lMailField)) : '';
+        const known    = emailByEmpId[mid] || '';
+        const fillEmail = (!rowEmail && known && CONFIG.copyEmailToNewRows) ? known : '';
+        const finalEmail = rowEmail || fillEmail;
+        const fields = {};
+        if (lLevelField)  fields[CONFIG.leadersLevelField] = levelFor(code);
+        if (lStatusField) {
+            fields[CONFIG.leadersStatusField] = finalEmail
+                ? `${CONFIG.statusUpdate} (${direct} direct report${direct !== 1 ? 's' : ''})`
+                : (row ? CONFIG.statusMissingEmail : CONFIG.statusMissing);
+        }
+        return {fields, orgStr, fillEmail};
+    };
+
+    for (const mid of Object.keys(reportsByMidCode)) {
+        const codes = Object.keys(reportsByMidCode[mid]);
+        const existing = (rowsByMid[mid] || []).slice();
+
+        // Map existing rows by their current code; spare rows become reuse fodder.
+        const rowByCode = {};
+        const spare = [];
+        for (const row of existing) {
+            const rc = lCodeField ? parseCode(readText(row, lCodeField)) : '';
+            if (rc && !(rc in rowByCode)) rowByCode[rc] = row; else spare.push(row);
+        }
+        // Rows whose code isn't an org this manager actually manages → reuse fodder.
+        for (const rc of Object.keys(rowByCode)) {
+            if (!codes.includes(rc)) { spare.push(rowByCode[rc]); delete rowByCode[rc]; }
+        }
+
+        const nameStr = managerRecByMid[mid] && fName ? readText(managerRecByMid[mid], fName) : '';
+
+        for (const code of codes) {
+            if (rowByCode[code]) {
+                // Correct row already exists → refresh Level/Status (+ fill blank email).
+                const row = rowByCode[code];
+                handledRowIds.add(row.id);
+                const {fields, fillEmail} = buildFields(mid, code, row);
+                if (fillEmail && lMailField) { fields[CONFIG.leadersEmailField] = fillEmail; emailsCopied++; }
+                toUpdate.push({id: row.id, fields});
+                rowsRefreshed++;
+            } else if (spare.length) {
+                // OVERWRITE a mismatched/placeholder row with the real org.
+                const row = spare.shift();
+                handledRowIds.add(row.id);
+                const {fields, orgStr, fillEmail} = buildFields(mid, code, row);
+                if (CONFIG.leadersShortCodeField) fields[CONFIG.leadersShortCodeField] = orgStr;
+                if (fName && nameStr) fields[CONFIG.leadersNameField] = nameStr;
+                if (fillEmail && lMailField) { fields[CONFIG.leadersEmailField] = fillEmail; emailsCopied++; }
+                toUpdate.push({id: row.id, fields});
+                orgsOverwritten++;
+            } else {
+                // CREATE a new row for this org (copy the manager's known email).
+                const {fields, orgStr, fillEmail} = buildFields(mid, code, null);
+                fields[CONFIG.leadersEmpIdField] = managerRecByMid[mid] ? readText(managerRecByMid[mid], fEmp) : mid;
+                if (fName && nameStr) fields[CONFIG.leadersNameField] = nameStr;
+                if (CONFIG.leadersShortCodeField) fields[CONFIG.leadersShortCodeField] = orgStr;
+                if (fillEmail && lMailField) { fields[CONFIG.leadersEmailField] = fillEmail; emailsCopied++; }
+                toAdd.push({fields});
+                rowsCreated++;
+            }
+        }
+
+        // Leftover rows for this manager = orgs they no longer manage → flag only.
+        for (const row of spare) {
+            handledRowIds.add(row.id);
+            if (lStatusField) { toUpdate.push({id: row.id, fields: {[CONFIG.leadersStatusField]: CONFIG.statusNotLeader}}); rowsFlagged++; }
+        }
+    }
+
+    // Leader rows whose Leader ID never shows up as a manager in the table.
+    for (const r of leadersQ.records) {
+        if (handledRowIds.has(r.id)) continue;
+        const mid = normKey(readText(r, lEmpField));
+        const code = lCodeField ? parseCode(readText(r, lCodeField)) : '';
+        const below = subtreeBelow(code);
+        const fields = {};
+        if (lLevelField && code) fields[CONFIG.leadersLevelField] = levelFor(code);
+        if (lStatusField) {
+            let status;
+            if (mid && !(mid in emailByEmpId)) status = CONFIG.statusMissingEmail;
+            else if (below > 0) status = `${CONFIG.statusUpdate} (${below} in org)`;
+            else status = CONFIG.statusNotLeader;
+            fields[CONFIG.leadersStatusField] = status;
+        }
+        if (Object.keys(fields).length) toUpdate.push({id: r.id, fields});
+    }
+
+    while (toUpdate.length > 0) { const b = toUpdate.splice(0, 50); await leadersTable.updateRecordsAsync(b); }
+    while (toAdd.length > 0)    { const b = toAdd.splice(0, 50);    await leadersTable.createRecordsAsync(b); }
+
+    // Re-read so the corrected orgs + copied emails drive the email-text write.
+    leadersQ = await reloadLeaders();
+}
+
+// ── Write the output field for every position ───────────────────────────────
 let filledByHierarchy = 0, filledByShortCode = 0, stillEmpty = 0;
 const updates = posQ.records.map(r => {
-    // TEST MODE: only the top-of-branch leader(s).
     if (CONFIG.topLeadersOnly) {
         const emails = topLeaderEmailsFor(r);
         if (emails.length > 0) filledByShortCode++; else stillEmpty++;
@@ -267,8 +413,6 @@ const updates = posQ.records.map(r => {
 
     let emails, via;
     if (CONFIG.shortCodeMode === 'only') {
-        // Short code is the source of truth (top-first). Fall back to the
-        // hierarchy only for records that have no short code at all.
         emails = shortCodeEmailsFor(r);
         via = emails.length ? 'shortcode' : null;
         if (!emails.length) { emails = leaderEmailsFor(r); via = emails.length ? 'hierarchy' : null; }
@@ -282,14 +426,13 @@ const updates = posQ.records.map(r => {
                 if (!seen.has(k)) { seen.add(k); emails.push(e); }
             }
         } else if (!emails.length) {
-            emails = shortCodeEmailsFor(r);   // fallback only when the chain found nothing
+            emails = shortCodeEmailsFor(r);
             via = emails.length ? 'shortcode' : null;
         }
     }
 
-    // SELF: if this position's incumbent IS a leader (its [E] Employee ID matches
-    // a Leader ID), make sure their own email is on their own seat — even when
-    // their position sits in a different org than the one they lead.
+    // SELF: if this position's incumbent IS a leader, ensure their own email is on
+    // their own seat — even when their position sits in a different org.
     if (CONFIG.includeSelf) {
         const self = emailByEmpId[empKeyByRec[r.id]];
         if (self && !emails.some(e => normEmail(e) === normEmail(self))) emails.push(self);
@@ -309,80 +452,13 @@ while (updates.length > 0) {
     written += batch.length;
 }
 
-// ── Reconcile the leaders list (Status + Level columns; never Email) ─────────
-let added = 0, updated = 0;
-if (CONFIG.flagMissingLeaders) {
-    const lLevelField  = fieldOrNull(leadersTable, CONFIG.leadersLevelField);
-    const lStatusField = fieldOrNull(leadersTable, CONFIG.leadersStatusField);
-
-    // Managers = the records some position resolves to as a parent; count their
-    // direct reports (by the manager's employee id).
-    const reportsByEmpId = {};
-    const managerRecByEmpId = {};
-    for (const r of posQ.records) {
-        const m = parentOf(r);
-        if (!m) continue;
-        const mid = empKeyByRec[m.id];
-        if (!mid) continue;
-        reportsByEmpId[mid] = (reportsByEmpId[mid] || 0) + 1;
-        if (!managerRecByEmpId[mid]) managerRecByEmpId[mid] = m;
-    }
-
-    // Short-code subtree size: positions strictly BELOW a leader's code. This is
-    // the reliable signal (same as the email branch) when the manager-pointer
-    // hierarchy doesn't resolve.
-    const allCodes = posQ.records.map(r => codeByRec[r.id]).filter(Boolean);
-    const subtreeBelow = C => C ? allCodes.reduce((s, c) => (c.length > C.length && c.startsWith(C) ? s + 1 : s), 0) : 0;
-
-    // 1) Update EXISTING leaders: Level, and a situational Status. "Active" is
-    //    decided by direct reports (hierarchy) OR a non-empty short-code subtree.
-    const toUpdate = [];
-    for (const r of leadersQ.records) {
-        const mid = normKey(readText(r, lEmpField));
-        const code = lCodeField ? parseCode(readText(r, lCodeField)) : '';
-        const direct = mid ? (reportsByEmpId[mid] || 0) : 0;
-        const below = subtreeBelow(code);
-        const fields = {};
-        if (lLevelField && code) fields[CONFIG.leadersLevelField] = levelFor(code);
-        if (lStatusField) {
-            let status;
-            if (mid && !(mid in emailByEmpId)) status = CONFIG.statusMissingEmail;
-            else if (direct > 0) status = `${CONFIG.statusUpdate} (${direct} direct report${direct !== 1 ? 's' : ''})`;
-            else if (below > 0)  status = `${CONFIG.statusUpdate} (${below} in org)`;
-            else status = CONFIG.statusNotLeader;
-            fields[CONFIG.leadersStatusField] = status;
-        }
-        if (Object.keys(fields).length) toUpdate.push({id: r.id, fields});
-    }
-
-    // 2) ADD managers not on the list, Status = "Leader missing".
-    const toAdd = [];
-    for (const mid of Object.keys(managerRecByEmpId)) {
-        if (leaderIdSet.has(mid)) continue;            // already a leader
-        const m = managerRecByEmpId[mid];
-        const fields = {[CONFIG.leadersEmpIdField]: readText(m, fEmp)};
-        if (fName) fields[CONFIG.leadersNameField] = readText(m, fName);
-        if (fOrg)  fields[CONFIG.leadersShortCodeField] = readText(m, fOrg);
-        if (lLevelField)  fields[CONFIG.leadersLevelField]  = levelFor(codeByRec[m.id]);
-        if (lStatusField) fields[CONFIG.leadersStatusField] = CONFIG.statusMissing;
-        toAdd.push({fields});
-    }
-
-    while (toUpdate.length > 0) { const b = toUpdate.splice(0, 50); await leadersTable.updateRecordsAsync(b); updated += b.length; }
-    while (toAdd.length > 0)    { const b = toAdd.splice(0, 50);    await leadersTable.createRecordsAsync(b); added += b.length; }
-}
-
 // ── Summary: layers (by short-code depth) and employees per layer ────────────
 const codes = posQ.records.map(r => codeByRec[r.id]).filter(Boolean);
-
-// Positions per layer = per short-code length (DOS = layer 3, DOSN = 4, …).
 const perLayer = {};
 for (const c of codes) perLayer[c.length] = (perLayer[c.length] || 0) + 1;
 const layerLines = Object.keys(perLayer).map(Number).sort((a, b) => a - b)
     .map(len => `- **Layer ${len}**: ${perLayer[len]} position(s)`);
 
-// Each leader and how many positions sit in their subtree (code prefix), TOP
-// (shortest code) first.
 const leaderCounts = leadersByCode.map(L => ({
     code: L.code,
     email: L.email,
@@ -394,7 +470,9 @@ const topLines = leaderCounts.slice(0, 25)
 output.markdown(
     `### Updated "${CONFIG.outputField}" on ${written} position(s)\n` +
     `- ${filledByShortCode} via short code · ${filledByHierarchy} via hierarchy · **${stillEmpty} empty**\n` +
-    `- leaders list: **${added} added** (Status "${CONFIG.statusMissing}") · **${updated} updated** (Level / "${CONFIG.statusMissingEmail}")\n\n` +
+    `- leaders list (source of truth = positions): **${rowsCreated} row(s) created** · ` +
+    `**${orgsOverwritten} org(s) overwritten** · ${rowsRefreshed} refreshed · ` +
+    `${emailsCopied} email(s) copied · ${rowsFlagged} flagged "${CONFIG.statusNotLeader}"\n\n` +
     `### Positions per layer (short-code depth)\n` +
     layerLines.join('\n') + `\n\n` +
     `### Top leaders (top layer first) — employees in their subtree\n` +
