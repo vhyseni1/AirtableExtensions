@@ -1,36 +1,30 @@
 /**
- * populate-email-text.js — branching access via the parent→child hierarchy
+ * populate-email-text.js — FUTURE branching access (name-based, no [E] columns)
  * ----------------------------------------------------------------------------
  * One-off (re-runnable) Airtable **Scripting extension** script.
  *
  * For every position it writes into "[T] Email Text (Future Leaders)" the emails
  * of every LEADER in that position's management chain — INCLUDING the position
- * itself — by climbing the real parent→child relationship: a record's parent is
- * the record whose "Unique ID" equals the position id in this record's
- * "Organization Manager (from [F] Supervisory Organization)" (the head of the org
- * it sits in), then unioning in short-code matches. STRUCTURE comes only from
- * [F]/parent references + short code (never [E] manager/org columns); a person's
- * [E] Employee ID is used only to identify the incumbent (an always-existing id).
+ * itself — by climbing the real parent→child relationship and identifying each
+ * leader by the FUTURE NAME carried in the parent reference.
+ *
+ * WHY NAME-BASED (no [E]): the [E] columns describe the EXISTING org/incumbents.
+ * In the future reorg a seat's FUTURE head is often a different person than its
+ * current [E] incumbent, so matching by [E] Employee ID mis-identifies managers.
+ * Structure comes only from the [F]/parent references + short code; identity comes
+ * from the future name in "[F] Manager ID" — whose value matches the parent's
+ * "Unique ID" and carries the name ("50472279 - Head of Quality Control (Kristina
+ * Henthorn)" → Kristina Henthorn) — matched to the leaders list's "Leader Name".
  *
  * SOURCE OF TRUTH = the Employees & Positions table. Each manager (parent of ≥1
- * position) manages the set of supervisory orgs their DIRECT reports sit in. The
- * reconcile step makes the "Future Leaders list" reflect that:
- *   • if a leader's "Managing Organization" code doesn't match an org they
- *     actually manage → it is OVERWRITTEN with the real one from the table;
- *   • a manager who manages MORE THAN ONE org gets ONE ROW PER ORG (so short-code
- *     matching covers every org — e.g. a DOAD+DOAB manager gets a DOAD row and a
- *     DOAB row, and every report under either org receives their email);
- *   • a brand-new org row copies the manager's KNOWN email from their primary row
- *     (it only ever fills a BLANK email — it never overwrites a curated one).
+ * position) manages the supervisory orgs their DIRECT reports sit in. Reconcile:
+ *   • overwrite a leader's "Managing Organization" when its code doesn't match an
+ *     org they actually manage;
+ *   • a manager who manages MORE THAN ONE org gets ONE ROW PER ORG;
+ *   • a brand-new org row copies the manager's KNOWN email from their other row
+ *     (only ever fills a BLANK email — never overwrites a curated one).
  * Reconcile runs BEFORE the email-text write and the list is re-read in between,
  * so corrected orgs + copied emails take effect in a SINGLE run.
- *
- *   Hierarchy : parent(record) = the record whose "Unique ID" == the position id
- *               in "Organization Manager (from [F] Supervisory Organization)"
- *               (tolerates "12345 - Title (Name)").
- *   Leaders   : "Future Leaders list" maps a Leader ID → Email, with a
- *               "Managing Organization" whose leading token is the short code.
- *   Output    : comma-separated leader emails written to the output field.
  *
  * Writes the output field, plus the leaders list's Status / Level / Managing
  * Organization, and (only on rows where it is BLANK) the copied Email. Safe to
@@ -41,31 +35,28 @@
 const CONFIG = {
     posTable:          'Employees & Positions',
     uniqueIdField:     'Unique ID',          // each record's own id
-    // The parent pointer: the head of this record's supervisory org, carrying the
-    // parent's position id ("50472279 - Head of Quality Control (Kristina …)").
-    // (Resolved emoji/spacing-tolerantly; falls back to other known field names.)
-    managerIdField:    'Organization Manager (from [F] Supervisory Organization 🔗)',
-    employeeIdField:   '[E] Employee ID',    // incumbent id, to match a leader
+    // Parent pointer: this record's "[F] Manager ID" — its value matches the
+    // PARENT's "Unique ID" (the join), and it also carries the parent's future
+    // name ("50472279 - Head of Quality Control (Kristina Henthorn)") used to
+    // identify the leader. (Resolved emoji/spacing-tolerantly.)
+    managerIdField:    '[F] Manager ID 🔎',
     outputField:       '[T] Email Text (Future Leaders)',  // comma-separated emails (output)
 
     leadersTable:      'Future Leaders list',
     leadersEmpIdField: 'Leader ID',
+    leadersNameField:  'Leader Name',        // matched to the future name in the pointer
     leadersEmailField: 'Email',
-    // The leader's short code lives as the LEADING token of "Managing
-    // Organization" (e.g. "DOC Sensor & Cartridge Manufacturing" → DOC).
+    // The leader's short code = the LEADING token of "Managing Organization".
     leadersShortCodeField: 'Managing Organization',
 
-    // Also stamp a leader's OWN email on their OWN seat (so they can see
-    // themselves at the top of their branch). Set false for "reports only".
+    // Also stamp a leader's OWN email on their OWN seat (so they see themselves).
     includeSelf:       true,
 
     // RECONCILE the leaders list against the positions table (source of truth):
     // overwrite mismatched "Managing Organization" values and split a multi-org
     // manager into one row per org. Status / Level are (re)written too.
     flagMissingLeaders: true,
-    posNameField:       '[E] First Name, Last Name',     // → Leader Name (optional)
     posOrgField:        '[F] Supervisory Organization',  // the org a report SITS in
-    leadersNameField:   'Leader Name',
     leadersLevelField:  'Level',
     leadersStatusField: 'Status',
     statusMissing:      'Leader missing',
@@ -79,10 +70,8 @@ const CONFIG = {
     // SHORT CODE drives access: every leader whose short code is a PREFIX of a
     // record's short code gets that record, listed TOP-FIRST.
     shortCodeField:    'Short Code (from [F] Supervisory Organization 🔗)',
-    // 'always' = manager-ID chain FIRST (handles managers who run more than one
-    // org), then UNION short-code leaders (fills gaps where the chain breaks at a
-    // vacant manager). 'only' = short code only. 'empty' = chain, short code only
-    // when the chain found nothing.
+    // 'always' = name chain FIRST, then UNION short-code leaders. 'only' = short
+    // code only. 'empty' = chain, short code only when the chain found nothing.
     shortCodeMode:     'always',
 
     // TEST MODE: when true, write ONLY each position's TOP-of-branch leader(s).
@@ -91,17 +80,30 @@ const CONFIG = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const norm      = s => String(s == null ? '' : s).normalize('NFKC').trim();
-const normKey   = s => norm(s).toUpperCase();      // id matching (case-tolerant)
+const normKey   = s => norm(s).toUpperCase();
 const normEmail = s => norm(s).toLowerCase();
-const normCode  = s => norm(s).replace(/\s+/g, '').toUpperCase();  // short codes
-// Leading code token of a string, e.g. "DOCAA Production Rotkreuz" → "DOCAA".
+const normCode  = s => norm(s).replace(/\s+/g, '').toUpperCase();
+// Leading code token, e.g. "DOCAA Production Rotkreuz" → "DOCAA".
 const parseCode = s => {
     const m = norm(s).match(/^[A-Za-z0-9]+/);
     return m ? m[0].toUpperCase() : '';
 };
+// Person-name key: drop "(On Leave)"-style suffixes + diacritics + punctuation,
+// uppercase, collapse spaces. So "Patrick Beer (On Leave)" and "Käfer" still match.
+const normPerson = s => norm(s)
+    .replace(/\([^)]*\)/g, ' ')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+// Future name carried in a parent pointer: the LAST parenthesised group that
+// isn't all digits ("… - Title (Kristina Henthorn)" → "Kristina Henthorn").
+const parseMgrName = raw => {
+    const groups = [...String(raw == null ? '' : raw).matchAll(/\(([^()]+)\)/g)].map(m => norm(m[1]));
+    for (let i = groups.length - 1; i >= 0; i--) if (groups[i] && !/^\d+$/.test(groups[i])) return groups[i];
+    return '';
+};
 
-// Parent-id key: the first run of 3+ digits ("12345 - Title" → "12345"), else
-// the whole normalized value. Mirrors the org-chart's matching.
+// Parent-id key: the first run of 3+ digits ("12345 - Title" → "12345"), else the
+// whole normalized value.
 function idKey(s) {
     const str = String(s == null ? '' : s);
     const m = str.match(/\d{3,}/);
@@ -115,9 +117,8 @@ function readText(record, field) {
 }
 const fieldOrNull = (table, name) => { try { return name ? table.getField(name) : null; } catch (e) { return null; } };
 const normName = s => String(s == null ? '' : s).normalize('NFKC').toLowerCase().replace(/[^a-z0-9]/g, '');
-// Resolve a field by exact name, then by emoji/space-tolerant normalized name,
-// then by an optional predicate — so the manager pointer survives the icon
-// characters in its long lookup-field name.
+// Resolve a field by exact name, then emoji/space-tolerant normalized name, then a
+// predicate — so the manager pointer survives the icon characters in its name.
 function resolveField(table, candidates, predicate) {
     for (const c of candidates) { if (!c) continue; try { return table.getField(c); } catch (e) { /* next */ } }
     const wanted = candidates.filter(Boolean).map(normName);
@@ -135,28 +136,27 @@ const levelFor = code => {
     return '';
 };
 
-// ── Leaders: from the Future Leaders list — email + (its own) short code ─────
+// ── Leaders: Leader Name → email, plus (code,email) for short-code matching ──
 const leadersTable = base.getTable(CONFIG.leadersTable);
 const lEmpField  = leadersTable.getField(CONFIG.leadersEmpIdField);
+const lNameField = leadersTable.getField(CONFIG.leadersNameField);
 const lMailField = leadersTable.getField(CONFIG.leadersEmailField);
 const lCodeField = CONFIG.leadersShortCodeField ? leadersTable.getField(CONFIG.leadersShortCodeField) : null;
 
-const emailByEmpId = {};            // Leader ID → email (mutated by reloadLeaders)
-const leadersByCode = [];           // {code, email} (mutated by reloadLeaders)
+const emailByName  = {};   // normPerson(Leader Name) → email (mutated by reload)
+const leadersByCode = [];  // {code, email} (mutated by reload)
 
-// Rebuild emailByEmpId + leadersByCode IN PLACE from the current leaders list, so
-// reconcile's writes are visible to the email-text write within the same run.
 async function reloadLeaders() {
-    const q = await leadersTable.selectRecordsAsync({
-        fields: lCodeField ? [lEmpField, lMailField, lCodeField] : [lEmpField, lMailField],
-    });
-    for (const k of Object.keys(emailByEmpId)) delete emailByEmpId[k];
+    const fields = [lEmpField, lNameField, lMailField];
+    if (lCodeField) fields.push(lCodeField);
+    const q = await leadersTable.selectRecordsAsync({fields});
+    for (const k of Object.keys(emailByName)) delete emailByName[k];
     leadersByCode.length = 0;
     const seen = new Set();
     for (const r of q.records) {
-        const id = normKey(readText(r, lEmpField));
+        const name = normPerson(readText(r, lNameField));
         const email = norm(readText(r, lMailField));
-        if (id && email && !(id in emailByEmpId)) emailByEmpId[id] = email;
+        if (name && email && !(name in emailByName)) emailByName[name] = email;
         const code = lCodeField ? parseCode(readText(r, lCodeField)) : '';
         if (email && code) {
             const key = code + '|' + normEmail(email);
@@ -168,39 +168,44 @@ async function reloadLeaders() {
 
 let leadersQ = await reloadLeaders();
 output.text(
-    `Loaded ${Object.keys(emailByEmpId).length} leader email(s); ` +
+    `Loaded ${Object.keys(emailByName).length} leader email(s) by name; ` +
     `${leadersByCode.length} have a short code on "${CONFIG.leadersTable}".`,
 );
 
-// ── Positions: index by Unique ID; read manager pointer + employee id ───────
+// ── Positions: index by Unique ID; read parent pointer ──────────────────────
 const posTable = base.getTable(CONFIG.posTable);
 const fUid = posTable.getField(CONFIG.uniqueIdField);
 const fMgr = resolveField(posTable, [
     CONFIG.managerIdField,
+    '[F] Manager ID 🔎',
+    '[F] Manager ID',
     'Organization Manager (from [F] Supervisory Organization 🔗)',
     'Organization Manager (from [F] Supervisory Organization)',
-], f => { const n = normName(f.name); return n.includes('organizationmanager') && n.includes('supervisoryorganization'); });
-const fEmp = posTable.getField(CONFIG.employeeIdField);
+], f => { const n = normName(f.name); return n.includes('fmanagerid') || (n.includes('organizationmanager') && n.includes('supervisoryorganization')); });
 const fOut = posTable.getField(CONFIG.outputField);
 const fCode = CONFIG.shortCodeField ? posTable.getField(CONFIG.shortCodeField) : null;
-const fName = CONFIG.flagMissingLeaders ? fieldOrNull(posTable, CONFIG.posNameField) : null;
 const fOrg  = CONFIG.flagMissingLeaders ? fieldOrNull(posTable, CONFIG.posOrgField) : null;
-const posFields = [fUid, fMgr, fEmp, fOut];
-for (const f of [fCode, fName, fOrg]) if (f && !posFields.includes(f)) posFields.push(f);
+const posFields = [fUid, fMgr, fOut];
+for (const f of [fCode, fOrg]) if (f && !posFields.includes(f)) posFields.push(f);
 const posQ = await posTable.selectRecordsAsync({fields: posFields});
 
-const recByUid     = {};   // unique-id key → record  (keyed by raw AND leading-number)
-const mgrRawByRec  = {};   // record id → raw "[F] Manager ID 🔎" text
-const empKeyByRec  = {};   // record id → employee-id key
+const recByUid     = {};   // unique-id key → record (keyed by raw AND leading-number)
+const mgrRawByRec  = {};   // record id → raw parent-pointer text
 const codeByRec    = {};   // record id → short code
+const occupantNameById = {};   // position id → its FUTURE head's name (from pointers)
 for (const r of posQ.records) {
     const uidRaw = readText(r, fUid);
     for (const k of [normKey(uidRaw), idKey(uidRaw)]) {
         if (k && !(k in recByUid)) recByUid[k] = r;
     }
     mgrRawByRec[r.id] = readText(r, fMgr);
-    empKeyByRec[r.id] = normKey(readText(r, fEmp));
     codeByRec[r.id]   = fCode ? normCode(readText(r, fCode)) : '';
+}
+for (const r of posQ.records) {
+    const raw = mgrRawByRec[r.id];
+    if (!raw) continue;
+    const pid = idKey(raw), pname = parseMgrName(raw);
+    if (pid && pname && !(pid in occupantNameById)) occupantNameById[pid] = pname;
 }
 
 const parentOf = r => {
@@ -210,8 +215,7 @@ const parentOf = r => {
     return (p && p.id !== r.id) ? p : null;
 };
 
-// A record inherits every leader (from the Future Leaders list) whose short code
-// is a PREFIX of the record's code. Shortest code = highest → top leaders first.
+// Short-code leaders whose code is a PREFIX of this record's code, top-first.
 const shortCodeEmailsFor = r => {
     const code = codeByRec[r.id];
     if (!code) return [];
@@ -220,25 +224,18 @@ const shortCodeEmailsFor = r => {
         .sort((a, b) => a.code.length - b.code.length);
     const out = [];
     const seen = new Set();
-    for (const L of matches) {
-        const k = normEmail(L.email);
-        if (!seen.has(k)) { seen.add(k); out.push(L.email); }
-    }
+    for (const L of matches) { const k = normEmail(L.email); if (!seen.has(k)) { seen.add(k); out.push(L.email); } }
     return out;
 };
 
-// TEST: only the TOP-of-branch leader(s) — the prefix match(es) with the SHORTEST
-// short code (highest in the org).
+// TEST: only the TOP-of-branch leader(s) — the shortest prefix code.
 const topLeaderEmailsFor = r => {
     const code = codeByRec[r.id];
     if (!code) return [];
     let minLen = Infinity;
     const matches = [];
     for (const L of leadersByCode) {
-        if (code.startsWith(L.code)) {
-            matches.push(L);
-            if (L.code.length < minLen) minLen = L.code.length;
-        }
+        if (code.startsWith(L.code)) { matches.push(L); if (L.code.length < minLen) minLen = L.code.length; }
     }
     const out = [];
     const seen = new Set();
@@ -250,105 +247,73 @@ const topLeaderEmailsFor = r => {
     return out;
 };
 
-// Leader emails for the chain, ORDERED TOP-FIRST: the top leader, then the next
-// one down, … to the position's direct manager (and the position itself last when
-// includeSelf). Climb to the root, then reverse.
+// Leader emails for the chain, TOP-FIRST. We climb the parent references and
+// identify each ancestor by the FUTURE NAME in the pointer (→ emailByName); SELF
+// is this seat's own future head (someone points to it as their parent).
 function leaderEmailsFor(startRec) {
     const out = [];
-    const seen = new Set();    // dedupe emails
-    const guard = new Set();   // cycle guard on record ids
-    let r = startRec;
-    let isSelf = true;
-    while (r && !guard.has(r.id)) {
-        guard.add(r.id);
-        if (!isSelf || CONFIG.includeSelf) {
-            const email = emailByEmpId[empKeyByRec[r.id]];   // empty for vacant seats
-            if (email) {
-                const k = normEmail(email);
-                if (!seen.has(k)) { seen.add(k); out.push(email); }
-            }
-        }
-        isSelf = false;
-        r = parentOf(r);   // climb the hierarchy — straight through vacant seats
+    const seen = new Set();
+    const guard = new Set();
+    // SELF first (ends up LAST after reverse).
+    if (CONFIG.includeSelf) {
+        const selfName = occupantNameById[idKey(readText(startRec, fUid))];
+        const e = selfName ? emailByName[normPerson(selfName)] : '';
+        if (e) { const k = normEmail(e); if (!seen.has(k)) { seen.add(k); out.push(e); } }
     }
-    out.reverse();   // top leader first → … → direct manager (→ self if included)
+    let cur = startRec;
+    while (cur && !guard.has(cur.id)) {
+        guard.add(cur.id);
+        const pname = parseMgrName(mgrRawByRec[cur.id]);
+        const e = pname ? emailByName[normPerson(pname)] : '';
+        if (e) { const k = normEmail(e); if (!seen.has(k)) { seen.add(k); out.push(e); } }
+        cur = parentOf(cur);   // climb via position id — through vacant seats
+    }
+    out.reverse();   // top leader first → … → direct manager (→ self last)
     return out;
 }
 
 // ── Reconcile the leaders list to the positions table (SOURCE OF TRUTH) ──────
-// Runs BEFORE the email-text write; the list is re-read afterward so the writes
-// take effect this run.
+// Managers/leaders are identified by FUTURE NAME (never [E]). Runs BEFORE the
+// email-text write; the list is re-read afterward so writes take effect this run.
 let orgsOverwritten = 0, rowsCreated = 0, emailsCopied = 0, rowsFlagged = 0, rowsRefreshed = 0;
 if (CONFIG.flagMissingLeaders) {
     const lLevelField  = fieldOrNull(leadersTable, CONFIG.leadersLevelField);
     const lStatusField = fieldOrNull(leadersTable, CONFIG.leadersStatusField);
-    const lNameField   = fieldOrNull(leadersTable, CONFIG.leadersNameField);
 
-    // The manager NAME carried in "[F] Manager ID" ("… (Kristina Henthorn)" →
-    // "Kristina Henthorn"). Picks the LAST parenthesised group that isn't all
-    // digits, so a trailing "(50520170)" id never wins over the name.
-    const parseMgrName = raw => {
-        const groups = [...String(raw == null ? '' : raw).matchAll(/\(([^()]+)\)/g)].map(m => norm(m[1]));
-        for (let i = groups.length - 1; i >= 0; i--) if (groups[i] && !/^\d+$/.test(groups[i])) return groups[i];
-        return '';
-    };
-
-    // Managed orgs per MANAGER KEY. The key is the seat's employee id when it has
-    // one, else "NAME:<manager name>" — so a VACANT/NEW manager seat (no incumbent
-    // id, like Kristina's future "Head of Quality Control") is still recognised and
-    // matched to its leader row by Leader Name.
-    const reportsByKeyCode = {};   // key → { code → count }
-    const keyMeta          = {};   // key → { empid, name, seat }
-    const orgStrCount      = {};   // code → { fullString → count }
+    // Managed orgs per MANAGER NAME: distinct supervisory-org codes their direct
+    // reports sit in, with a representative full string + per-(name,code) count.
+    const reportsByNameCode = {};   // nameKey → { code → count }
+    const nameMeta          = {};   // nameKey → { display }
+    const orgStrCount       = {};   // code → { fullString → count }
     for (const r of posQ.records) {
         const raw = mgrRawByRec[r.id];
         if (!raw) continue;
-        const seat  = recByUid[normKey(raw)] || recByUid[idKey(raw)] || null;
-        const empid = seat ? empKeyByRec[seat.id] : '';
-        const name  = parseMgrName(raw);
-        const key   = empid || (name ? 'NAME:' + normKey(name) : '');
-        if (!key) continue;
+        const display = parseMgrName(raw);
+        if (!display) continue;
+        const nameKey = normPerson(display);
+        if (!nameKey) continue;
         const orgStr = fOrg ? readText(r, fOrg) : '';
         const code = parseCode(orgStr);
         if (!code) continue;
-        (reportsByKeyCode[key] = reportsByKeyCode[key] || {});
-        reportsByKeyCode[key][code] = (reportsByKeyCode[key][code] || 0) + 1;
-        if (!keyMeta[key]) keyMeta[key] = {empid, name, seat};
-        else {
-            if (!keyMeta[key].empid && empid) keyMeta[key].empid = empid;
-            if (!keyMeta[key].name  && name)  keyMeta[key].name  = name;
-            if (!keyMeta[key].seat  && seat)  keyMeta[key].seat  = seat;
-        }
+        (reportsByNameCode[nameKey] = reportsByNameCode[nameKey] || {});
+        reportsByNameCode[nameKey][code] = (reportsByNameCode[nameKey][code] || 0) + 1;
+        if (!nameMeta[nameKey]) nameMeta[nameKey] = {display};
         (orgStrCount[code] = orgStrCount[code] || {});
         if (orgStr) orgStrCount[code][orgStr] = (orgStrCount[code][orgStr] || 0) + 1;
     }
-    const orgStrByCode = {};   // code → most common full supervisory-org string
+    const orgStrByCode = {};
     for (const code of Object.keys(orgStrCount)) {
         orgStrByCode[code] = Object.keys(orgStrCount[code])
             .sort((a, b) => orgStrCount[code][b] - orgStrCount[code][a])[0] || code;
     }
 
-    // Index existing leader rows by Leader ID AND by Leader Name.
-    const rowsByMid = {};
+    // Index existing leader rows by Leader Name.
     const rowsByName = {};
     for (const r of leadersQ.records) {
-        const mid = normKey(readText(r, lEmpField));
-        if (mid) (rowsByMid[mid] = rowsByMid[mid] || []).push(r);
-        const nm = lNameField ? normKey(readText(r, lNameField)) : '';
+        const nm = normPerson(readText(r, lNameField));
         if (nm) (rowsByName[nm] = rowsByName[nm] || []).push(r);
     }
-    // Resolve the existing rows for a manager key. A NAME key is only honoured when
-    // it maps to exactly ONE leader row (avoids merging two different same-named
-    // people); ambiguous/absent name → no rows, and the key is skipped below.
-    const existingRowsForKey = key => {
-        if (key.startsWith('NAME:')) {
-            const rows = rowsByName[key.slice(5)] || [];
-            return rows.length === 1 ? rows.slice() : [];
-        }
-        return (rowsByMid[key] || []).slice();
-    };
 
-    // Short-code subtree size, for leaders we can't resolve via the hierarchy.
     const allCodes = posQ.records.map(r => codeByRec[r.id]).filter(Boolean);
     const subtreeBelow = C => C ? allCodes.reduce((s, c) => (c.length > C.length && c.startsWith(C) ? s + 1 : s), 0) : 0;
 
@@ -356,7 +321,6 @@ if (CONFIG.flagMissingLeaders) {
     const toAdd = [];
     const handledRowIds = new Set();
 
-    // Build the fields for a row that should represent (code, direct-report count).
     const buildFields = (direct, code, row, knownEmail) => {
         const orgStr   = orgStrByCode[code] || code;
         const rowEmail = row ? norm(readText(row, lMailField)) : '';
@@ -372,83 +336,68 @@ if (CONFIG.flagMissingLeaders) {
         return {fields, orgStr, fillEmail};
     };
 
-    for (const key of Object.keys(reportsByKeyCode)) {
-        const meta = keyMeta[key];
-        const codes = Object.keys(reportsByKeyCode[key]);
-        const existing = existingRowsForKey(key);
-        // A NAME key with no unique existing row can't be identified safely → skip.
-        if (key.startsWith('NAME:') && existing.length === 0) continue;
+    for (const nameKey of Object.keys(reportsByNameCode)) {
+        const codes = Object.keys(reportsByNameCode[nameKey]);
+        const existing = (rowsByName[nameKey] || []).slice();
+        const display = nameMeta[nameKey].display;
 
-        // Known email = any existing row's email, else the seat's incumbent email.
         let knownEmail = '';
         for (const row of existing) { const e = norm(readText(row, lMailField)); if (e) { knownEmail = e; break; } }
-        if (!knownEmail && meta.empid) knownEmail = emailByEmpId[meta.empid] || '';
 
-        // Map existing rows by their current code; spare rows become reuse fodder.
         const rowByCode = {};
         const spare = [];
         for (const row of existing) {
             const rc = lCodeField ? parseCode(readText(row, lCodeField)) : '';
             if (rc && !(rc in rowByCode)) rowByCode[rc] = row; else spare.push(row);
         }
-        // Rows whose code isn't an org this manager actually manages → reuse fodder.
         for (const rc of Object.keys(rowByCode)) {
             if (!codes.includes(rc)) { spare.push(rowByCode[rc]); delete rowByCode[rc]; }
         }
 
-        const nameStr = meta.name || (meta.seat && fName ? readText(meta.seat, fName) : '');
-        const empForRow = meta.empid || (meta.seat ? readText(meta.seat, fEmp) : '');
-
         for (const code of codes) {
-            const direct = reportsByKeyCode[key][code];
+            const direct = reportsByNameCode[nameKey][code];
             if (rowByCode[code]) {
-                // Correct row already exists → refresh Level/Status (+ fill blank email).
                 const row = rowByCode[code];
                 handledRowIds.add(row.id);
                 const {fields, fillEmail} = buildFields(direct, code, row, knownEmail);
-                if (fillEmail && lMailField) { fields[CONFIG.leadersEmailField] = fillEmail; emailsCopied++; }
+                if (fillEmail) { fields[CONFIG.leadersEmailField] = fillEmail; emailsCopied++; }
                 toUpdate.push({id: row.id, fields});
                 rowsRefreshed++;
             } else if (spare.length) {
-                // OVERWRITE a mismatched/placeholder row with the real org.
                 const row = spare.shift();
                 handledRowIds.add(row.id);
                 const {fields, orgStr, fillEmail} = buildFields(direct, code, row, knownEmail);
                 if (CONFIG.leadersShortCodeField) fields[CONFIG.leadersShortCodeField] = orgStr;
-                if (fName && nameStr) fields[CONFIG.leadersNameField] = nameStr;
-                if (fillEmail && lMailField) { fields[CONFIG.leadersEmailField] = fillEmail; emailsCopied++; }
+                if (fillEmail) { fields[CONFIG.leadersEmailField] = fillEmail; emailsCopied++; }
                 toUpdate.push({id: row.id, fields});
                 orgsOverwritten++;
             } else {
-                // CREATE a new row for this org (copy the manager's known email).
                 const {fields, orgStr, fillEmail} = buildFields(direct, code, null, knownEmail);
-                if (empForRow) fields[CONFIG.leadersEmpIdField] = empForRow;
-                if (fName && nameStr) fields[CONFIG.leadersNameField] = nameStr;
+                fields[CONFIG.leadersNameField] = display;
                 if (CONFIG.leadersShortCodeField) fields[CONFIG.leadersShortCodeField] = orgStr;
-                if (fillEmail && lMailField) { fields[CONFIG.leadersEmailField] = fillEmail; emailsCopied++; }
+                if (fillEmail) { fields[CONFIG.leadersEmailField] = fillEmail; emailsCopied++; }
                 toAdd.push({fields});
                 rowsCreated++;
             }
         }
 
-        // Leftover rows for this manager = orgs they no longer manage → flag only.
         for (const row of spare) {
             handledRowIds.add(row.id);
             if (lStatusField) { toUpdate.push({id: row.id, fields: {[CONFIG.leadersStatusField]: CONFIG.statusNotLeader}}); rowsFlagged++; }
         }
     }
 
-    // Leader rows whose Leader ID never shows up as a manager in the table.
+    // Leader rows whose name never appears as a manager in the table.
     for (const r of leadersQ.records) {
         if (handledRowIds.has(r.id)) continue;
-        const mid = normKey(readText(r, lEmpField));
         const code = lCodeField ? parseCode(readText(r, lCodeField)) : '';
         const below = subtreeBelow(code);
+        const rowEmail = norm(readText(r, lMailField));
         const fields = {};
         if (lLevelField && code) fields[CONFIG.leadersLevelField] = levelFor(code);
         if (lStatusField) {
             let status;
-            if (mid && !(mid in emailByEmpId)) status = CONFIG.statusMissingEmail;
+            if (!rowEmail) status = CONFIG.statusMissingEmail;
             else if (below > 0) status = `${CONFIG.statusUpdate} (${below} in org)`;
             else status = CONFIG.statusNotLeader;
             fields[CONFIG.leadersStatusField] = status;
@@ -459,7 +408,6 @@ if (CONFIG.flagMissingLeaders) {
     while (toUpdate.length > 0) { const b = toUpdate.splice(0, 50); await leadersTable.updateRecordsAsync(b); }
     while (toAdd.length > 0)    { const b = toAdd.splice(0, 50);    await leadersTable.createRecordsAsync(b); }
 
-    // Re-read so the corrected orgs + copied emails drive the email-text write.
     leadersQ = await reloadLeaders();
 }
 
@@ -490,13 +438,6 @@ const updates = posQ.records.map(r => {
             emails = shortCodeEmailsFor(r);
             via = emails.length ? 'shortcode' : null;
         }
-    }
-
-    // SELF: if this position's incumbent IS a leader, ensure their own email is on
-    // their own seat — even when their position sits in a different org.
-    if (CONFIG.includeSelf) {
-        const self = emailByEmpId[empKeyByRec[r.id]];
-        if (self && !emails.some(e => normEmail(e) === normEmail(self))) emails.push(self);
     }
 
     if (emails.length === 0) stillEmpty++;
@@ -530,7 +471,7 @@ const topLines = leaderCounts.slice(0, 25)
 
 output.markdown(
     `### Updated "${CONFIG.outputField}" on ${written} position(s)\n` +
-    `- ${filledByShortCode} via short code · ${filledByHierarchy} via hierarchy · **${stillEmpty} empty**\n` +
+    `- ${filledByShortCode} via short code · ${filledByHierarchy} via name chain · **${stillEmpty} empty**\n` +
     `- leaders list (source of truth = positions): **${rowsCreated} row(s) created** · ` +
     `**${orgsOverwritten} org(s) overwritten** · ${rowsRefreshed} refreshed · ` +
     `${emailsCopied} email(s) copied · ${rowsFlagged} flagged "${CONFIG.statusNotLeader}"\n\n` +
