@@ -122,6 +122,7 @@ for (const f of [fCode, fName, fOrg]) if (f && !posFields.includes(f)) posFields
 const posQ = await posTable.selectRecordsAsync({fields: posFields});
 
 const recByUid    = {};
+const recByEmpId  = {};   // [E] Employee ID → record (current managers are referenced by employee id)
 const mgrRawByRec = {};
 const empKeyByRec = {};
 const codeByRec   = {};
@@ -132,6 +133,7 @@ for (const r of posQ.records) {
     }
     mgrRawByRec[r.id] = readText(r, fMgr);
     empKeyByRec[r.id] = normKey(readText(r, fEmp));
+    if (empKeyByRec[r.id] && !(empKeyByRec[r.id] in recByEmpId)) recByEmpId[empKeyByRec[r.id]] = r;
     codeByRec[r.id]   = fCode ? parseCode(readText(r, fCode)) : '';   // leading token = code
 }
 
@@ -172,10 +174,17 @@ const topLeaderEmailsFor = r => {
     return out;
 };
 
+// CURRENT hierarchy: "[E] Manager ID" is the MANAGER'S EMPLOYEE ID, so resolve
+// the parent by matching it to a record's [E] Employee ID. Tolerates a formatted
+// "276355 - Name" value by taking the leading number.
+const mgrEmpIdOf = r => {
+    const raw = mgrRawByRec[r.id] || '';
+    const m = raw.match(/\d{3,}/);
+    return m ? m[0] : normKey(raw);
+};
 const parentOf = r => {
-    const raw = mgrRawByRec[r.id];
-    if (!raw) return null;
-    const p = recByUid[normKey(raw)] || recByUid[idKey(raw)] || null;
+    const mid = mgrEmpIdOf(r);
+    const p = mid ? recByEmpId[mid] : null;
     return (p && p.id !== r.id) ? p : null;
 };
 function leaderEmailsFor(startRec) {
