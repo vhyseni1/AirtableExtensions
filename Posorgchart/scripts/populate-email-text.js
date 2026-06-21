@@ -6,8 +6,11 @@
  * For every position it writes into "[T] Email Text (Future Leaders)" the emails
  * of every LEADER in that position's management chain — INCLUDING the position
  * itself — by climbing the real parent→child relationship: a record's parent is
- * the record whose "Unique ID" equals this record's "[F] Manager ID" (the SAME
- * join the org-chart extension uses), then unioning in short-code matches.
+ * the record whose "Unique ID" equals the position id in this record's
+ * "Organization Manager (from [F] Supervisory Organization)" (the head of the org
+ * it sits in), then unioning in short-code matches. STRUCTURE comes only from
+ * [F]/parent references + short code (never [E] manager/org columns); a person's
+ * [E] Employee ID is used only to identify the incumbent (an always-existing id).
  *
  * SOURCE OF TRUTH = the Employees & Positions table. Each manager (parent of ≥1
  * position) manages the set of supervisory orgs their DIRECT reports sit in. The
@@ -22,8 +25,9 @@
  * Reconcile runs BEFORE the email-text write and the list is re-read in between,
  * so corrected orgs + copied emails take effect in a SINGLE run.
  *
- *   Hierarchy : parent(record) = the record whose "Unique ID" == record's
- *               "[F] Manager ID"  (tolerates "12345 - Title (Name)").
+ *   Hierarchy : parent(record) = the record whose "Unique ID" == the position id
+ *               in "Organization Manager (from [F] Supervisory Organization)"
+ *               (tolerates "12345 - Title (Name)").
  *   Leaders   : "Future Leaders list" maps a Leader ID → Email, with a
  *               "Managing Organization" whose leading token is the short code.
  *   Output    : comma-separated leader emails written to the output field.
@@ -37,7 +41,10 @@
 const CONFIG = {
     posTable:          'Employees & Positions',
     uniqueIdField:     'Unique ID',          // each record's own id
-    managerIdField:    '[F] Manager ID 🔎',  // the parent's Unique ID (lookup)
+    // The parent pointer: the head of this record's supervisory org, carrying the
+    // parent's position id ("50472279 - Head of Quality Control (Kristina …)").
+    // (Resolved emoji/spacing-tolerantly; falls back to other known field names.)
+    managerIdField:    'Organization Manager (from [F] Supervisory Organization 🔗)',
     employeeIdField:   '[E] Employee ID',    // incumbent id, to match a leader
     outputField:       '[T] Email Text (Future Leaders)',  // comma-separated emails (output)
 
@@ -107,6 +114,17 @@ function readText(record, field) {
     return (s || '').trim();
 }
 const fieldOrNull = (table, name) => { try { return name ? table.getField(name) : null; } catch (e) { return null; } };
+const normName = s => String(s == null ? '' : s).normalize('NFKC').toLowerCase().replace(/[^a-z0-9]/g, '');
+// Resolve a field by exact name, then by emoji/space-tolerant normalized name,
+// then by an optional predicate — so the manager pointer survives the icon
+// characters in its long lookup-field name.
+function resolveField(table, candidates, predicate) {
+    for (const c of candidates) { if (!c) continue; try { return table.getField(c); } catch (e) { /* next */ } }
+    const wanted = candidates.filter(Boolean).map(normName);
+    for (const f of table.fields) if (wanted.includes(normName(f.name))) return f;
+    if (predicate) for (const f of table.fields) if (predicate(f)) return f;
+    throw new Error(`No field matching "${candidates[0]}" on "${table.name}"`);
+}
 // Level from a short code's length: 2→GOLT, 3→GOLT-1, 4→GOLT-2, 5+→Below Golt-2.
 const levelFor = code => {
     const n = (code || '').length;
@@ -157,7 +175,11 @@ output.text(
 // ── Positions: index by Unique ID; read manager pointer + employee id ───────
 const posTable = base.getTable(CONFIG.posTable);
 const fUid = posTable.getField(CONFIG.uniqueIdField);
-const fMgr = posTable.getField(CONFIG.managerIdField);
+const fMgr = resolveField(posTable, [
+    CONFIG.managerIdField,
+    'Organization Manager (from [F] Supervisory Organization 🔗)',
+    'Organization Manager (from [F] Supervisory Organization)',
+], f => { const n = normName(f.name); return n.includes('organizationmanager') && n.includes('supervisoryorganization'); });
 const fEmp = posTable.getField(CONFIG.employeeIdField);
 const fOut = posTable.getField(CONFIG.outputField);
 const fCode = CONFIG.shortCodeField ? posTable.getField(CONFIG.shortCodeField) : null;
