@@ -260,24 +260,43 @@ let orgsOverwritten = 0, rowsCreated = 0, emailsCopied = 0, rowsFlagged = 0, row
 if (CONFIG.flagMissingLeaders) {
     const lLevelField  = fieldOrNull(leadersTable, CONFIG.leadersLevelField);
     const lStatusField = fieldOrNull(leadersTable, CONFIG.leadersStatusField);
+    const lNameField   = fieldOrNull(leadersTable, CONFIG.leadersNameField);
 
-    // Managed orgs per manager: the distinct supervisory-org CODES their direct
-    // reports sit in (dedup by leading token), with a representative full string
-    // and a per-(manager, code) direct-report count.
-    const reportsByMidCode = {};   // mid → { code → count }
+    // The manager NAME carried in "[F] Manager ID" ("… (Kristina Henthorn)" →
+    // "Kristina Henthorn"). Picks the LAST parenthesised group that isn't all
+    // digits, so a trailing "(50520170)" id never wins over the name.
+    const parseMgrName = raw => {
+        const groups = [...String(raw == null ? '' : raw).matchAll(/\(([^()]+)\)/g)].map(m => norm(m[1]));
+        for (let i = groups.length - 1; i >= 0; i--) if (groups[i] && !/^\d+$/.test(groups[i])) return groups[i];
+        return '';
+    };
+
+    // Managed orgs per MANAGER KEY. The key is the seat's employee id when it has
+    // one, else "NAME:<manager name>" — so a VACANT/NEW manager seat (no incumbent
+    // id, like Kristina's future "Head of Quality Control") is still recognised and
+    // matched to its leader row by Leader Name.
+    const reportsByKeyCode = {};   // key → { code → count }
+    const keyMeta          = {};   // key → { empid, name, seat }
     const orgStrCount      = {};   // code → { fullString → count }
-    const managerRecByMid  = {};   // mid → manager position record (for name / id)
     for (const r of posQ.records) {
-        const m = parentOf(r);
-        if (!m) continue;
-        const mid = empKeyByRec[m.id];
-        if (!mid) continue;
-        if (!managerRecByMid[mid]) managerRecByMid[mid] = m;
+        const raw = mgrRawByRec[r.id];
+        if (!raw) continue;
+        const seat  = recByUid[normKey(raw)] || recByUid[idKey(raw)] || null;
+        const empid = seat ? empKeyByRec[seat.id] : '';
+        const name  = parseMgrName(raw);
+        const key   = empid || (name ? 'NAME:' + normKey(name) : '');
+        if (!key) continue;
         const orgStr = fOrg ? readText(r, fOrg) : '';
         const code = parseCode(orgStr);
         if (!code) continue;
-        (reportsByMidCode[mid] = reportsByMidCode[mid] || {});
-        reportsByMidCode[mid][code] = (reportsByMidCode[mid][code] || 0) + 1;
+        (reportsByKeyCode[key] = reportsByKeyCode[key] || {});
+        reportsByKeyCode[key][code] = (reportsByKeyCode[key][code] || 0) + 1;
+        if (!keyMeta[key]) keyMeta[key] = {empid, name, seat};
+        else {
+            if (!keyMeta[key].empid && empid) keyMeta[key].empid = empid;
+            if (!keyMeta[key].name  && name)  keyMeta[key].name  = name;
+            if (!keyMeta[key].seat  && seat)  keyMeta[key].seat  = seat;
+        }
         (orgStrCount[code] = orgStrCount[code] || {});
         if (orgStr) orgStrCount[code][orgStr] = (orgStrCount[code][orgStr] || 0) + 1;
     }
@@ -287,13 +306,25 @@ if (CONFIG.flagMissingLeaders) {
             .sort((a, b) => orgStrCount[code][b] - orgStrCount[code][a])[0] || code;
     }
 
-    // Group the EXISTING leader rows by Leader ID.
+    // Index existing leader rows by Leader ID AND by Leader Name.
     const rowsByMid = {};
+    const rowsByName = {};
     for (const r of leadersQ.records) {
         const mid = normKey(readText(r, lEmpField));
-        if (!mid) continue;
-        (rowsByMid[mid] = rowsByMid[mid] || []).push(r);
+        if (mid) (rowsByMid[mid] = rowsByMid[mid] || []).push(r);
+        const nm = lNameField ? normKey(readText(r, lNameField)) : '';
+        if (nm) (rowsByName[nm] = rowsByName[nm] || []).push(r);
     }
+    // Resolve the existing rows for a manager key. A NAME key is only honoured when
+    // it maps to exactly ONE leader row (avoids merging two different same-named
+    // people); ambiguous/absent name → no rows, and the key is skipped below.
+    const existingRowsForKey = key => {
+        if (key.startsWith('NAME:')) {
+            const rows = rowsByName[key.slice(5)] || [];
+            return rows.length === 1 ? rows.slice() : [];
+        }
+        return (rowsByMid[key] || []).slice();
+    };
 
     // Short-code subtree size, for leaders we can't resolve via the hierarchy.
     const allCodes = posQ.records.map(r => codeByRec[r.id]).filter(Boolean);
@@ -303,13 +334,11 @@ if (CONFIG.flagMissingLeaders) {
     const toAdd = [];
     const handledRowIds = new Set();
 
-    // Build the fields for a row that should represent (mid, code).
-    const buildFields = (mid, code, row) => {
-        const direct   = reportsByMidCode[mid][code];
+    // Build the fields for a row that should represent (code, direct-report count).
+    const buildFields = (direct, code, row, knownEmail) => {
         const orgStr   = orgStrByCode[code] || code;
         const rowEmail = row ? norm(readText(row, lMailField)) : '';
-        const known    = emailByEmpId[mid] || '';
-        const fillEmail = (!rowEmail && known && CONFIG.copyEmailToNewRows) ? known : '';
+        const fillEmail = (!rowEmail && knownEmail && CONFIG.copyEmailToNewRows) ? knownEmail : '';
         const finalEmail = rowEmail || fillEmail;
         const fields = {};
         if (lLevelField)  fields[CONFIG.leadersLevelField] = levelFor(code);
@@ -321,9 +350,17 @@ if (CONFIG.flagMissingLeaders) {
         return {fields, orgStr, fillEmail};
     };
 
-    for (const mid of Object.keys(reportsByMidCode)) {
-        const codes = Object.keys(reportsByMidCode[mid]);
-        const existing = (rowsByMid[mid] || []).slice();
+    for (const key of Object.keys(reportsByKeyCode)) {
+        const meta = keyMeta[key];
+        const codes = Object.keys(reportsByKeyCode[key]);
+        const existing = existingRowsForKey(key);
+        // A NAME key with no unique existing row can't be identified safely → skip.
+        if (key.startsWith('NAME:') && existing.length === 0) continue;
+
+        // Known email = any existing row's email, else the seat's incumbent email.
+        let knownEmail = '';
+        for (const row of existing) { const e = norm(readText(row, lMailField)); if (e) { knownEmail = e; break; } }
+        if (!knownEmail && meta.empid) knownEmail = emailByEmpId[meta.empid] || '';
 
         // Map existing rows by their current code; spare rows become reuse fodder.
         const rowByCode = {};
@@ -337,14 +374,16 @@ if (CONFIG.flagMissingLeaders) {
             if (!codes.includes(rc)) { spare.push(rowByCode[rc]); delete rowByCode[rc]; }
         }
 
-        const nameStr = managerRecByMid[mid] && fName ? readText(managerRecByMid[mid], fName) : '';
+        const nameStr = meta.name || (meta.seat && fName ? readText(meta.seat, fName) : '');
+        const empForRow = meta.empid || (meta.seat ? readText(meta.seat, fEmp) : '');
 
         for (const code of codes) {
+            const direct = reportsByKeyCode[key][code];
             if (rowByCode[code]) {
                 // Correct row already exists → refresh Level/Status (+ fill blank email).
                 const row = rowByCode[code];
                 handledRowIds.add(row.id);
-                const {fields, fillEmail} = buildFields(mid, code, row);
+                const {fields, fillEmail} = buildFields(direct, code, row, knownEmail);
                 if (fillEmail && lMailField) { fields[CONFIG.leadersEmailField] = fillEmail; emailsCopied++; }
                 toUpdate.push({id: row.id, fields});
                 rowsRefreshed++;
@@ -352,7 +391,7 @@ if (CONFIG.flagMissingLeaders) {
                 // OVERWRITE a mismatched/placeholder row with the real org.
                 const row = spare.shift();
                 handledRowIds.add(row.id);
-                const {fields, orgStr, fillEmail} = buildFields(mid, code, row);
+                const {fields, orgStr, fillEmail} = buildFields(direct, code, row, knownEmail);
                 if (CONFIG.leadersShortCodeField) fields[CONFIG.leadersShortCodeField] = orgStr;
                 if (fName && nameStr) fields[CONFIG.leadersNameField] = nameStr;
                 if (fillEmail && lMailField) { fields[CONFIG.leadersEmailField] = fillEmail; emailsCopied++; }
@@ -360,8 +399,8 @@ if (CONFIG.flagMissingLeaders) {
                 orgsOverwritten++;
             } else {
                 // CREATE a new row for this org (copy the manager's known email).
-                const {fields, orgStr, fillEmail} = buildFields(mid, code, null);
-                fields[CONFIG.leadersEmpIdField] = managerRecByMid[mid] ? readText(managerRecByMid[mid], fEmp) : mid;
+                const {fields, orgStr, fillEmail} = buildFields(direct, code, null, knownEmail);
+                if (empForRow) fields[CONFIG.leadersEmpIdField] = empForRow;
                 if (fName && nameStr) fields[CONFIG.leadersNameField] = nameStr;
                 if (CONFIG.leadersShortCodeField) fields[CONFIG.leadersShortCodeField] = orgStr;
                 if (fillEmail && lMailField) { fields[CONFIG.leadersEmailField] = fillEmail; emailsCopied++; }
