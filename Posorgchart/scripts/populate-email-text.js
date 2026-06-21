@@ -76,7 +76,11 @@ const CONFIG = {
     //            has no short code)
     // 'empty'  → hierarchy first, short codes only when the chain found nothing
     // 'always' → hierarchy plus a UNION of short-code leaders
-    shortCodeMode:     'only',
+    // 'always' = manager-ID chain FIRST (handles managers who run more than one
+    // org), then UNION short-code leaders (fills gaps where the chain breaks at a
+    // vacant manager). 'only' = short code only. 'empty' = chain, short code only
+    // when the chain found nothing.
+    shortCodeMode:     'always',
 
     // TEST MODE: when true, IGNORE everything above and write ONLY each
     // position's TOP-of-branch leader(s) — the leader(s) with the SHORTEST

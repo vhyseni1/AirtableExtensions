@@ -30,7 +30,9 @@ const CONFIG = {
     leadersShortCodeField: 'Managing Organization',   // leader code = its leading token
 
     includeSelf:    true,
-    shortCodeMode:  'only',   // 'only' (recommended) | 'empty' | 'always'
+    // 'always' = manager-ID chain FIRST (handles multi-org managers) then UNION
+    // short-code leaders (fills vacant-manager gaps). 'only' | 'empty' available.
+    shortCodeMode:  'always',
     topLeadersOnly: false,
 
     // RECONCILE: write to the leaders list's Status/Level columns (NEVER Email).
