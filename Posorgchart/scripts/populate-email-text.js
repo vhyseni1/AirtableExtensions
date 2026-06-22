@@ -70,6 +70,12 @@ const CONFIG = {
     // short code only. 'empty' = chain, short code only when the chain found none.
     shortCodeMode:     'always',
 
+    // EMAIL-TEXT SCOPE: write ONLY each position's GOLT + GOLT-1 leaders — i.e.
+    // leaders whose short code is a PREFIX of the position's code AND whose code
+    // length is in this set (3 = GOLT, 4 = GOLT-1). Set null/[] to disable and
+    // fall back to the full management chain + short-code union.
+    emailCodeLengths:  [3, 4],
+
     // TEST MODE: when true, write ONLY each position's TOP-of-branch leader(s).
     topLeadersOnly:    false,
 };
@@ -199,6 +205,21 @@ const shortCodeEmailsFor = r => {
     if (!code) return [];
     const matches = leadersByCode
         .filter(L => code.startsWith(L.code))
+        .sort((a, b) => a.code.length - b.code.length);
+    const out = [];
+    const seen = new Set();
+    for (const L of matches) { const k = normEmail(L.email); if (!seen.has(k)) { seen.add(k); out.push(L.email); } }
+    return out;
+};
+
+// GOLT + GOLT-1 leaders for a record: prefix-matching leaders whose code length
+// is in CONFIG.emailCodeLengths (3 = GOLT, 4 = GOLT-1), top-first.
+const allowedCodeLens = new Set(CONFIG.emailCodeLengths || []);
+const goltEmailsFor = r => {
+    const code = codeByRec[r.id];
+    if (!code) return [];
+    const matches = leadersByCode
+        .filter(L => allowedCodeLens.has(L.code.length) && code.startsWith(L.code))
         .sort((a, b) => a.code.length - b.code.length);
     const out = [];
     const seen = new Set();
@@ -390,6 +411,13 @@ let filledByHierarchy = 0, filledByShortCode = 0, stillEmpty = 0;
 const updates = posQ.records.map(r => {
     if (CONFIG.topLeadersOnly) {
         const emails = topLeaderEmailsFor(r);
+        if (emails.length > 0) filledByShortCode++; else stillEmpty++;
+        return {id: r.id, fields: {[fOut.id]: emails.join(', ')}};
+    }
+
+    // GOLT + GOLT-1 only (short codes of length 3 / 4), per CONFIG.emailCodeLengths.
+    if (allowedCodeLens.size > 0) {
+        const emails = goltEmailsFor(r);
         if (emails.length > 0) filledByShortCode++; else stillEmpty++;
         return {id: r.id, fields: {[fOut.id]: emails.join(', ')}};
     }
