@@ -68,7 +68,8 @@ function PhaseStrip({phase, mounted}) {
 }
 
 // ── Delivery timeline — markers on a line, labels stacked in clean lanes ───────
-const TL_ROW = 46;
+const TL_ROW = 66;   // lane vertical pitch — must exceed the card height
+const CARD_W = 178;  // fixed card width — used for exact horizontal packing
 function Timeline({features, colorOf, onPick}) {
     const ref = useRef(null);
     const [w, setW] = useState(0);
@@ -93,16 +94,18 @@ function Timeline({features, colorOf, onPick}) {
     const span = end - start || 1;
     const pct = ms => ((ms - start) / span) * 100;
 
-    // Greedy lane packing so labels never overlap (date-proportional positions).
+    // Greedy lane packing: a label drops to the next lane whenever its fixed-width
+    // card would collide with the last one placed in that lane. Same-lane cards are
+    // therefore horizontally clear, and lanes are TL_ROW apart vertically — so no
+    // card can overlap another.
     const W = w || 900;
     const laneRight = [];
     const placed = dated.map(f => {
         const cx = (pct(f.goLiveMs) / 100) * W;
-        const labelW = Math.min(200, 60 + f.name.length * 6.6);
-        const left = cx - labelW / 2;
+        const left = cx - CARD_W / 2;
         let lane = 0;
         while (lane < laneRight.length && left < laneRight[lane] + 14) lane++;
-        laneRight[lane] = cx + labelW / 2;
+        laneRight[lane] = cx + CARD_W / 2;
         return {f, lane};
     });
     const rows = Math.max(1, laneRight.length);
@@ -113,7 +116,7 @@ function Timeline({features, colorOf, onPick}) {
     while (d.getTime() <= end) { ticks.push(d.getTime()); d.setMonth(d.getMonth() + 1); }
 
     return (
-        <div className="fp-timeline" ref={ref} style={{minHeight: 96 + rows * TL_ROW}}>
+        <div className="fp-timeline" ref={ref} style={{minHeight: 92 + rows * TL_ROW}}>
             <div className="fp-timeline-track">
                 {ticks.map(t => (
                     <div key={t} className="fp-tl-tick" style={{left: `${pct(t)}%`}}>
@@ -132,9 +135,8 @@ function Timeline({features, colorOf, onPick}) {
                         <span className="fp-tl-marker" style={{borderColor: colorOf(f.initiative)}} />
                         <span className="fp-tl-connector" style={{height: lane * TL_ROW + 10}} />
                         <span className="fp-tl-label" style={{borderLeftColor: colorOf(f.initiative)}}>
-                            <b>{fmtShort(f.goLiveMs)}</b>
+                            <span className="fp-tl-line"><b>{fmtShort(f.goLiveMs)}</b><span className="fp-tl-pct">{f.pct}%</span></span>
                             <span className="fp-tl-feat">{f.name}</span>
-                            <span className="fp-tl-sub">{f.pct}% · {f.initiative}</span>
                         </span>
                     </div>
                 ))}
