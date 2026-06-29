@@ -1,5 +1,6 @@
 import {useEffect, useState} from 'react';
 import {PHASE_GROUPS, PHASE_COLORS} from './constants';
+import Logo from './Logo';
 
 const fmtDate = ms => (ms == null ? '—' : new Date(ms).toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: 'numeric'}));
 const RAG_COLOR = {Green: '#16A34A', Amber: '#F59E0B', Red: '#E11D48'};
@@ -223,7 +224,7 @@ export default function Narrative({model, onClose}) {
                 ))}
             </div>
             <div className="fp-ss-top">
-                <div className="fp-ss-brand"><span className="fp-logo">UBS</span> ampliFI · Narrative</div>
+                <div className="fp-ss-brand"><Logo className="on-dark" /> ampliFI · Narrative</div>
                 <div className="fp-ss-topright">
                     <button type="button" className="fp-ss-play" onClick={() => setPlaying(p => !p)} aria-label={playing ? 'Pause' : 'Play'} title={playing ? 'Pause' : 'Play'}>
                         {playing ? '❚❚' : '▶'}

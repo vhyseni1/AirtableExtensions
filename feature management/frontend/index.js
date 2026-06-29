@@ -8,6 +8,7 @@ import Roadmap from './Roadmap';
 import TeamView from './TeamView';
 import Workflow from './Workflow';
 import Narrative from './Narrative';
+import Logo from './Logo';
 import './style.css';
 
 const MODES = [
@@ -29,7 +30,7 @@ function Dashboard() {
         <>
             <header className="fp-nav">
                 <div className="fp-nav-left">
-                    <span className="fp-logo">UBS</span>
+                    <Logo />
                     <span className="fp-nav-title">ampliFI</span>
                 </div>
                 <nav className="fp-nav-tabs" role="tablist" aria-label="View">

@@ -39,6 +39,8 @@
     background: var(--fp-accent); color: #fff; font-weight: 800; letter-spacing: .05em;
     padding: 5px 10px; border-radius: 5px; font-size: 15px;
 }
+.fp-logo-img { height: 26px; width: auto; display: block; }
+.fp-ss-brand .fp-logo-img { height: 20px; }
 .fp-nav-tabs { display: inline-flex; gap: 4px; background: #eef1f6; border-radius: 12px; padding: 4px; overflow-x: auto; max-width: 100%; }
 .fp-nav-tabs button {
     border: none; background: transparent; padding: 8px 18px; border-radius: 9px;
