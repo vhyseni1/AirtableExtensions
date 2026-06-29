@@ -48,6 +48,7 @@ function buildSlides(model, colorOf) {
         node: (
             <div className="fp-ss-cover">
                 <div>
+                    <Logo className="on-dark fp-ss-logo" />
                     <h1 className="fp-ss-title">Programme Portfolio</h1>
                     <p className="fp-ss-sub">{byInitiative.length} initiatives · {features.length} features · {attrs.length} data attributes</p>
                     <span className="fp-ss-rag" style={{background: RAG_COLOR[status]}}>{status === 'Green' ? 'On track' : status === 'Amber' ? 'Watch' : 'At risk'}</span>
