@@ -30,7 +30,7 @@ function Dashboard() {
             <header className="fp-nav">
                 <div className="fp-nav-left">
                     <span className="fp-logo">UBS</span>
-                    <span className="fp-nav-title">Finance Data Programme</span>
+                    <span className="fp-nav-title">ampliFI</span>
                 </div>
                 <nav className="fp-nav-tabs" role="tablist" aria-label="View">
                     {MODES.map(m => (

@@ -43,7 +43,7 @@ function buildSlides(model, colorOf) {
 
     // 1 — Cover
     slides.push({
-        topic: 'UBS Switzerland · Finance Data Programme',
+        topic: 'UBS Switzerland · ampliFI',
         node: (
             <div className="fp-ss-cover">
                 <div>
@@ -223,7 +223,7 @@ export default function Narrative({model, onClose}) {
                 ))}
             </div>
             <div className="fp-ss-top">
-                <div className="fp-ss-brand"><span className="fp-logo">UBS</span> Finance Data Programme · Narrative</div>
+                <div className="fp-ss-brand"><span className="fp-logo">UBS</span> ampliFI · Narrative</div>
                 <div className="fp-ss-topright">
                     <button type="button" className="fp-ss-play" onClick={() => setPlaying(p => !p)} aria-label={playing ? 'Pause' : 'Play'} title={playing ? 'Pause' : 'Play'}>
                         {playing ? '❚❚' : '▶'}

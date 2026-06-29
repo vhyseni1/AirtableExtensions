@@ -213,9 +213,9 @@ export default function Executive({model}) {
             {/* Hero */}
             <section className="fp-hero">
                 <div className="fp-hero-headline">
-                    <div className="fp-eyebrow">UBS Switzerland · Finance Data Programme</div>
-                    <h1>Programme Portfolio Overview</h1>
-                    <p className="fp-hero-sub">Executive view across {byInitiative.length} initiatives and {features.length} features — accounting data maturity through to go-live.</p>
+                    <div className="fp-eyebrow">UBS Switzerland · ampliFI</div>
+                    <h1>Program Overview</h1>
+                    <p className="fp-hero-sub">Executive view across initiatives, backlog features and attributes.</p>
                     <div className="fp-hero-stats">
                         <button type="button" onClick={() => openFeatures('On track', onTrack)}><b><CountUp value={onTrack.length} /></b><span>On track</span></button>
                         <button type="button" onClick={() => openFeatures('Need attention', needAttn)}><b style={{color: '#ff9d57'}}><CountUp value={needAttn.length} /></b><span>Need attention</span></button>
@@ -232,7 +232,7 @@ export default function Executive({model}) {
             </section>
 
             {/* Initiative cards */}
-            <div className="fp-section-title">By initiative</div>
+            <div className="fp-section-title">By entity and initiatives</div>
             <div className="fp-initgrid">
                 {byInitiative.map(it => {
                     const phase = {};
