@@ -232,7 +232,7 @@ export default function Executive({model}) {
             </section>
 
             {/* Initiative cards */}
-            <div className="fp-section-title">By entity and initiatives</div>
+            <div className="fp-section-title">By entity / initiative</div>
             <div className="fp-initgrid">
                 {byInitiative.map(it => {
                     const phase = {};
