@@ -4,11 +4,11 @@ import {type DashboardAggregations} from '../hooks/useAggregations';
 import {
     AnimatedBars,
     AnimatedDonut,
-    AnimatedFlywheel,
     AnimatedGauge,
+    AnimatedStackedBars,
     type BarItem,
     type DonutSegment,
-    type FlywheelSpoke,
+    type StackedBarItem,
 } from './primitives/NarrativeVisuals';
 
 interface Metric {
@@ -48,10 +48,13 @@ function buildBeats(agg: DashboardAggregations): Beat[] {
         {value: m.lowSeverity, label: 'Low', color: SEV_LOW},
     ];
 
-    const componentSpokes: FlywheelSpoke[] = topComps.map((c, i) => ({
+    const componentStacks: StackedBarItem[] = topComps.map(c => ({
         label: c.component,
-        value: c.total,
-        color: [HEAT, '#FFD60C', '#FF1F26', BLUE, FRICTION][i % 5],
+        segments: [
+            {value: c.high, color: SEV_HIGH, label: 'High'},
+            {value: c.medium, color: SEV_MED, label: 'Medium'},
+            {value: c.low, color: SEV_LOW, label: 'Low'},
+        ],
     }));
 
     const pressureBars: BarItem[] = topPressure.map(p => ({
@@ -97,12 +100,16 @@ function buildBeats(agg: DashboardAggregations): Beat[] {
             accent: HEAT,
             glyph: '◆',
             visual:
-                componentSpokes.length > 0 ? (
-                    <AnimatedFlywheel
-                        spokes={componentSpokes}
-                        centerLabel="Top 5"
-                        size={280}
-                        innerRadius={48}
+                componentStacks.length > 0 ? (
+                    <AnimatedStackedBars
+                        items={componentStacks}
+                        width={520}
+                        height={220}
+                        legend={[
+                            {color: SEV_HIGH, label: 'High'},
+                            {color: SEV_MED, label: 'Medium'},
+                            {color: SEV_LOW, label: 'Low'},
+                        ]}
                     />
                 ) : null,
         },
@@ -165,16 +172,6 @@ function buildBeats(agg: DashboardAggregations): Beat[] {
             ],
             accent: FRICTION,
             glyph: '⟑',
-            visual: (
-                <AnimatedGauge
-                    value={m.frictionPoints}
-                    total={Math.max(1, m.totalImpacts)}
-                    color={FRICTION}
-                    label="friction points"
-                    size={240}
-                    thickness={28}
-                />
-            ),
         },
     ];
 }

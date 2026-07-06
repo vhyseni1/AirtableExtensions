@@ -5,15 +5,14 @@ export type TabKey = 'overview' | 'heatmaps' | 'waterfalls' | 'flows' | 'radars'
 export interface TabSpec {
     key: TabKey;
     label: string;
-    eyebrow: string;
 }
 
 export const TABS: ReadonlyArray<TabSpec> = [
-    {key: 'overview', label: 'General overview', eyebrow: '01'},
-    {key: 'heatmaps', label: 'Heat maps', eyebrow: '02'},
-    {key: 'waterfalls', label: 'Waterfalls', eyebrow: '03'},
-    {key: 'flows', label: 'Flows', eyebrow: '04'},
-    {key: 'radars', label: 'Radars', eyebrow: '05'},
+    {key: 'overview', label: 'Overview'},
+    {key: 'heatmaps', label: 'Heat maps'},
+    {key: 'waterfalls', label: 'Waterfalls'},
+    {key: 'flows', label: 'Flows'},
+    {key: 'radars', label: 'Radars'},
 ];
 
 interface Props {
@@ -26,9 +25,9 @@ export function Tabs({active, onChange}: Props) {
         <nav
             role="tablist"
             style={{
-                display: 'flex',
-                gap: 0,
-                borderBottom: `1px solid ${tokens.colors.rule}`,
+                display: 'inline-flex',
+                gap: 6,
+                flexShrink: 0,
             }}
         >
             {TABS.map(tab => {
@@ -41,37 +40,20 @@ export function Tabs({active, onChange}: Props) {
                         aria-selected={isActive}
                         onClick={() => onChange(tab.key)}
                         style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'flex-start',
-                            gap: 2,
-                            padding: `${tokens.space.sm} ${tokens.space.md}`,
-                            borderBottom: `2px solid ${isActive ? tokens.colors.accent : 'transparent'}`,
-                            color: isActive ? tokens.colors.accent : tokens.colors.textMuted,
-                            transition: 'color 120ms ease, border-color 120ms ease',
-                            marginBottom: -1,
+                            padding: '6px 12px',
+                            fontSize: 11,
+                            fontWeight: isActive ? 700 : 600,
+                            letterSpacing: '0.08em',
+                            textTransform: 'uppercase',
+                            border: `1px solid ${isActive ? tokens.colors.accent : tokens.colors.rule}`,
+                            borderRadius: tokens.radius.sm,
+                            background: isActive ? tokens.colors.accent : tokens.colors.bgPanel,
+                            color: isActive ? '#FFFFFF' : tokens.colors.text,
+                            cursor: 'pointer',
+                            transition: 'background 120ms ease, color 120ms ease, border-color 120ms ease',
                         }}
                     >
-                        <span
-                            className="cia-num"
-                            style={{
-                                fontSize: 9,
-                                letterSpacing: '0.14em',
-                                color: isActive ? tokens.colors.accent : tokens.colors.textFaint,
-                                fontWeight: 700,
-                            }}
-                        >
-                            {tab.eyebrow}
-                        </span>
-                        <span
-                            style={{
-                                fontSize: 12,
-                                fontWeight: isActive ? 700 : 600,
-                                letterSpacing: '0.02em',
-                            }}
-                        >
-                            {tab.label}
-                        </span>
+                        {tab.label}
                     </button>
                 );
             })}

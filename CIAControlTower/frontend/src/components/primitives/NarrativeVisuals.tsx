@@ -309,6 +309,151 @@ export interface BarItem {
     color: string;
 }
 
+export interface StackedSegment {
+    value: number;
+    color: string;
+    label?: string;
+}
+
+export interface StackedBarItem {
+    label: string;
+    segments: StackedSegment[];
+}
+
+export interface LegendItem {
+    color: string;
+    label: string;
+}
+
+/**
+ * Horizontal stacked bars — each row has multiple segments that fill left to
+ * right with a staggered start. Useful for a top-N breakdown where each item
+ * has a categorical mix (e.g., components split by High/Medium/Low severity).
+ * Total value per row is rendered as a pill on the right once the bar settles.
+ */
+export function AnimatedStackedBars({
+    items,
+    height = 220,
+    width = 480,
+    durMs = 1300,
+    legend,
+}: {
+    items: StackedBarItem[];
+    height?: number;
+    width?: number;
+    durMs?: number;
+    legend?: LegendItem[];
+}) {
+    const t = useAnimatedProgress(durMs);
+    const n = items.length;
+    if (n === 0) return null;
+
+    const totals = items.map(it => it.segments.reduce((a, s) => a + s.value, 0));
+    const maxTotal = Math.max(1, ...totals);
+
+    const legendHeight = legend && legend.length > 0 ? 22 : 0;
+    const rowsHeight = height - legendHeight;
+    const rowHeight = rowsHeight / n;
+    const barHeight = Math.max(14, rowHeight - 12);
+    const labelWidth = Math.min(160, width * 0.4);
+    const trackX = labelWidth + 8;
+    const trackWidth = width - trackX - 44;
+
+    return (
+        <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{display: 'block'}}>
+            {items.map((item, i) => {
+                const localT = Math.max(0, Math.min(1, (t - i * 0.08) / (1 - i * 0.05)));
+                const eased = easeOutCubic(localT);
+                const rowY = i * rowHeight + (rowHeight - barHeight) / 2;
+                const total = totals[i] ?? 0;
+                const filledTotalW = (total / maxTotal) * trackWidth * eased;
+
+                let cursor = 0;
+                return (
+                    <g key={i}>
+                        <text
+                            x={labelWidth}
+                            y={rowY + barHeight / 2 + 4}
+                            textAnchor="end"
+                            fontSize={11}
+                            fontWeight={600}
+                            fill="rgba(255,255,255,0.9)"
+                        >
+                            {item.label.length > 26 ? item.label.slice(0, 25) + '…' : item.label}
+                        </text>
+                        <rect
+                            x={trackX}
+                            y={rowY}
+                            width={trackWidth}
+                            height={barHeight}
+                            rx={barHeight / 2}
+                            fill="rgba(255,255,255,0.10)"
+                        />
+                        {item.segments.map((seg, si) => {
+                            if (total === 0 || seg.value === 0) return null;
+                            const segW = (seg.value / total) * filledTotalW;
+                            const x = trackX + cursor;
+                            cursor += segW;
+                            const isFirst = si === 0;
+                            const isLast = si === item.segments.length - 1 || cursor >= filledTotalW - 0.5;
+                            return (
+                                <rect
+                                    key={si}
+                                    x={x}
+                                    y={rowY}
+                                    width={Math.max(0, segW)}
+                                    height={barHeight}
+                                    fill={seg.color}
+                                    rx={isFirst || isLast ? barHeight / 2 : 0}
+                                    style={{
+                                        filter: `drop-shadow(0 1px 2px ${seg.color}66)`,
+                                    }}
+                                />
+                            );
+                        })}
+                        {eased > 0.7 ? (
+                            <text
+                                x={trackX + filledTotalW + 6}
+                                y={rowY + barHeight / 2 + 4}
+                                fontSize={12}
+                                fontWeight={700}
+                                fontFamily="Roche Sans Mono, JetBrains Mono, monospace"
+                                fill="#FFFFFF"
+                                style={{opacity: (eased - 0.7) / 0.3}}
+                            >
+                                {total}
+                            </text>
+                        ) : null}
+                    </g>
+                );
+            })}
+
+            {legend && legend.length > 0 ? (
+                <g transform={`translate(0, ${rowsHeight})`}>
+                    {legend.map((item, i) => {
+                        const spacing = width / legend.length;
+                        return (
+                            <g key={i} transform={`translate(${i * spacing + 8}, 10)`}>
+                                <rect x={0} y={-6} width={10} height={10} rx={2} fill={item.color} />
+                                <text
+                                    x={16}
+                                    y={2}
+                                    fontSize={10}
+                                    fontWeight={600}
+                                    fill="rgba(255,255,255,0.82)"
+                                    letterSpacing="0.1em"
+                                >
+                                    {item.label.toUpperCase()}
+                                </text>
+                            </g>
+                        );
+                    })}
+                </g>
+            ) : null}
+        </svg>
+    );
+}
+
 /**
  * Horizontal bars, each row filling from left with a staggered start.
  * Value pill appears at the right end as each bar settles.

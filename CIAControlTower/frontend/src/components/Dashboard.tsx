@@ -146,7 +146,12 @@ function DashboardBody({tableName}: {tableName: string}) {
                 gap: tokens.space.lg,
             }}
         >
-            <Masthead onNarrative={() => setNarrative(true)} onPrint={() => window.print()} runCount={aggregations.runs.length} />
+            <Masthead
+                onNarrative={() => setNarrative(true)}
+                runCount={aggregations.runs.length}
+                tab={tab}
+                onTabChange={setTab}
+            />
             <div
                 style={{
                     position: 'sticky',
@@ -172,7 +177,6 @@ function DashboardBody({tableName}: {tableName: string}) {
                     roles={aggregations.roles}
                     freshness={freshness}
                 />
-                <Tabs active={tab} onChange={setTab} />
             </div>
 
             {filtered.length === 0 ? (
@@ -243,12 +247,14 @@ function DashboardBody({tableName}: {tableName: string}) {
 
 function Masthead({
     onNarrative,
-    onPrint,
     runCount,
+    tab,
+    onTabChange,
 }: {
     onNarrative: () => void;
-    onPrint: () => void;
     runCount: number;
+    tab: TabKey;
+    onTabChange: (t: TabKey) => void;
 }) {
     return (
         <header
@@ -256,12 +262,13 @@ function Masthead({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                gap: tokens.space.lg,
+                gap: tokens.space.md,
                 paddingBottom: tokens.space.sm,
                 borderBottom: `1px solid ${tokens.colors.rule}`,
+                flexWrap: 'wrap',
             }}
         >
-            <div style={{display: 'flex', alignItems: 'baseline', gap: tokens.space.md, flexWrap: 'wrap', minWidth: 0}}>
+            <div style={{display: 'flex', alignItems: 'baseline', gap: tokens.space.md, minWidth: 0}}>
                 <h1
                     style={{
                         margin: 0,
@@ -282,24 +289,24 @@ function Masthead({
                 >
                     ELEVATE-CIA
                 </span>
-                <span
-                    style={{
-                        fontSize: 11,
-                        color: tokens.colors.textMuted,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        minWidth: 0,
-                    }}
-                >
-                    Where the heat is · what's breaking · who's under pressure · where alignment fails
-                </span>
             </div>
-            <div style={{display: 'flex', gap: tokens.space.sm, flexShrink: 0}}>
+            <div
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: tokens.space.md,
+                    flexShrink: 0,
+                    flexWrap: 'wrap',
+                }}
+            >
+                <Tabs active={tab} onChange={onTabChange} />
+                <span
+                    aria-hidden
+                    style={{width: 1, height: 22, background: tokens.colors.rule}}
+                />
                 <ActionButton onClick={onNarrative} disabled={runCount === 0}>
                     Narrative ▶
                 </ActionButton>
-                <ActionButton onClick={onPrint}>Export PDF</ActionButton>
             </div>
         </header>
     );
