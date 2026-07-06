@@ -137,9 +137,10 @@ function Matrix({matrix, max, onDrill}: MatrixProps) {
             <div
                 style={{
                     display: 'grid',
-                    gridTemplateColumns: `160px repeat(${components.length}, ${colSize})`,
-                    gap: 4,
-                    minWidth: 160 + components.length * 84,
+                    gridTemplateColumns: `170px repeat(${components.length}, ${colSize})`,
+                    gap: 6,
+                    minWidth: 170 + components.length * 84,
+                    padding: '4px 2px 8px 2px',
                 }}
             >
                 <div />
@@ -170,23 +171,34 @@ function ColHeader({label, total}: {label: string; total: number}) {
                 flexDirection: 'column',
                 justifyContent: 'flex-end',
                 alignItems: 'center',
-                fontSize: 10,
-                color: tokens.colors.textMuted,
+                fontSize: 10.5,
+                color: tokens.colors.text,
                 fontWeight: 600,
-                letterSpacing: '0.04em',
-                padding: '4px 6px',
+                letterSpacing: '0.06em',
+                padding: '4px 6px 8px',
                 textAlign: 'center',
-                lineHeight: 1.2,
+                lineHeight: 1.25,
                 wordBreak: 'break-word',
                 overflowWrap: 'anywhere',
                 textTransform: 'uppercase',
-                minHeight: 28,
-                gap: 2,
+                minHeight: 32,
+                gap: 4,
             }}
             title={`${label} · ${total}`}
         >
             <span>{label}</span>
-            <span className="cia-num" style={{color: tokens.colors.textFaint, fontSize: 9}}>
+            <span
+                className="cia-num"
+                style={{
+                    color: tokens.colors.textMuted,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    padding: '1px 6px',
+                    background: tokens.colors.bgAlt,
+                    borderRadius: 999,
+                    fontVariantNumeric: 'tabular-nums',
+                }}
+            >
                 {total}
             </span>
         </div>
@@ -224,17 +236,34 @@ function RowFragment({rowLabel, rowTotal, components, cells, max, onDrill}: RowF
                 <span style={{overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
                     {rowLabel}
                 </span>
-                <span className="cia-num" style={{color: tokens.colors.textFaint, fontWeight: 500}}>
+                <span
+                    className="cia-num"
+                    style={{
+                        color: tokens.colors.textMuted,
+                        fontWeight: 700,
+                        fontSize: 11,
+                        padding: '2px 6px',
+                        background: tokens.colors.bgAlt,
+                        borderRadius: 999,
+                        fontVariantNumeric: 'tabular-nums',
+                    }}
+                >
                     {rowTotal}
                 </span>
             </div>
             {components.map(c => {
                 const cell = cells.get(c)?.get(rowLabel);
                 const count = cell?.count ?? 0;
-                const intensity = count === 0 ? 0 : 0.15 + (count / max) * 0.7;
+                const intensity = count === 0 ? 0 : 0.18 + (count / max) * 0.72;
                 const band = severityBandFromAvg(cell?.avgSev ?? 0);
                 const color = severityHexFromAvg(cell?.avgSev ?? 0);
-                const bg = count === 0 ? tokens.colors.bgAlt : withAlpha(color, intensity);
+                const bgSolid = count === 0 ? tokens.colors.bgAlt : withAlpha(color, intensity);
+                const bgHighlight =
+                    count === 0 ? tokens.colors.bgAlt : withAlpha(color, Math.min(1, intensity + 0.08));
+                const gradient =
+                    count === 0
+                        ? tokens.colors.bgAlt
+                        : `linear-gradient(155deg, ${bgHighlight} 0%, ${bgSolid} 55%, ${withAlpha(color, Math.min(1, intensity + 0.04))} 100%)`;
                 return (
                     <button
                         key={c}
@@ -247,25 +276,43 @@ function RowFragment({rowLabel, rowTotal, components, cells, max, onDrill}: RowF
                                 : `${count} impact${count === 1 ? '' : 's'} · avg severity ${(cell?.avgSev ?? 0).toFixed(1)}`
                         }
                         style={{
-                            background: bg,
-                            border: `1px solid ${count > 0 ? withAlpha(color, 0.4) : tokens.colors.ruleSoft}`,
-                            borderRadius: tokens.radius.sm,
-                            minHeight: 44,
+                            background: gradient,
+                            border:
+                                count === 0
+                                    ? `1px dashed ${tokens.colors.rule}`
+                                    : `1px solid ${withAlpha(color, 0.35)}`,
+                            borderRadius: 8,
+                            minHeight: 48,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             fontFamily: tokens.fonts.mono,
-                            fontSize: 12,
+                            fontSize: 15,
                             fontWeight: 700,
+                            fontVariantNumeric: 'tabular-nums',
                             color: count === 0 ? tokens.colors.textFaint : cellTextColor(band, intensity),
                             cursor: count === 0 ? 'default' : 'pointer',
-                            transition: 'transform 80ms ease',
+                            boxShadow:
+                                count === 0
+                                    ? 'none'
+                                    : `0 1px 2px rgba(2,35,102,0.06), inset 0 1px 0 rgba(255,255,255,0.14)`,
+                            transition:
+                                'transform 140ms cubic-bezier(0.4,0,0.2,1), box-shadow 140ms ease',
                         }}
                         onMouseEnter={e => {
-                            if (count > 0) (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.04)';
+                            if (count > 0) {
+                                const el = e.currentTarget as HTMLButtonElement;
+                                el.style.transform = 'translateY(-1px) scale(1.03)';
+                                el.style.boxShadow = `0 6px 14px ${withAlpha(color, 0.28)}, 0 2px 4px rgba(2,35,102,0.10), inset 0 1px 0 rgba(255,255,255,0.2)`;
+                            }
                         }}
                         onMouseLeave={e => {
-                            (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)';
+                            const el = e.currentTarget as HTMLButtonElement;
+                            el.style.transform = 'translateY(0) scale(1)';
+                            el.style.boxShadow =
+                                count === 0
+                                    ? 'none'
+                                    : `0 1px 2px rgba(2,35,102,0.06), inset 0 1px 0 rgba(255,255,255,0.14)`;
                         }}
                     >
                         {count > 0 ? count : ''}

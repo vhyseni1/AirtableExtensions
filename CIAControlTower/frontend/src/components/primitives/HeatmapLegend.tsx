@@ -1,15 +1,8 @@
 import {sevColor, tokens} from '../../styles/tokens';
 
 interface Props {
-    /** What the cell value represents. Default: 'Count of records'. */
     valueLabel?: string;
-    /**
-     * How to read the numbers.
-     * 'higher-worse' — cells with bigger numbers mean more concentrated impact (default for count / severity).
-     * 'higher-better' — cells with bigger numbers mean stronger positive signal (e.g. confidence).
-     */
     scaleMeaning?: 'higher-worse' | 'higher-better' | 'neutral';
-    /** Optional custom rule of thumb. Overrides scaleMeaning if provided. */
     interpretation?: string;
 }
 
@@ -17,7 +10,7 @@ export function HeatmapLegend({valueLabel = 'Count of records', scaleMeaning = '
     const readingLine =
         interpretation ??
         (scaleMeaning === 'higher-better'
-            ? 'Higher = stronger signal. More filled = better.'
+            ? 'Higher = stronger signal. Darker cells = better.'
             : scaleMeaning === 'higher-worse'
                 ? 'Higher = more concentrated impact. Darker + redder = hotter.'
                 : 'Cells show the value below; color reflects severity band.');
@@ -28,119 +21,128 @@ export function HeatmapLegend({valueLabel = 'Count of records', scaleMeaning = '
                 display: 'flex',
                 alignItems: 'center',
                 flexWrap: 'wrap',
-                gap: tokens.space.md,
+                gap: tokens.space.lg,
                 padding: `${tokens.space.sm} ${tokens.space.md}`,
-                background: tokens.colors.bgAlt,
-                border: `1px solid ${tokens.colors.ruleSoft}`,
-                borderRadius: tokens.radius.sm,
+                background: `linear-gradient(180deg, ${tokens.colors.bgPanel} 0%, ${tokens.colors.bgAlt} 100%)`,
+                border: `1px solid ${tokens.colors.rule}`,
+                borderRadius: 8,
                 marginBottom: tokens.space.md,
                 fontSize: 11,
                 color: tokens.colors.textMuted,
                 lineHeight: 1.35,
+                boxShadow: '0 1px 2px rgba(2,35,102,0.03)',
             }}
         >
-            <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
-                <span
-                    style={{
-                        fontSize: 10,
-                        letterSpacing: '0.1em',
-                        textTransform: 'uppercase',
-                        color: tokens.colors.textFaint,
-                        fontWeight: 700,
-                    }}
-                >
-                    Cell value
-                </span>
+            <LegendGroup label="Cell shows">
                 <span style={{color: tokens.colors.text, fontWeight: 600}}>{valueLabel}</span>
-            </div>
+            </LegendGroup>
 
-            <div
-                aria-hidden
-                style={{
-                    width: 1,
-                    height: 20,
-                    background: tokens.colors.rule,
-                }}
-            />
+            <Divider />
 
-            <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
-                <span
-                    style={{
-                        fontSize: 10,
-                        letterSpacing: '0.1em',
-                        textTransform: 'uppercase',
-                        color: tokens.colors.textFaint,
-                        fontWeight: 700,
-                    }}
-                >
-                    Color
+            <LegendGroup label="Severity">
+                <SeverityRamp />
+                <span style={{fontSize: 10, color: tokens.colors.textFaint, letterSpacing: '0.06em'}}>
+                    LOW → HIGH
                 </span>
-                {(['Low', 'Medium', 'High'] as const).map(sev => (
-                    <span key={sev} style={{display: 'inline-flex', alignItems: 'center', gap: 4}}>
-                        <span
-                            style={{
-                                width: 10,
-                                height: 10,
-                                background: sevColor(sev),
-                                borderRadius: 2,
-                                display: 'inline-block',
-                            }}
-                        />
-                        <span style={{color: tokens.colors.text, fontWeight: 500}}>{sev}</span>
-                    </span>
-                ))}
-            </div>
+            </LegendGroup>
 
-            <div
-                aria-hidden
-                style={{
-                    width: 1,
-                    height: 20,
-                    background: tokens.colors.rule,
-                }}
-            />
+            <Divider />
 
-            <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
-                <span
-                    style={{
-                        fontSize: 10,
-                        letterSpacing: '0.1em',
-                        textTransform: 'uppercase',
-                        color: tokens.colors.textFaint,
-                        fontWeight: 700,
-                    }}
-                >
-                    Shade
+            <LegendGroup label="Shade">
+                <IntensityRamp />
+                <span style={{fontSize: 10, color: tokens.colors.textFaint, letterSpacing: '0.06em'}}>
+                    FEW → MANY
                 </span>
-                <SwatchGradient />
-                <span style={{color: tokens.colors.text, fontWeight: 500}}>Higher count = darker</span>
-            </div>
+            </LegendGroup>
 
             <div
                 style={{
                     marginLeft: 'auto',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
                     fontStyle: 'italic',
-                    color: tokens.colors.textFaint,
+                    color: tokens.colors.textMuted,
                     fontSize: 11,
                 }}
             >
+                <span
+                    aria-hidden
+                    style={{
+                        fontSize: 14,
+                        color: scaleMeaning === 'higher-better' ? sevColor('Low') : sevColor('High'),
+                        lineHeight: 1,
+                    }}
+                >
+                    {scaleMeaning === 'higher-better' ? '↑' : '↗'}
+                </span>
                 {readingLine}
             </div>
         </div>
     );
 }
 
-function SwatchGradient() {
+function LegendGroup({label, children}: {label: string; children: React.ReactNode}) {
+    return (
+        <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+            <span
+                style={{
+                    fontSize: 10,
+                    letterSpacing: '0.14em',
+                    textTransform: 'uppercase',
+                    color: tokens.colors.textFaint,
+                    fontWeight: 700,
+                }}
+            >
+                {label}
+            </span>
+            {children}
+        </div>
+    );
+}
+
+function Divider() {
     return (
         <span
             aria-hidden
             style={{
-                width: 60,
-                height: 10,
-                borderRadius: 2,
-                background: `linear-gradient(90deg, ${sevColor('High')}22 0%, ${sevColor('High')}CC 100%)`,
-                border: `1px solid ${tokens.colors.rule}`,
+                width: 1,
+                height: 22,
+                background: tokens.colors.rule,
+            }}
+        />
+    );
+}
+
+function SeverityRamp() {
+    return (
+        <span
+            aria-hidden
+            style={{
                 display: 'inline-block',
+                width: 84,
+                height: 12,
+                borderRadius: 999,
+                background: `linear-gradient(90deg, ${sevColor('Low')} 0%, ${sevColor('Medium')} 50%, ${sevColor('High')} 100%)`,
+                border: `1px solid ${tokens.colors.rule}`,
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2)',
+            }}
+        />
+    );
+}
+
+function IntensityRamp() {
+    return (
+        <span
+            aria-hidden
+            style={{
+                display: 'inline-block',
+                width: 84,
+                height: 12,
+                borderRadius: 999,
+                background: `linear-gradient(90deg, ${sevColor('High')}18 0%, ${sevColor('High')}CC 100%)`,
+                border: `1px solid ${tokens.colors.rule}`,
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2)',
             }}
         />
     );

@@ -175,20 +175,22 @@ export function MatrixHeatMap({
             <div
                 style={{
                     display: 'grid',
-                    gridTemplateColumns: `120px repeat(${cols.length}, minmax(${minColWidth}px, 1fr))`,
-                    gap: 3,
-                    minWidth: 120 + cols.length * minColWidth,
+                    gridTemplateColumns: `140px repeat(${cols.length}, minmax(${minColWidth}px, 1fr))`,
+                    gap: 6,
+                    minWidth: 140 + cols.length * minColWidth,
+                    padding: '4px 2px 8px 2px',
                 }}
             >
                 <div
                     style={{
                         fontSize: 9,
                         color: tokens.colors.textFaint,
-                        letterSpacing: '0.1em',
+                        letterSpacing: '0.14em',
                         textTransform: 'uppercase',
                         fontWeight: 700,
                         alignSelf: 'end',
-                        paddingBottom: 4,
+                        paddingBottom: 6,
+                        paddingLeft: 8,
                     }}
                 >
                     {rowLabel ?? ''} ↓ / {colLabel ?? ''} →
@@ -221,21 +223,34 @@ function ColHeader({label, total, orientation}: {label: string; total: number; o
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'flex-end',
-                    fontSize: 10,
-                    color: tokens.colors.textMuted,
+                    alignItems: 'center',
+                    fontSize: 10.5,
+                    color: tokens.colors.text,
                     fontWeight: 600,
                     letterSpacing: '0.04em',
-                    padding: '4px 6px',
+                    padding: '4px 6px 8px',
                     textAlign: 'center',
-                    lineHeight: 1.2,
+                    lineHeight: 1.25,
                     wordBreak: 'break-word',
                     overflowWrap: 'anywhere',
-                    minHeight: 28,
+                    minHeight: 32,
+                    gap: 4,
                 }}
                 title={`${label} · ${total}`}
             >
-                <div style={{textTransform: 'uppercase'}}>{label}</div>
-                <div className="cia-num" style={{color: tokens.colors.textFaint, fontSize: 9, marginTop: 2}}>
+                <div style={{textTransform: 'uppercase', letterSpacing: '0.06em'}}>{label}</div>
+                <div
+                    className="cia-num"
+                    style={{
+                        color: tokens.colors.textMuted,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        padding: '1px 6px',
+                        background: tokens.colors.bgAlt,
+                        borderRadius: 999,
+                        fontVariantNumeric: 'tabular-nums',
+                    }}
+                >
                     {total}
                 </div>
             </div>
@@ -305,22 +320,34 @@ function RowFragment({row, rowTotal, cols, cells, cellMetrics, maxRaw, onDrill}:
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '0 8px',
-                    fontSize: 11,
+                    padding: '0 12px 0 10px',
+                    fontSize: 11.5,
                     color: tokens.colors.text,
                     fontWeight: 600,
-                    letterSpacing: '0.04em',
-                    textTransform: 'uppercase',
+                    letterSpacing: '0.03em',
                     borderRight: `1px solid ${tokens.colors.ruleSoft}`,
-                    minHeight: 36,
+                    minHeight: 44,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
+                    gap: 8,
                 }}
                 title={row}
             >
                 <span style={{overflow: 'hidden', textOverflow: 'ellipsis'}}>{row}</span>
-                <span className="cia-num" style={{color: tokens.colors.textFaint, fontWeight: 500, marginLeft: 4}}>
+                <span
+                    className="cia-num"
+                    style={{
+                        color: tokens.colors.textMuted,
+                        fontWeight: 700,
+                        fontSize: 11,
+                        marginLeft: 4,
+                        padding: '2px 6px',
+                        background: tokens.colors.bgAlt,
+                        borderRadius: 999,
+                        fontVariantNumeric: 'tabular-nums',
+                    }}
+                >
                     {rowTotal}
                 </span>
             </div>
@@ -328,9 +355,13 @@ function RowFragment({row, rowTotal, cols, cells, cellMetrics, maxRaw, onDrill}:
                 const cell = cells.get(row)?.get(c);
                 const metric = cellMetrics.get(c);
                 const empty = !metric || metric.raw === 0;
-                const intensity = empty ? 0 : 0.18 + (metric.raw / maxRaw) * 0.7;
+                const intensity = empty ? 0 : 0.18 + (metric.raw / maxRaw) * 0.72;
                 const color = empty ? tokens.colors.textFaint : tintColor(metric.tint);
-                const bg = empty ? tokens.colors.bgAlt : withAlpha(color, intensity);
+                const bgSolid = empty ? tokens.colors.bgAlt : withAlpha(color, intensity);
+                const bgHighlight = empty ? tokens.colors.bgAlt : withAlpha(color, Math.min(1, intensity + 0.08));
+                const gradient = empty
+                    ? tokens.colors.bgAlt
+                    : `linear-gradient(155deg, ${bgHighlight} 0%, ${bgSolid} 55%, ${withAlpha(color, Math.min(1, intensity + 0.04))} 100%)`;
                 const records = cell?.records ?? [];
                 return (
                     <button
@@ -340,27 +371,41 @@ function RowFragment({row, rowTotal, cols, cells, cellMetrics, maxRaw, onDrill}:
                         onClick={() => onDrill(records, `${row} · ${c}`)}
                         title={empty ? 'No data' : `${row} · ${c}: ${metric?.display ?? ''}`}
                         style={{
-                            background: bg,
-                            border: `1px solid ${empty ? tokens.colors.ruleSoft : withAlpha(color, 0.4)}`,
-                            borderRadius: tokens.radius.sm,
-                            minHeight: 36,
+                            background: gradient,
+                            border: empty
+                                ? `1px dashed ${tokens.colors.rule}`
+                                : `1px solid ${withAlpha(color, 0.35)}`,
+                            borderRadius: 8,
+                            minHeight: 44,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             fontFamily: tokens.fonts.mono,
-                            fontSize: 11,
+                            fontSize: 14,
                             fontWeight: 700,
+                            fontVariantNumeric: 'tabular-nums',
                             color: empty
                                 ? tokens.colors.textFaint
                                 : cellTextColor(metric.tint, intensity),
                             cursor: empty ? 'default' : 'pointer',
-                            transition: 'transform 80ms ease',
+                            boxShadow: empty
+                                ? 'none'
+                                : `0 1px 2px rgba(2,35,102,0.06), inset 0 1px 0 rgba(255,255,255,0.14)`,
+                            transition: 'transform 140ms cubic-bezier(0.4,0,0.2,1), box-shadow 140ms ease',
                         }}
                         onMouseEnter={e => {
-                            if (!empty) (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.05)';
+                            if (!empty) {
+                                const el = e.currentTarget as HTMLButtonElement;
+                                el.style.transform = 'translateY(-1px) scale(1.03)';
+                                el.style.boxShadow = `0 6px 14px ${withAlpha(color, 0.28)}, 0 2px 4px rgba(2,35,102,0.10), inset 0 1px 0 rgba(255,255,255,0.2)`;
+                            }
                         }}
                         onMouseLeave={e => {
-                            (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)';
+                            const el = e.currentTarget as HTMLButtonElement;
+                            el.style.transform = 'translateY(0) scale(1)';
+                            el.style.boxShadow = empty
+                                ? 'none'
+                                : `0 1px 2px rgba(2,35,102,0.06), inset 0 1px 0 rgba(255,255,255,0.14)`;
                         }}
                     >
                         {metric?.display ?? ''}
