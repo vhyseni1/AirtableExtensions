@@ -106,6 +106,18 @@ function tintColor(tint: Tint): string {
     return tokens.colors.accent;
 }
 
+/**
+ * Pick a text color that contrasts well against a tint-shaded cell background.
+ * Yellow is the tough case: even at high intensity it's too luminous for white
+ * text, so it always gets dark text. Red/green/blue flip to white once the
+ * background is opaque enough.
+ */
+function cellTextColor(tint: Tint, intensity: number): string {
+    if (tint === 'medium') return tokens.colors.text;
+    if (intensity >= 0.6) return '#FFFFFF';
+    return tokens.colors.text;
+}
+
 function defaultMetric(records: Impact[]): MetricResult {
     if (records.length === 0) return {display: '', raw: 0, tint: 'neutral'};
     const sevs: number[] = [];
@@ -337,8 +349,10 @@ function RowFragment({row, rowTotal, cols, cells, cellMetrics, maxRaw, onDrill}:
                             justifyContent: 'center',
                             fontFamily: tokens.fonts.mono,
                             fontSize: 11,
-                            fontWeight: 600,
-                            color: empty ? tokens.colors.textFaint : intensity > 0.55 ? '#fff' : color,
+                            fontWeight: 700,
+                            color: empty
+                                ? tokens.colors.textFaint
+                                : cellTextColor(metric.tint, intensity),
                             cursor: empty ? 'default' : 'pointer',
                             transition: 'transform 80ms ease',
                         }}

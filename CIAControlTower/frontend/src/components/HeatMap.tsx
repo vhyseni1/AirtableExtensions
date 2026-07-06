@@ -12,11 +12,32 @@ interface Props {
     onDrill: (records: Impact[], title: string) => void;
 }
 
+type SeverityBand = 'high' | 'medium' | 'low' | 'none';
+
+function severityBandFromAvg(avg: number): SeverityBand {
+    if (avg >= 2.5) return 'high';
+    if (avg >= 1.5) return 'medium';
+    if (avg > 0) return 'low';
+    return 'none';
+}
+
 function severityHexFromAvg(avg: number): string {
-    if (avg >= 2.5) return sevColor('High');
-    if (avg >= 1.5) return sevColor('Medium');
-    if (avg > 0) return sevColor('Low');
+    const band = severityBandFromAvg(avg);
+    if (band === 'high') return sevColor('High');
+    if (band === 'medium') return sevColor('Medium');
+    if (band === 'low') return sevColor('Low');
     return tokens.colors.textFaint;
+}
+
+/**
+ * Pick a text color that reads on top of a tint-shaded cell background.
+ * Yellow (medium) always gets dark text — even solid yellow is too luminous
+ * for white text to read cleanly. Others flip to white once shade is opaque.
+ */
+function cellTextColor(band: SeverityBand, intensity: number): string {
+    if (band === 'medium') return tokens.colors.text;
+    if (intensity >= 0.6) return '#FFFFFF';
+    return tokens.colors.text;
 }
 
 function withAlpha(hex: string, alpha: number): string {
@@ -211,6 +232,7 @@ function RowFragment({rowLabel, rowTotal, components, cells, max, onDrill}: RowF
                 const cell = cells.get(c)?.get(rowLabel);
                 const count = cell?.count ?? 0;
                 const intensity = count === 0 ? 0 : 0.15 + (count / max) * 0.7;
+                const band = severityBandFromAvg(cell?.avgSev ?? 0);
                 const color = severityHexFromAvg(cell?.avgSev ?? 0);
                 const bg = count === 0 ? tokens.colors.bgAlt : withAlpha(color, intensity);
                 return (
@@ -234,8 +256,8 @@ function RowFragment({rowLabel, rowTotal, components, cells, max, onDrill}: RowF
                             justifyContent: 'center',
                             fontFamily: tokens.fonts.mono,
                             fontSize: 12,
-                            fontWeight: 600,
-                            color: count === 0 ? tokens.colors.textFaint : intensity > 0.55 ? '#fff' : color,
+                            fontWeight: 700,
+                            color: count === 0 ? tokens.colors.textFaint : cellTextColor(band, intensity),
                             cursor: count === 0 ? 'default' : 'pointer',
                             transition: 'transform 80ms ease',
                         }}
