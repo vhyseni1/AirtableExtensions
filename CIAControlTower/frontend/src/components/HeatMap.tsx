@@ -3,6 +3,7 @@ import {sevColor, tokens} from '../styles/tokens';
 import {type DashboardAggregations} from '../hooks/useAggregations';
 import {type Impact, CHANGE_CATEGORIES} from '../utils/schema';
 import {EmptyState} from './primitives/EmptyState';
+import {HeatmapLegend} from './primitives/HeatmapLegend';
 import {Panel} from './primitives/Panel';
 
 interface Props {
@@ -56,6 +57,10 @@ export function HeatMap({aggregations, filtered, onDrill}: Props) {
                 <EmptyState line="No components or roles in scope. Adjust filters to see the matrix." />
             ) : (
                 <div style={{display: 'flex', flexDirection: 'column', gap: tokens.space.xl}}>
+                    <HeatmapLegend
+                        valueLabel="Count of impact records"
+                        scaleMeaning="higher-worse"
+                    />
                     <Matrix matrix={matrix} max={max} onDrill={onDrill} />
                     <div>
                         <SectionHeading title="By Affiliate" subtitle="Change_Category mix per affiliate" />
@@ -132,7 +137,6 @@ function Matrix({matrix, max, onDrill}: MatrixProps) {
                     />
                 ))}
             </div>
-            <Legend />
         </div>
     );
 }
@@ -247,40 +251,6 @@ function RowFragment({rowLabel, rowTotal, components, cells, max, onDrill}: RowF
                 );
             })}
         </>
-    );
-}
-
-function Legend() {
-    return (
-        <div
-            style={{
-                display: 'flex',
-                gap: tokens.space.lg,
-                marginTop: tokens.space.md,
-                fontSize: 10,
-                color: tokens.colors.textMuted,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                alignItems: 'center',
-            }}
-        >
-            <span>Change_Impact</span>
-            {(['Low', 'Medium', 'High'] as const).map(s => (
-                <span key={s} style={{display: 'flex', alignItems: 'center', gap: 4}}>
-                    <span
-                        style={{
-                            width: 10,
-                            height: 10,
-                            background: sevColor(s),
-                            borderRadius: 2,
-                            display: 'inline-block',
-                        }}
-                    />
-                    {s}
-                </span>
-            ))}
-            <span style={{marginLeft: 'auto'}}>Cell shade ∝ count · color ∝ avg Change_Impact</span>
-        </div>
     );
 }
 

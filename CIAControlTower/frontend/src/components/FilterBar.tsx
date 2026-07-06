@@ -105,7 +105,7 @@ export function FilterBar({filter, onChange, runs, roles, freshness}: Props) {
             </Group>
 
             <MultiSelectDropdown
-                label="Archetype"
+                label="Business Archetypes"
                 options={archetypeOptions}
                 selected={filter.archetypes}
                 onChange={next => onChange({...filter, archetypes: next as BusinessArchetype[]})}

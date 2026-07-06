@@ -7,6 +7,7 @@ import {
     CONFIDENCES,
     type Impact,
 } from '../../utils/schema';
+import {HeatmapLegend} from '../primitives/HeatmapLegend';
 import {MatrixHeatMap, type MetricResult, type Tint} from '../primitives/MatrixHeatMap';
 import {Panel} from '../primitives/Panel';
 
@@ -253,6 +254,11 @@ export function CustomHeatmapBuilder({filtered, onDrill}: Props) {
                     {filtered.length} record{filtered.length === 1 ? '' : 's'} in scope
                 </div>
             </div>
+
+            <HeatmapLegend
+                valueLabel={metric.label}
+                scaleMeaning={metric.key === 'avgConfidence' ? 'higher-better' : 'higher-worse'}
+            />
 
             <MatrixHeatMap
                 records={filtered}

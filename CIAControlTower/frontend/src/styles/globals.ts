@@ -62,6 +62,11 @@ button:focus-visible {
     50% { opacity: 0.55; }
 }
 
+@keyframes cia-story-progress {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+}
+
 @keyframes cia-skeleton {
     0% { background-position: -200px 0; }
     100% { background-position: calc(200px + 100%) 0; }

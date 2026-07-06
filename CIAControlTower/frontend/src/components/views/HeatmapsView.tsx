@@ -5,6 +5,7 @@ import {
     CHANGE_CATEGORIES,
     type Impact,
 } from '../../utils/schema';
+import {HeatmapLegend} from '../primitives/HeatmapLegend';
 import {MatrixHeatMap} from '../primitives/MatrixHeatMap';
 import {Panel} from '../primitives/Panel';
 import {CustomHeatmapBuilder} from './CustomHeatmapBuilder';
@@ -28,6 +29,7 @@ export function HeatmapsView({filtered, onDrill}: Props) {
                 title="Change_Component × Archetype"
                 subtitle="Who feels what — count, color = avg Change_Impact"
             >
+                <HeatmapLegend valueLabel="Count of impact records" scaleMeaning="higher-worse" />
                 <MatrixHeatMap
                     records={filtered}
                     rowKey={r => r.persona ?? null}
@@ -43,6 +45,7 @@ export function HeatmapsView({filtered, onDrill}: Props) {
                 title="Archetype × Change_Category"
                 subtitle="Pillar burden by archetype"
             >
+                <HeatmapLegend valueLabel="Count of impact records" scaleMeaning="higher-worse" />
                 <MatrixHeatMap
                     records={filtered}
                     rowKey={r => r.persona ?? null}
@@ -60,6 +63,7 @@ export function HeatmapsView({filtered, onDrill}: Props) {
                 title="Affiliate × Change_Component"
                 subtitle="Geographic concentration of impact"
             >
+                <HeatmapLegend valueLabel="Count of impact records" scaleMeaning="higher-worse" />
                 <MatrixHeatMap
                     records={filtered}
                     rowKey={r => r.affiliate ?? null}
@@ -76,6 +80,7 @@ export function HeatmapsView({filtered, onDrill}: Props) {
                 title="Business_Archetype × Change_Component"
                 subtitle="Which archetypes carry which systemic changes"
             >
+                <HeatmapLegend valueLabel="Count of impact records" scaleMeaning="higher-worse" />
                 <MatrixHeatMap
                     records={flattenByArchetype(filtered)}
                     rowKey={r => r.role || null}
