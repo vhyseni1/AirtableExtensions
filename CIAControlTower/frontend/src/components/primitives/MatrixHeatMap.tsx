@@ -176,9 +176,9 @@ export function MatrixHeatMap({
                 style={{
                     display: 'grid',
                     gridTemplateColumns: `140px repeat(${cols.length}, minmax(${minColWidth}px, 1fr))`,
-                    gap: 6,
+                    gap: 0,
                     minWidth: 140 + cols.length * minColWidth,
-                    padding: '4px 2px 8px 2px',
+                    padding: 0,
                 }}
             >
                 <div
@@ -373,7 +373,7 @@ function RowFragment({row, rowTotal, cols, cells, cellMetrics, maxRaw, onDrill}:
                         style={{
                             background: gradient,
                             border: 'none',
-                            borderRadius: 8,
+                            borderRadius: 0,
                             minHeight: 44,
                             display: 'flex',
                             alignItems: 'center',
@@ -386,24 +386,18 @@ function RowFragment({row, rowTotal, cols, cells, cellMetrics, maxRaw, onDrill}:
                                 ? tokens.colors.textFaint
                                 : cellTextColor(metric.tint, intensity),
                             cursor: empty ? 'default' : 'pointer',
-                            boxShadow: empty
-                                ? 'none'
-                                : `0 1px 2px rgba(2,35,102,0.06), inset 0 1px 0 rgba(255,255,255,0.14)`,
-                            transition: 'transform 140ms cubic-bezier(0.4,0,0.2,1), box-shadow 140ms ease',
+                            boxShadow: 'none',
+                            transition: 'filter 140ms ease',
                         }}
                         onMouseEnter={e => {
                             if (!empty) {
                                 const el = e.currentTarget as HTMLButtonElement;
-                                el.style.transform = 'translateY(-1px) scale(1.03)';
-                                el.style.boxShadow = `0 6px 14px ${withAlpha(color, 0.28)}, 0 2px 4px rgba(2,35,102,0.10), inset 0 1px 0 rgba(255,255,255,0.2)`;
+                                el.style.filter = 'brightness(1.08)';
                             }
                         }}
                         onMouseLeave={e => {
                             const el = e.currentTarget as HTMLButtonElement;
-                            el.style.transform = 'translateY(0) scale(1)';
-                            el.style.boxShadow = empty
-                                ? 'none'
-                                : `0 1px 2px rgba(2,35,102,0.06), inset 0 1px 0 rgba(255,255,255,0.14)`;
+                            el.style.filter = 'none';
                         }}
                     >
                         {metric?.display ?? ''}
