@@ -211,6 +211,8 @@ export function affiliateSlices(records: Impact[]): AffiliateSlice[] {
 export interface HeadlineMetrics {
     totalImpacts: number;
     highSeverity: number;
+    mediumSeverity: number;
+    lowSeverity: number;
     gapsOpen: number;
     pressureFlags: number;
     frictionPoints: number;
@@ -221,6 +223,8 @@ export interface HeadlineMetrics {
 export function headlineMetrics(records: Impact[]): HeadlineMetrics {
     const reviewed = records.filter(r => r.validationStatus === 'Reviewed');
     const highSeverity = reviewed.filter(r => r.changeImpact === 'High').length;
+    const mediumSeverity = reviewed.filter(r => r.changeImpact === 'Medium').length;
+    const lowSeverity = reviewed.filter(r => r.changeImpact === 'Low').length;
     const gapsOpen = reviewed.filter(
         r => r.tags.includes('Gap') && !r.actionOwner.trim() && !r.notes.trim(),
     ).length;
@@ -234,6 +238,8 @@ export function headlineMetrics(records: Impact[]): HeadlineMetrics {
     return {
         totalImpacts: reviewed.length,
         highSeverity,
+        mediumSeverity,
+        lowSeverity,
         gapsOpen,
         pressureFlags,
         frictionPoints,

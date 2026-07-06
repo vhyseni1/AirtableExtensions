@@ -1,6 +1,15 @@
 import {useEffect, useMemo, useState} from 'react';
 import {tokens} from '../styles/tokens';
 import {type DashboardAggregations} from '../hooks/useAggregations';
+import {
+    AnimatedBars,
+    AnimatedDonut,
+    AnimatedFlywheel,
+    AnimatedGauge,
+    type BarItem,
+    type DonutSegment,
+    type FlywheelSpoke,
+} from './primitives/NarrativeVisuals';
 
 interface Metric {
     value: string;
@@ -15,6 +24,8 @@ interface Beat {
     metrics: Metric[];
     accent: string;
     glyph: string;
+    /** Narrative-specific visual for this beat. Rendered above the metrics/headline block. */
+    visual?: React.ReactNode;
 }
 
 const HEAT = '#FF7D29';
@@ -22,11 +33,32 @@ const GAP = '#ED4A0D';
 const PRESSURE = '#C40000';
 const FRICTION = '#BC36F0';
 const BLUE = '#0B41CD';
+const SEV_HIGH = '#FF1F26';
+const SEV_MED = '#FFD60C';
+const SEV_LOW = '#00B458';
 
 function buildBeats(agg: DashboardAggregations): Beat[] {
     const m = agg.headline;
-    const topComp = agg.topComponents[0];
-    const hottestArchetype = agg.pressure[0];
+    const topComps = agg.topComponents.slice(0, 5);
+    const topPressure = agg.pressure.slice(0, 4);
+
+    const severitySegments: DonutSegment[] = [
+        {value: m.highSeverity, label: 'High', color: SEV_HIGH},
+        {value: m.mediumSeverity, label: 'Medium', color: SEV_MED},
+        {value: m.lowSeverity, label: 'Low', color: SEV_LOW},
+    ];
+
+    const componentSpokes: FlywheelSpoke[] = topComps.map((c, i) => ({
+        label: c.component,
+        value: c.total,
+        color: [HEAT, '#FFD60C', '#FF1F26', BLUE, FRICTION][i % 5],
+    }));
+
+    const pressureBars: BarItem[] = topPressure.map(p => ({
+        label: p.persona,
+        value: p.count,
+        color: PRESSURE,
+    }));
 
     return [
         {
@@ -35,24 +67,44 @@ function buildBeats(agg: DashboardAggregations): Beat[] {
             headline: 'The change landscape this run.',
             metrics: [
                 {value: String(m.totalImpacts), sublabel: 'reviewed impacts'},
-                {value: String(m.highSeverity), sublabel: 'at high impact', accent: '#FF1F26'},
-                {value: `${m.avgConfidencePct}%`, sublabel: 'high confidence', accent: '#00B458'},
+                {value: String(m.highSeverity), sublabel: 'high impact', accent: SEV_HIGH},
+                {value: `${m.avgConfidencePct}%`, sublabel: 'high confidence', accent: SEV_LOW},
             ],
             accent: BLUE,
             glyph: '⬤',
+            visual: (
+                <AnimatedDonut
+                    segments={severitySegments}
+                    centerValue={m.totalImpacts}
+                    centerLabel="impacts"
+                    size={260}
+                    thickness={34}
+                />
+            ),
         },
         {
             zone: 'Where the heat is',
             kicker: 'Heat center',
-            headline: topComp ? topComp.component : 'No dominant heat center yet.',
-            metrics: topComp
+            headline: topComps[0]
+                ? `${topComps[0].component} carries the load.`
+                : 'No dominant heat center yet.',
+            metrics: topComps[0]
                 ? [
-                    {value: String(topComp.total), sublabel: 'total impacts', accent: HEAT},
-                    {value: String(topComp.high), sublabel: 'high impact', accent: '#FF1F26'},
+                    {value: String(topComps[0].total), sublabel: 'total impacts', accent: HEAT},
+                    {value: String(topComps[0].high), sublabel: 'high impact', accent: SEV_HIGH},
                 ]
                 : [],
             accent: HEAT,
             glyph: '◆',
+            visual:
+                componentSpokes.length > 0 ? (
+                    <AnimatedFlywheel
+                        spokes={componentSpokes}
+                        centerLabel="Top 5"
+                        size={280}
+                        innerRadius={48}
+                    />
+                ) : null,
         },
         {
             zone: "What's breaking",
@@ -60,28 +112,46 @@ function buildBeats(agg: DashboardAggregations): Beat[] {
             headline:
                 m.gapsOpen > 0
                     ? 'Gaps are still waiting for owners.'
-                    : 'Every gap has a follow-up. Audit-clean.',
+                    : 'Every gap has follow-up. Audit-clean.',
             metrics: [
                 {value: String(m.gapsOpen), sublabel: 'gaps open', accent: GAP},
-                {value: String(m.totalImpacts - m.gapsOpen), sublabel: 'addressed', accent: '#00B458'},
+                {
+                    value: String(Math.max(0, m.totalImpacts - m.gapsOpen)),
+                    sublabel: 'addressed',
+                    accent: SEV_LOW,
+                },
             ],
             accent: GAP,
             glyph: '▸',
+            visual: (
+                <AnimatedGauge
+                    value={m.gapsOpen}
+                    total={Math.max(1, m.totalImpacts)}
+                    color={GAP}
+                    label="gaps open"
+                    size={240}
+                    thickness={28}
+                />
+            ),
         },
         {
             zone: "Who's under pressure",
             kicker: 'Load signal',
-            headline: hottestArchetype
-                ? `${hottestArchetype.persona} archetype is most stretched.`
+            headline: topPressure[0]
+                ? `${topPressure[0].persona} archetype is most stretched.`
                 : 'Sustainable load — no pressure recorded.',
-            metrics: hottestArchetype
+            metrics: topPressure[0]
                 ? [
-                    {value: String(hottestArchetype.count), sublabel: 'pressure flags', accent: PRESSURE},
+                    {value: String(topPressure[0].count), sublabel: 'pressure flags', accent: PRESSURE},
                     {value: String(m.pressureFlags), sublabel: 'total across archetypes'},
                 ]
-                : [{value: '0', sublabel: 'pressure flags', accent: '#00B458'}],
+                : [{value: '0', sublabel: 'pressure flags', accent: SEV_LOW}],
             accent: PRESSURE,
             glyph: '●',
+            visual:
+                pressureBars.length > 0 ? (
+                    <AnimatedBars items={pressureBars} width={380} height={220} />
+                ) : null,
         },
         {
             zone: 'Where alignment fails',
@@ -90,9 +160,21 @@ function buildBeats(agg: DashboardAggregations): Beat[] {
                 m.frictionPoints > 0
                     ? 'Named parties disagree.'
                     : 'Healthy alignment — no friction recorded.',
-            metrics: [{value: String(m.frictionPoints), sublabel: 'friction points', accent: FRICTION}],
+            metrics: [
+                {value: String(m.frictionPoints), sublabel: 'friction points', accent: FRICTION},
+            ],
             accent: FRICTION,
             glyph: '⟑',
+            visual: (
+                <AnimatedGauge
+                    value={m.frictionPoints}
+                    total={Math.max(1, m.totalImpacts)}
+                    color={FRICTION}
+                    label="friction points"
+                    size={240}
+                    thickness={28}
+                />
+            ),
         },
     ];
 }
@@ -102,7 +184,7 @@ interface Props {
     onClose: () => void;
 }
 
-const BEAT_MS = 4200;
+const BEAT_MS = 5000;
 
 export function NarrativeMode({aggregations, onClose}: Props) {
     const beats = useMemo(() => buildBeats(aggregations), [aggregations]);
@@ -200,7 +282,7 @@ export function NarrativeMode({aggregations, onClose}: Props) {
                 ))}
             </div>
 
-            {/* Header: beat counter + zone */}
+            {/* Header */}
             <div
                 style={{
                     display: 'flex',
@@ -224,13 +306,14 @@ export function NarrativeMode({aggregations, onClose}: Props) {
 
             {/* Center content */}
             <div
+                key={`beat-${idx}`}
                 style={{
                     flex: 1,
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'center',
                     alignItems: 'center',
-                    gap: tokens.space.xl,
+                    gap: tokens.space.lg,
                     textAlign: 'center',
                     minHeight: 0,
                 }}
@@ -247,18 +330,22 @@ export function NarrativeMode({aggregations, onClose}: Props) {
                     {beat.kicker}
                 </span>
 
-                {/* Big metrics row */}
+                {/* Animated visual + inline metrics */}
+                {beat.visual ? <div style={{marginTop: 4}}>{beat.visual}</div> : null}
+
+                {/* Metrics row */}
                 {beat.metrics.length > 0 ? (
                     <div
                         style={{
                             display: 'flex',
-                            gap: `clamp(${tokens.space.xl}, 6vw, 96px)`,
+                            gap: `clamp(${tokens.space.xl}, 5vw, 72px)`,
                             flexWrap: 'wrap',
                             justifyContent: 'center',
                             alignItems: 'baseline',
+                            marginTop: tokens.space.md,
                         }}
                     >
-                        {beat.metrics.map((m, i) => (
+                        {beat.metrics.map((mm, i) => (
                             <div
                                 key={i}
                                 style={{
@@ -271,26 +358,26 @@ export function NarrativeMode({aggregations, onClose}: Props) {
                                 <span
                                     style={{
                                         fontFamily: tokens.fonts.serif,
-                                        fontSize: 'clamp(56px, 10vw, 120px)',
+                                        fontSize: 'clamp(32px, 5.5vw, 68px)',
                                         fontWeight: 700,
                                         lineHeight: 0.95,
                                         letterSpacing: '-0.03em',
-                                        color: m.accent ?? '#FFFFFF',
+                                        color: mm.accent ?? '#FFFFFF',
                                         textShadow: '0 1px 24px rgba(0,0,0,0.24)',
                                     }}
                                 >
-                                    {m.value}
+                                    {mm.value}
                                 </span>
                                 <span
                                     style={{
-                                        fontSize: 12,
+                                        fontSize: 11,
                                         letterSpacing: '0.16em',
                                         textTransform: 'uppercase',
                                         fontWeight: 600,
                                         color: 'rgba(255,255,255,0.82)',
                                     }}
                                 >
-                                    {m.sublabel}
+                                    {mm.sublabel}
                                 </span>
                             </div>
                         ))}
@@ -301,18 +388,19 @@ export function NarrativeMode({aggregations, onClose}: Props) {
                     style={{
                         margin: 0,
                         fontFamily: tokens.fonts.serif,
-                        fontSize: 'clamp(24px, 3.2vw, 40px)',
+                        fontSize: 'clamp(20px, 2.6vw, 32px)',
                         fontWeight: 600,
                         lineHeight: 1.25,
                         letterSpacing: '-0.015em',
-                        maxWidth: 880,
+                        maxWidth: 820,
+                        color: 'rgba(255,255,255,0.94)',
                     }}
                 >
                     {beat.headline}
                 </h2>
             </div>
 
-            {/* Footer hint */}
+            {/* Footer */}
             <div
                 style={{
                     display: 'flex',
