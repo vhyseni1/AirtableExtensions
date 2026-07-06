@@ -22,10 +22,10 @@ export function PressurePanel({pressure, onDrill}: Props) {
         <Panel
             eyebrow="Panel C"
             title="Who's under pressure"
-            subtitle="Burnout/overload signals by persona"
+            subtitle="Burnout/overload signals by archetype"
         >
             {pressure.length === 0 ? (
-                <EmptyState line="No persona pressure recorded. Sustainable load." />
+                <EmptyState line="No archetype pressure recorded. Sustainable load." />
             ) : (
                 <div style={{display: 'flex', flexDirection: 'column', gap: tokens.space.sm}}>
                     {pressure.map(p => (

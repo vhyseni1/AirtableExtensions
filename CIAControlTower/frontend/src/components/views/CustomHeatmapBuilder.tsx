@@ -43,7 +43,7 @@ const DIMENSIONS: ReadonlyArray<DimensionSpec> = [
     },
     {key: 'affiliate', label: 'Affiliate', extract: r => r.affiliate ?? null},
     {key: 'role', label: 'Role', extract: r => (r.role?.trim() ? r.role : null)},
-    {key: 'persona', label: 'Persona', extract: r => r.persona ?? null},
+    {key: 'persona', label: 'Archetype', extract: r => r.persona ?? null},
     {key: 'responsible', label: 'Responsible', extract: r => r.responsible ?? null},
     {key: 'eclStream', label: 'ECL_Stream', extract: r => r.eclStream ?? null},
     {

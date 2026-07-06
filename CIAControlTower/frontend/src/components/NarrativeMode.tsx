@@ -20,8 +20,8 @@ function buildBeats(agg: DashboardAggregations): Beat[] {
             ? `${m.gapsOpen} gap${m.gapsOpen === 1 ? '' : 's'} unowned, unreviewed, or unfunded.`
             : 'Every gap has a reviewer note.';
     const pressureLine = hottestPersona
-        ? `${hottestPersona.persona}s show ${hottestPersona.count} pressure flag${hottestPersona.count === 1 ? '' : 's'}.`
-        : 'No persona pressure recorded.';
+        ? `${hottestPersona.persona} archetype shows ${hottestPersona.count} pressure flag${hottestPersona.count === 1 ? '' : 's'}.`
+        : 'No archetype pressure recorded.';
     const frictionLine =
         m.frictionPoints > 0
             ? `${m.frictionPoints} friction point${m.frictionPoints === 1 ? '' : 's'} between named parties.`

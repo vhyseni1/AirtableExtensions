@@ -25,14 +25,14 @@ export function HeatmapsView({filtered, onDrill}: Props) {
         >
             <Panel
                 eyebrow="Matrix · 01"
-                title="Change_Component × Persona"
+                title="Change_Component × Archetype"
                 subtitle="Who feels what — count, color = avg Change_Impact"
             >
                 <MatrixHeatMap
                     records={filtered}
                     rowKey={r => r.persona ?? null}
                     colKey={r => (r.changeComponent?.trim() ? r.changeComponent : null)}
-                    rowLabel="Persona"
+                    rowLabel="Archetype"
                     colLabel="Change_Component"
                     onDrill={onDrill}
                 />
@@ -40,15 +40,15 @@ export function HeatmapsView({filtered, onDrill}: Props) {
 
             <Panel
                 eyebrow="Matrix · 02"
-                title="Persona × Change_Category"
-                subtitle="Pillar burden by role"
+                title="Archetype × Change_Category"
+                subtitle="Pillar burden by archetype"
             >
                 <MatrixHeatMap
                     records={filtered}
                     rowKey={r => r.persona ?? null}
                     colKey={r => r.changeCategory ?? null}
                     colOrder={CHANGE_CATEGORIES}
-                    rowLabel="Persona"
+                    rowLabel="Archetype"
                     colLabel="Change_Category"
                     minColWidth={64}
                     onDrill={onDrill}

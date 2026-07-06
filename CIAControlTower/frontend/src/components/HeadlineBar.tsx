@@ -64,7 +64,7 @@ export function buildDrillSpec(
                 title: 'Pressure flags',
                 eyebrow: 'Drill-down',
                 records: filtered.filter(r => r.tags.includes('Pressure')),
-                emptyLine: 'No persona pressure recorded in this run.',
+                emptyLine: 'No archetype pressure recorded in this run.',
             };
         case 'friction':
             return {
