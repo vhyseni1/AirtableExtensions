@@ -372,9 +372,7 @@ function RowFragment({row, rowTotal, cols, cells, cellMetrics, maxRaw, onDrill}:
                         title={empty ? 'No data' : `${row} · ${c}: ${metric?.display ?? ''}`}
                         style={{
                             background: gradient,
-                            border: empty
-                                ? `1px dashed ${tokens.colors.rule}`
-                                : `1px solid ${withAlpha(color, 0.35)}`,
+                            border: 'none',
                             borderRadius: 8,
                             minHeight: 44,
                             display: 'flex',

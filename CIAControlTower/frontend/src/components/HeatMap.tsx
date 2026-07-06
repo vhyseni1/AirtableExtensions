@@ -277,10 +277,7 @@ function RowFragment({rowLabel, rowTotal, components, cells, max, onDrill}: RowF
                         }
                         style={{
                             background: gradient,
-                            border:
-                                count === 0
-                                    ? `1px dashed ${tokens.colors.rule}`
-                                    : `1px solid ${withAlpha(color, 0.35)}`,
+                            border: 'none',
                             borderRadius: 8,
                             minHeight: 48,
                             display: 'flex',
