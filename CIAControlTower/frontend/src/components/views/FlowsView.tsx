@@ -69,7 +69,7 @@ export function FlowsView({filtered, onDrill}: Props) {
                     records={filtered}
                     columns={[affiliate, categoryCol, impactCol]}
                     onDrill={onDrill}
-                    height={420}
+                    height={520}
                 />
             </Panel>
 
@@ -82,7 +82,7 @@ export function FlowsView({filtered, onDrill}: Props) {
                     records={tagFlattened}
                     columns={[role, categoryCol, tagCol]}
                     onDrill={(records, title) => onDrill(dedupeById(records), title)}
-                    height={480}
+                    height={560}
                 />
             </Panel>
 
@@ -95,7 +95,7 @@ export function FlowsView({filtered, onDrill}: Props) {
                     records={archetypeFlattened}
                     columns={[archetypeCol, categoryCol, impactCol]}
                     onDrill={(records, title) => onDrill(dedupeById(records), title)}
-                    height={420}
+                    height={520}
                 />
             </Panel>
         </div>

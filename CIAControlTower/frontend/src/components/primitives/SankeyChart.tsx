@@ -16,7 +16,7 @@ interface Props {
     columns: [SankeyDimension, SankeyDimension, SankeyDimension];
     onDrill: (records: Impact[], title: string) => void;
     height?: number;
-    /** Natural (max) rendered width in px. */
+    /** Natural (max) rendered width in px for the chart column. */
     maxRenderWidth?: number;
 }
 
@@ -67,14 +67,22 @@ interface BandLayout {
     records: Impact[];
 }
 
-export function SankeyChart({records, columns, onDrill, height = 380, maxRenderWidth = 1100}: Props) {
+const nodeId = (col: number, key: string) => `${col}${key}`;
+
+export function SankeyChart({records, columns, onDrill, height = 440, maxRenderWidth = 940}: Props) {
     const [hovered, setHovered] = useState<string | null>(null);
+    const [pinned, setPinned] = useState<string | null>(null);
     const uid = useId().replace(/:/g, '');
     const gradId = (i: number) => `sankey-grad-${uid}-${i}`;
 
     const {nodes, bands, totalsByCol} = useMemo(() => {
         return buildLayout(records, columns, height);
     }, [records, columns, height]);
+
+    // Clear a stale pin if the pinned node no longer exists after a data change.
+    const pinnedExists = pinned ? nodes.some(n => nodeId(n.column, n.key) === pinned) : true;
+    const effectivePinned = pinnedExists ? pinned : null;
+    const active = hovered ?? effectivePinned;
 
     if (nodes.length === 0) {
         return <EmptyState line="No data in scope for this flow." />;
@@ -83,148 +91,333 @@ export function SankeyChart({records, columns, onDrill, height = 380, maxRenderW
     const colXCenter = (col: number) => MARGIN_X + (col / 2) * (WIDTH - MARGIN_X * 2);
     const HEADER_Y = 16;
 
-    const nodeId = (col: number, key: string) => `${col}${key}`;
-    const bandTouchesHover = (b: BandLayout): boolean => {
-        if (!hovered) return false;
-        return hovered === nodeId(b.sourceCol, b.sourceKey) || hovered === nodeId(b.sourceCol + 1, b.targetKey);
+    const bandTouchesActive = (b: BandLayout): boolean => {
+        if (!active) return false;
+        return active === nodeId(b.sourceCol, b.sourceKey) || active === nodeId(b.sourceCol + 1, b.targetKey);
     };
 
+    const nodesByCol: [NodeLayout[], NodeLayout[], NodeLayout[]] = [
+        nodes.filter(n => n.column === 0),
+        nodes.filter(n => n.column === 1),
+        nodes.filter(n => n.column === 2),
+    ];
+
+    const togglePin = (id: string) => setPinned(prev => (prev === id ? null : id));
+
     return (
-        <div style={{width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
-            <svg
-                viewBox={`0 0 ${WIDTH} ${height}`}
-                preserveAspectRatio="xMidYMid meet"
-                style={{width: '100%', maxWidth: maxRenderWidth, height: 'auto', display: 'block'}}
+        <div style={{display: 'flex', gap: tokens.space.lg, alignItems: 'stretch', flexWrap: 'wrap'}}>
+            {/* Left rail: three count tables */}
+            <div
+                style={{
+                    width: 268,
+                    flex: '1 1 240px',
+                    maxWidth: 300,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: tokens.space.sm,
+                    minWidth: 0,
+                }}
             >
-                <defs>
+                {[0, 1, 2].map(col => (
+                    <NodeTable
+                        key={col}
+                        title={columns[col]?.label ?? ''}
+                        nodes={nodesByCol[col] ?? []}
+                        total={totalsByCol[col] ?? 0}
+                        activeId={active}
+                        pinnedId={effectivePinned}
+                        onHover={setHovered}
+                        onToggle={togglePin}
+                        onDrill={onDrill}
+                    />
+                ))}
+            </div>
+
+            {/* Right: the flow chart */}
+            <div style={{flex: '3 1 460px', minWidth: 360, display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
+                <svg
+                    viewBox={`0 0 ${WIDTH} ${height}`}
+                    preserveAspectRatio="xMidYMid meet"
+                    style={{width: '100%', maxWidth: maxRenderWidth, height: 'auto', display: 'block'}}
+                >
+                    <defs>
+                        {bands.map((b, i) => {
+                            const x1 = colXCenter(b.sourceCol) + NODE_W / 2;
+                            const x2 = colXCenter(b.sourceCol + 1) - NODE_W / 2;
+                            return (
+                                <linearGradient
+                                    key={i}
+                                    id={gradId(i)}
+                                    gradientUnits="userSpaceOnUse"
+                                    x1={x1}
+                                    y1={0}
+                                    x2={x2}
+                                    y2={0}
+                                >
+                                    <stop offset="0%" stopColor={b.sourceColor} />
+                                    <stop offset="100%" stopColor={b.targetColor} />
+                                </linearGradient>
+                            );
+                        })}
+                    </defs>
+
+                    {[0, 1, 2].map(col => (
+                        <text
+                            key={col}
+                            x={colXCenter(col)}
+                            y={HEADER_Y}
+                            fontSize={12}
+                            fill={tokens.colors.textMuted}
+                            textAnchor="middle"
+                            fontWeight={700}
+                            letterSpacing="0.14em"
+                        >
+                            {(columns[col]?.label ?? '').toUpperCase()}
+                        </text>
+                    ))}
+
                     {bands.map((b, i) => {
                         const x1 = colXCenter(b.sourceCol) + NODE_W / 2;
                         const x2 = colXCenter(b.sourceCol + 1) - NODE_W / 2;
+                        const cx1 = x1 + (x2 - x1) * 0.5;
+                        const cx2 = x1 + (x2 - x1) * 0.5;
+                        const y1Top = b.sourceY;
+                        const y1Bot = b.sourceY + b.h;
+                        const y2Top = b.targetY;
+                        const y2Bot = b.targetY + b.h;
+                        const d = `M ${x1} ${y1Top} C ${cx1} ${y1Top}, ${cx2} ${y2Top}, ${x2} ${y2Top} L ${x2} ${y2Bot} C ${cx2} ${y2Bot}, ${cx1} ${y1Bot}, ${x1} ${y1Bot} Z`;
+                        const opacity = active ? (bandTouchesActive(b) ? 0.7 : 0.07) : 0.34;
                         return (
-                            <linearGradient
+                            <path
                                 key={i}
-                                id={gradId(i)}
-                                gradientUnits="userSpaceOnUse"
-                                x1={x1}
-                                y1={0}
-                                x2={x2}
-                                y2={0}
+                                d={d}
+                                fill={`url(#${gradId(i)})`}
+                                fillOpacity={opacity}
+                                stroke="none"
+                                style={{cursor: 'pointer', transition: 'fill-opacity 140ms ease'}}
+                                onMouseEnter={() => setHovered(nodeId(b.sourceCol, b.sourceKey))}
+                                onMouseLeave={() => setHovered(null)}
+                                onClick={() => onDrill(b.records, `${b.sourceKey} → ${b.targetKey}`)}
                             >
-                                <stop offset="0%" stopColor={b.sourceColor} />
-                                <stop offset="100%" stopColor={b.targetColor} />
-                            </linearGradient>
+                                <title>{`${b.sourceKey} → ${b.targetKey}: ${b.records.length}`}</title>
+                            </path>
                         );
                     })}
-                </defs>
 
-                {[0, 1, 2].map(col => (
-                    <text
-                        key={col}
-                        x={colXCenter(col)}
-                        y={HEADER_Y}
-                        fontSize={12}
-                        fill={tokens.colors.textMuted}
-                        textAnchor="middle"
-                        fontWeight={700}
-                        letterSpacing="0.14em"
-                    >
-                        {(columns[col]?.label ?? '').toUpperCase()}
-                    </text>
-                ))}
-
-                {/* Bands (gradient source→target) */}
-                {bands.map((b, i) => {
-                    const x1 = colXCenter(b.sourceCol) + NODE_W / 2;
-                    const x2 = colXCenter(b.sourceCol + 1) - NODE_W / 2;
-                    const cx1 = x1 + (x2 - x1) * 0.5;
-                    const cx2 = x1 + (x2 - x1) * 0.5;
-                    const y1Top = b.sourceY;
-                    const y1Bot = b.sourceY + b.h;
-                    const y2Top = b.targetY;
-                    const y2Bot = b.targetY + b.h;
-                    const d = `M ${x1} ${y1Top} C ${cx1} ${y1Top}, ${cx2} ${y2Top}, ${x2} ${y2Top} L ${x2} ${y2Bot} C ${cx2} ${y2Bot}, ${cx1} ${y1Bot}, ${x1} ${y1Bot} Z`;
-                    const opacity = hovered ? (bandTouchesHover(b) ? 0.66 : 0.08) : 0.34;
-                    return (
-                        <path
-                            key={i}
-                            d={d}
-                            fill={`url(#${gradId(i)})`}
-                            fillOpacity={opacity}
-                            stroke="none"
-                            style={{cursor: 'pointer', transition: 'fill-opacity 140ms ease'}}
-                            onMouseEnter={() => setHovered(nodeId(b.sourceCol, b.sourceKey))}
-                            onMouseLeave={() => setHovered(null)}
-                            onClick={() => onDrill(b.records, `${b.sourceKey} → ${b.targetKey}`)}
-                        >
-                            <title>{`${b.sourceKey} → ${b.targetKey}: ${b.records.length}`}</title>
-                        </path>
-                    );
-                })}
-
-                {/* Nodes */}
-                {nodes.map(n => {
-                    const x = colXCenter(n.column) - NODE_W / 2;
-                    const isRight = n.column === 2;
-                    const labelX = n.column === 0 ? x - 10 : x + NODE_W + 10;
-                    const maxChars = n.column === 1 ? 24 : 22;
-                    const dim = hovered && hovered !== nodeId(n.column, n.key);
-                    return (
-                        <g
-                            key={`${n.column}-${n.key}`}
-                            style={{cursor: 'pointer', opacity: dim ? 0.45 : 1, transition: 'opacity 140ms ease'}}
-                            onMouseEnter={() => setHovered(nodeId(n.column, n.key))}
-                            onMouseLeave={() => setHovered(null)}
-                            onClick={() => onDrill(n.records, `${columns[n.column]?.label ?? ''} · ${n.label}`)}
-                        >
-                            <rect
-                                x={x}
-                                y={n.y}
-                                width={NODE_W}
-                                height={Math.max(2, n.h)}
-                                fill={n.color}
-                                rx={3}
-                                style={{filter: `drop-shadow(0 1px 2px ${n.color}55)`}}
+                    {nodes.map(n => {
+                        const x = colXCenter(n.column) - NODE_W / 2;
+                        const isRight = n.column === 2;
+                        const labelX = n.column === 0 ? x - 10 : x + NODE_W + 10;
+                        const maxChars = n.column === 1 ? 24 : 22;
+                        const id = nodeId(n.column, n.key);
+                        const dim = active && active !== id;
+                        const isPinned = effectivePinned === id;
+                        return (
+                            <g
+                                key={`${n.column}-${n.key}`}
+                                style={{cursor: 'pointer', opacity: dim ? 0.4 : 1, transition: 'opacity 140ms ease'}}
+                                onMouseEnter={() => setHovered(id)}
+                                onMouseLeave={() => setHovered(null)}
+                                onClick={() => onDrill(n.records, `${columns[n.column]?.label ?? ''} · ${n.label}`)}
                             >
-                                <title>{`${n.label}: ${n.total}`}</title>
-                            </rect>
-                            <text
-                                x={labelX}
-                                y={n.y + n.h / 2 + 4}
-                                fontSize={12.5}
-                                fill={tokens.colors.text}
-                                textAnchor={isRight ? 'start' : n.column === 0 ? 'end' : 'start'}
-                                fontWeight={600}
-                            >
-                                <tspan>{truncate(n.label, maxChars)}</tspan>
-                                <tspan
-                                    dx={7}
-                                    fill={tokens.colors.textFaint}
-                                    fontFamily={tokens.fonts.mono}
-                                    fontSize={11}
+                                <rect
+                                    x={x}
+                                    y={n.y}
+                                    width={NODE_W}
+                                    height={Math.max(2, n.h)}
+                                    fill={n.color}
+                                    rx={3}
+                                    stroke={isPinned ? tokens.colors.text : 'none'}
+                                    strokeWidth={isPinned ? 2 : 0}
+                                    style={{filter: `drop-shadow(0 1px 2px ${n.color}55)`}}
                                 >
-                                    {n.total}
-                                </tspan>
-                            </text>
-                        </g>
-                    );
-                })}
-            </svg>
+                                    <title>{`${n.label}: ${n.total}`}</title>
+                                </rect>
+                                <text
+                                    x={labelX}
+                                    y={n.y + n.h / 2 + 4}
+                                    fontSize={12.5}
+                                    fill={tokens.colors.text}
+                                    textAnchor={isRight ? 'start' : n.column === 0 ? 'end' : 'start'}
+                                    fontWeight={600}
+                                >
+                                    <tspan>{truncate(n.label, maxChars)}</tspan>
+                                    <tspan
+                                        dx={7}
+                                        fill={tokens.colors.textFaint}
+                                        fontFamily={tokens.fonts.mono}
+                                        fontSize={11}
+                                    >
+                                        {n.total}
+                                    </tspan>
+                                </text>
+                            </g>
+                        );
+                    })}
+                </svg>
+                <div
+                    style={{
+                        display: 'flex',
+                        justifyContent: 'center',
+                        gap: tokens.space.md,
+                        alignItems: 'center',
+                        width: '100%',
+                        maxWidth: maxRenderWidth,
+                        marginTop: 8,
+                        fontSize: 10,
+                        color: tokens.colors.textFaint,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                    }}
+                >
+                    <span>Hover to trace · click a table row to pin</span>
+                    {effectivePinned ? (
+                        <button
+                            type="button"
+                            onClick={() => setPinned(null)}
+                            style={{
+                                padding: '3px 10px',
+                                border: `1px solid ${tokens.colors.rule}`,
+                                borderRadius: 999,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                letterSpacing: '0.06em',
+                                textTransform: 'uppercase',
+                                color: tokens.colors.textMuted,
+                                background: tokens.colors.bgPanel,
+                                cursor: 'pointer',
+                            }}
+                        >
+                            Clear pin
+                        </button>
+                    ) : null}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+interface NodeTableProps {
+    title: string;
+    nodes: NodeLayout[];
+    total: number;
+    activeId: string | null;
+    pinnedId: string | null;
+    onHover: (id: string | null) => void;
+    onToggle: (id: string) => void;
+    onDrill: (records: Impact[], title: string) => void;
+}
+
+function NodeTable({title, nodes, total, activeId, pinnedId, onHover, onToggle}: NodeTableProps) {
+    return (
+        <div
+            style={{
+                flex: '1 1 0',
+                minHeight: 92,
+                display: 'flex',
+                flexDirection: 'column',
+                border: `1px solid ${tokens.colors.rule}`,
+                borderRadius: tokens.radius.md,
+                background: tokens.colors.bgPanel,
+                overflow: 'hidden',
+            }}
+        >
             <div
                 style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    width: '100%',
-                    maxWidth: maxRenderWidth,
-                    marginTop: 8,
-                    fontSize: 10,
-                    color: tokens.colors.textFaint,
-                    letterSpacing: '0.04em',
-                    textTransform: 'uppercase',
+                    alignItems: 'baseline',
+                    padding: '6px 10px',
+                    borderBottom: `1px solid ${tokens.colors.ruleSoft}`,
+                    background: tokens.colors.bgAlt,
                 }}
             >
-                <span>{totalsByCol[0]} {columns[0].label.toLowerCase()}</span>
-                <span>Hover to trace · click to drill</span>
-                <span>{totalsByCol[2]} {columns[2].label.toLowerCase()}</span>
+                <span
+                    style={{
+                        fontSize: 9.5,
+                        letterSpacing: '0.12em',
+                        textTransform: 'uppercase',
+                        fontWeight: 700,
+                        color: tokens.colors.textMuted,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                    }}
+                >
+                    {title}
+                </span>
+                <span
+                    className="cia-num"
+                    style={{fontSize: 10, color: tokens.colors.textFaint, fontWeight: 700}}
+                >
+                    {total}
+                </span>
+            </div>
+            <div className="cia-scroll" style={{overflowY: 'auto', flex: 1, padding: 4}}>
+                {nodes.map(n => {
+                    const id = nodeId(n.column, n.key);
+                    const isActive = activeId === id;
+                    const isPinned = pinnedId === id;
+                    return (
+                        <button
+                            key={id}
+                            type="button"
+                            onMouseEnter={() => onHover(id)}
+                            onMouseLeave={() => onHover(null)}
+                            onClick={() => onToggle(id)}
+                            title={`${n.label} — ${n.total}${isPinned ? ' (pinned)' : ''}`}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 7,
+                                width: '100%',
+                                padding: '4px 6px',
+                                borderRadius: tokens.radius.sm,
+                                border: `1px solid ${isPinned ? n.color : 'transparent'}`,
+                                background: isActive ? `${n.color}18` : 'transparent',
+                                cursor: 'pointer',
+                                textAlign: 'left',
+                                transition: 'background 100ms ease',
+                            }}
+                        >
+                            <span
+                                style={{
+                                    width: 9,
+                                    height: 9,
+                                    borderRadius: 2,
+                                    background: n.color,
+                                    flexShrink: 0,
+                                }}
+                            />
+                            <span
+                                style={{
+                                    flex: 1,
+                                    fontSize: 11.5,
+                                    fontWeight: isActive ? 700 : 500,
+                                    color: tokens.colors.text,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    minWidth: 0,
+                                }}
+                            >
+                                {n.label}
+                            </span>
+                            <span
+                                className="cia-num"
+                                style={{
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    color: tokens.colors.textMuted,
+                                    fontVariantNumeric: 'tabular-nums',
+                                    flexShrink: 0,
+                                }}
+                            >
+                                {n.total}
+                            </span>
+                        </button>
+                    );
+                })}
             </div>
         </div>
     );
