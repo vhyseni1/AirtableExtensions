@@ -22,13 +22,14 @@ export function RadarsView({filtered, roles, onDrill}: Props) {
     return (
         <div
             style={{
-                display: 'flex',
-                flexDirection: 'column',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(480px, 1fr))',
                 gap: tokens.space.md,
             }}
         >
             <RoleProfilePanel filtered={filtered} roles={roles} onDrill={onDrill} />
             <AffiliateRiskPanel filtered={filtered} roles={roles} onDrill={onDrill} />
+            <CategorySeverityPanel filtered={filtered} onDrill={onDrill} />
         </div>
     );
 }
@@ -116,12 +117,7 @@ function RoleProfilePanel({filtered, roles, onDrill}: Props) {
                 </Field>
             </div>
 
-            <RadarChart
-                spokes={spokes}
-                series={seriesData}
-                onDrill={onDrill}
-                height={380}
-            />
+            <RadarChart spokes={spokes} series={seriesData} onDrill={onDrill} />
         </Panel>
     );
 }
@@ -182,8 +178,45 @@ function AffiliateRiskPanel({filtered, onDrill}: Props) {
                 max={100}
                 valueFormatter={n => `${Math.round(n)}%`}
                 onDrill={onDrill}
-                height={380}
             />
+        </Panel>
+    );
+}
+
+const SEV_SERIES: ReadonlyArray<{key: 'High' | 'Medium' | 'Low'; color: string}> = [
+    {key: 'High', color: '#FF1F26'},
+    {key: 'Medium', color: '#FFD60C'},
+    {key: 'Low', color: '#00B458'},
+];
+
+function CategorySeverityPanel({
+    filtered,
+    onDrill,
+}: {
+    filtered: Impact[];
+    onDrill: (records: Impact[], title: string) => void;
+}) {
+    const seriesData = useMemo<RadarSeries[]>(() => {
+        const spokeList = [...CHANGE_CATEGORIES];
+        return SEV_SERIES.map(sev => {
+            const values: number[] = [];
+            const records: Impact[][] = [];
+            for (const cat of spokeList) {
+                const recs = filtered.filter(r => r.changeCategory === cat && r.changeImpact === sev.key);
+                values.push(recs.length);
+                records.push(recs);
+            }
+            return {label: sev.key, color: sev.color, values, records};
+        });
+    }, [filtered]);
+
+    return (
+        <Panel
+            eyebrow="Radar · 03"
+            title="Category severity profile"
+            subtitle="Which change pillars carry High / Medium / Low impact — one polygon per severity"
+        >
+            <RadarChart spokes={[...CHANGE_CATEGORIES]} series={seriesData} onDrill={onDrill} />
         </Panel>
     );
 }

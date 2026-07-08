@@ -24,10 +24,10 @@ interface Props {
 
 const KIND_COLOR: Record<StepKind, string> = {
     start: '#0B41CD',
-    positive: '#FF7D29',
-    negative: '#1482FA',
-    subtotal: '#022366',
-    end: '#00B458',
+    positive: '#00B458',
+    negative: '#C40000',
+    subtotal: '#1482FA',
+    end: '#022366',
 };
 
 interface ResolvedBar {
@@ -75,40 +75,43 @@ function resolveBars(steps: ReadonlyArray<WaterfallStep>): ResolvedBar[] {
     });
 }
 
-export function WaterfallChart({steps, onDrill, emptyLine, height = 240}: Props) {
+export function WaterfallChart({steps, onDrill, emptyLine, height = 300}: Props) {
     const bars = useMemo(() => resolveBars(steps), [steps]);
 
     if (bars.length === 0) {
         return <EmptyState line={emptyLine ?? 'No data for this waterfall.'} />;
     }
 
-    const maxValue = Math.max(1, ...bars.map(b => b.valueHigh));
-    const padTop = 24;
-    const padBottom = 56;
-    const padLeft = 36;
-    const padRight = 12;
-    const innerHeight = height - padTop - padBottom;
     const barCount = bars.length;
-    const barGap = 16;
+    const padTop = 28;
+    const padBottom = 64;
+    const padLeft = 44;
+    const padRight = 16;
 
+    // Slot per bar; bar occupies the middle, gaps on both sides.
+    const slotW = 116;
+    const barGap = 34;
+    const barW = slotW - barGap;
+    const width = padLeft + padRight + slotW * barCount;
+    const innerHeight = height - padTop - padBottom;
+    const chartRight = width - padRight;
+
+    const maxValue = Math.max(1, ...bars.map(b => b.valueHigh));
     const yFor = (v: number): number => padTop + innerHeight * (1 - v / maxValue);
+    const slotCenter = (i: number): number => padLeft + slotW * i + slotW / 2;
 
-    const ticks = useMemo(() => {
-        const stepCount = 4;
-        const result: number[] = [];
-        for (let i = 0; i <= stepCount; i++) {
-            result.push(Math.round((maxValue / stepCount) * i));
-        }
-        return result;
-    }, [maxValue]);
+    const tickCount = 4;
+    const ticks: number[] = [];
+    for (let i = 0; i <= tickCount; i++) ticks.push(Math.round((maxValue / tickCount) * i));
 
     return (
-        <div style={{width: '100%'}}>
+        <div style={{width: '100%', display: 'flex', justifyContent: 'center'}}>
             <svg
-                viewBox={`0 0 ${100 * barCount + 60} ${height}`}
+                viewBox={`0 0 ${width} ${height}`}
                 preserveAspectRatio="xMidYMid meet"
-                style={{width: '100%', height: 'auto', maxHeight: height, display: 'block'}}
+                style={{width: '100%', maxWidth: Math.max(460, width), height: 'auto', display: 'block'}}
             >
+                {/* Gridlines + value axis */}
                 {ticks.map((t, i) => {
                     const y = yFor(t);
                     return (
@@ -116,13 +119,14 @@ export function WaterfallChart({steps, onDrill, emptyLine, height = 240}: Props)
                             <line
                                 x1={padLeft}
                                 y1={y}
-                                x2={100 * barCount + 60 - padRight}
+                                x2={chartRight}
                                 y2={y}
                                 stroke={tokens.colors.ruleSoft}
                                 strokeWidth={1}
+                                strokeDasharray={i === 0 ? undefined : '2 4'}
                             />
                             <text
-                                x={padLeft - 6}
+                                x={padLeft - 8}
                                 y={y + 3}
                                 fontSize={9}
                                 fill={tokens.colors.textFaint}
@@ -135,25 +139,25 @@ export function WaterfallChart({steps, onDrill, emptyLine, height = 240}: Props)
                     );
                 })}
 
+                {/* Connectors between consecutive bar tops */}
                 {bars.map((bar, i) => {
                     if (i === bars.length - 1) return null;
                     const next = bars[i + 1];
                     if (!next) return null;
-                    const xRight = padLeft + (i + 1) * (100) - barGap / 2;
-                    const xLeft = padLeft + (i + 1) * (100) + barGap / 2;
-                    const yEnd = yFor(bar.valueHigh);
-                    const yNextStart =
-                        next.kind === 'positive'
-                            ? yFor(next.valueLow)
-                            : next.kind === 'negative'
-                                ? yFor(next.valueHigh)
-                                : yFor(bar.valueHigh);
+                    const xRight = slotCenter(i) + barW / 2;
+                    const xLeft = slotCenter(i + 1) - barW / 2;
+                    // Level where this bar leaves off (running total after it):
+                    // negative bars end at their bottom, everything else at their top.
+                    const yEnd = bar.kind === 'negative' ? yFor(bar.valueLow) : yFor(bar.valueHigh);
+                    // Level where the next bar begins:
+                    // positive rises from its low edge; all others meet at their top.
+                    const yNextStart = next.kind === 'positive' ? yFor(next.valueLow) : yFor(next.valueHigh);
                     return (
                         <line
                             key={`conn-${i}`}
-                            x1={xRight - 60}
+                            x1={xRight}
                             y1={yEnd}
-                            x2={xLeft - 40}
+                            x2={xLeft}
                             y2={yNextStart}
                             stroke={tokens.colors.textFaint}
                             strokeDasharray="3 3"
@@ -162,9 +166,9 @@ export function WaterfallChart({steps, onDrill, emptyLine, height = 240}: Props)
                     );
                 })}
 
+                {/* Bars */}
                 {bars.map((bar, i) => {
-                    const x = padLeft + i * 100 + barGap / 2;
-                    const w = 100 - barGap;
+                    const x = slotCenter(i) - barW / 2;
                     const y = yFor(bar.valueHigh);
                     const h = Math.max(2, yFor(bar.valueLow) - y);
                     const interactive = bar.records.length > 0;
@@ -175,89 +179,85 @@ export function WaterfallChart({steps, onDrill, emptyLine, height = 240}: Props)
                             style={{cursor: interactive ? 'pointer' : 'default'}}
                             onClick={() => interactive && onDrill(bar.records, bar.drillTitle)}
                         >
-                            {bar.kind === 'negative' ? (
-                                <pattern
-                                    id={`hatch-${i}`}
-                                    patternUnits="userSpaceOnUse"
-                                    width="6"
-                                    height="6"
-                                    patternTransform="rotate(45)"
-                                >
-                                    <rect width="6" height="6" fill={bar.color} fillOpacity={0.5} />
-                                    <line x1="0" y1="0" x2="0" y2="6" stroke={bar.color} strokeWidth="3" />
-                                </pattern>
-                            ) : null}
                             <rect
                                 x={x}
                                 y={y}
-                                width={w}
+                                width={barW}
                                 height={h}
-                                fill={bar.kind === 'negative' ? `url(#hatch-${i})` : bar.color}
-                                opacity={isFloating ? 0.92 : 1}
-                                rx={2}
-                            />
+                                fill={bar.color}
+                                opacity={isFloating ? 0.9 : 1}
+                                rx={3}
+                                style={{
+                                    filter: `drop-shadow(0 1px 2px ${bar.color}44)`,
+                                    transition: 'opacity 120ms ease',
+                                }}
+                                onMouseEnter={e => {
+                                    (e.currentTarget as SVGRectElement).style.opacity = '1';
+                                }}
+                                onMouseLeave={e => {
+                                    (e.currentTarget as SVGRectElement).style.opacity = isFloating ? '0.9' : '1';
+                                }}
+                            >
+                                <title>{bar.note || `${bar.label}: ${bar.value}`}</title>
+                            </rect>
                             <text
-                                x={x + w / 2}
-                                y={y - 4}
-                                fontSize={10}
+                                x={x + barW / 2}
+                                y={y - 6}
+                                fontSize={12}
                                 fill={tokens.colors.text}
                                 textAnchor="middle"
                                 fontFamily={tokens.fonts.mono}
-                                fontWeight={600}
+                                fontWeight={700}
                             >
                                 {bar.kind === 'positive' ? `+${bar.value}` : bar.kind === 'negative' ? `−${bar.value}` : bar.value}
                             </text>
                             <foreignObject
-                                x={x - 6}
-                                y={padTop + innerHeight + 6}
-                                width={w + 12}
-                                height={padBottom - 10}
+                                x={slotCenter(i) - slotW / 2}
+                                y={padTop + innerHeight + 8}
+                                width={slotW}
+                                height={padBottom - 12}
                             >
                                 <div
                                     style={{
-                                        fontSize: 10,
+                                        fontSize: 10.5,
                                         color: tokens.colors.text,
                                         fontWeight: 600,
                                         textAlign: 'center',
-                                        lineHeight: 1.2,
+                                        lineHeight: 1.25,
                                         wordBreak: 'break-word',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        gap: 2,
                                     }}
                                     title={bar.note || `${bar.label}: ${bar.value}`}
                                 >
-                                    <div
+                                    <span
                                         style={{
                                             fontSize: 8,
-                                            color: tokens.colors.textFaint,
+                                            color: bar.color,
                                             letterSpacing: '0.08em',
                                             textTransform: 'uppercase',
                                             fontWeight: 700,
                                         }}
                                     >
                                         {bar.kind}
-                                    </div>
-                                    {bar.label}
+                                    </span>
+                                    <span>{bar.label}</span>
                                 </div>
                             </foreignObject>
-                            <rect
-                                x={x}
-                                y={padTop}
-                                width={w}
-                                height={innerHeight}
-                                fill="transparent"
-                            >
-                                <title>{bar.note || `${bar.label}: ${bar.value}`}</title>
-                            </rect>
                         </g>
                     );
                 })}
 
+                {/* Baseline */}
                 <line
                     x1={padLeft}
                     y1={padTop + innerHeight}
-                    x2={100 * barCount + 60 - padRight}
+                    x2={chartRight}
                     y2={padTop + innerHeight}
                     stroke={tokens.colors.rule}
-                    strokeWidth={1}
+                    strokeWidth={1.5}
                 />
             </svg>
         </div>

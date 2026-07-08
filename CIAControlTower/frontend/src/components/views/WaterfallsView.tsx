@@ -115,6 +115,37 @@ export function WaterfallsView({filtered, allImpacts, runs, onDrill}: Props) {
         ];
     }, [filtered]);
 
+    const confidenceSteps = useMemo<WaterfallStep[]>(() => {
+        const total = filtered.length;
+        const low = filtered.filter(r => r.confidence === 'Low');
+        const medium = filtered.filter(r => r.confidence === 'Medium');
+        const high = filtered.filter(r => r.confidence === 'High');
+        return [
+            {label: 'All reviewed', value: total, kind: 'start', records: filtered, drillTitle: 'All reviewed impacts'},
+            {
+                label: 'Drop Low conf.',
+                value: low.length,
+                kind: 'negative',
+                records: low,
+                drillTitle: 'Low-confidence impacts',
+            },
+            {
+                label: 'Drop Medium conf.',
+                value: medium.length,
+                kind: 'negative',
+                records: medium,
+                drillTitle: 'Medium-confidence impacts',
+            },
+            {
+                label: 'High confidence',
+                value: high.length,
+                kind: 'end',
+                records: high,
+                drillTitle: 'High-confidence impacts',
+            },
+        ];
+    }, [filtered]);
+
     const runDeltaSteps = useMemo<WaterfallStep[]>(() => {
         const current = runs[0];
         const previous = runs[1];
@@ -194,9 +225,16 @@ export function WaterfallsView({filtered, allImpacts, runs, onDrill}: Props) {
                     emptyLine="No gaps in scope. Resolution funnel empty."
                 />
             </Panel>
+            <Panel
+                eyebrow="Waterfall · 04"
+                title="Confidence funnel"
+                subtitle="From total → high confidence, dropping each band"
+            >
+                <WaterfallChart steps={confidenceSteps} onDrill={onDrill} />
+            </Panel>
             {runDeltaSteps.length ? (
                 <Panel
-                    eyebrow="Waterfall · 04"
+                    eyebrow="Waterfall · 05"
                     title="Run-over-run delta"
                     subtitle="Prior run → +new → −resolved → current run"
                 >

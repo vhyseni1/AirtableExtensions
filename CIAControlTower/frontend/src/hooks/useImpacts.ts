@@ -20,7 +20,6 @@ import {
     type Confidence,
     type EclStream,
     type Impact,
-    type Persona,
     type Responsible,
     type Tag,
     type ValidationStatus,

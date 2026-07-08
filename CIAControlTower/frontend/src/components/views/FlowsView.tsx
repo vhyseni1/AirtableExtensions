@@ -1,5 +1,11 @@
 import {sevColor, tagColor, tokens} from '../../styles/tokens';
-import {AFFILIATES, CHANGE_CATEGORIES, CHANGE_IMPACTS, type Impact} from '../../utils/schema';
+import {
+    AFFILIATES,
+    BUSINESS_ARCHETYPES,
+    CHANGE_CATEGORIES,
+    CHANGE_IMPACTS,
+    type Impact,
+} from '../../utils/schema';
 import {Panel} from '../primitives/Panel';
 import {SankeyChart, type SankeyDimension} from '../primitives/SankeyChart';
 
@@ -37,7 +43,14 @@ export function FlowsView({filtered, onDrill}: Props) {
         colorOf: v => tagColor(v),
     };
 
+    const archetypeCol: SankeyDimension = {
+        label: 'Business_Archetype',
+        extract: r => r.businessArchetypes[0] ?? null,
+        order: BUSINESS_ARCHETYPES,
+    };
+
     const tagFlattened = flattenByTag(filtered);
+    const archetypeFlattened = flattenByArchetype(filtered);
 
     return (
         <div
@@ -74,8 +87,33 @@ export function FlowsView({filtered, onDrill}: Props) {
                     height={480}
                 />
             </Panel>
+
+            <Panel
+                eyebrow="Flow · 03"
+                title="Business_Archetype → Change_Category → Change_Impact"
+                subtitle="Which archetypes carry which pillars, at what severity"
+            >
+                <SankeyChart
+                    records={archetypeFlattened}
+                    columns={[archetypeCol, categoryCol, impactCol]}
+                    onDrill={(records, title) => onDrill(dedupeById(records), title)}
+                    bandColorSource="target"
+                    height={420}
+                />
+            </Panel>
         </div>
     );
+}
+
+function flattenByArchetype(records: Impact[]): Impact[] {
+    const out: Impact[] = [];
+    for (const r of records) {
+        if (r.businessArchetypes.length === 0) continue;
+        for (const a of r.businessArchetypes) {
+            out.push({...r, businessArchetypes: [a]});
+        }
+    }
+    return out;
 }
 
 function flattenByTag(records: Impact[]): Impact[] {

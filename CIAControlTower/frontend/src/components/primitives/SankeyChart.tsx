@@ -18,6 +18,8 @@ interface Props {
     height?: number;
     /** Use the third column's colors to tint bands. Default: source-column tint. */
     bandColorSource?: 'source' | 'target';
+    /** Natural (max) rendered width in px. */
+    maxRenderWidth?: number;
 }
 
 const PALETTE: ReadonlyArray<string> = [
@@ -39,6 +41,13 @@ function paletteFor(values: ReadonlyArray<string>): Map<string, string> {
     values.forEach((v, i) => m.set(v, PALETTE[i % PALETTE.length] ?? '#5C544A'));
     return m;
 }
+
+// Layout geometry (in viewBox units). Wide side margins reserve room for
+// the left column's right-aligned labels and the right column's left-aligned
+// labels so nothing clips at the edges.
+const WIDTH = 1200;
+const MARGIN_X = 190;
+const NODE_W = 16;
 
 interface NodeLayout {
     column: number;
@@ -62,8 +71,15 @@ interface BandLayout {
     records: Impact[];
 }
 
-export function SankeyChart({records, columns, onDrill, height = 360, bandColorSource = 'source'}: Props) {
-    const {nodes, bands, totalsByCol, width} = useMemo(() => {
+export function SankeyChart({
+    records,
+    columns,
+    onDrill,
+    height = 380,
+    bandColorSource = 'source',
+    maxRenderWidth = 1100,
+}: Props) {
+    const {nodes, bands, totalsByCol} = useMemo(() => {
         return buildLayout(records, columns, height, bandColorSource);
     }, [records, columns, height, bandColorSource]);
 
@@ -71,52 +87,32 @@ export function SankeyChart({records, columns, onDrill, height = 360, bandColorS
         return <EmptyState line="No data in scope for this flow." />;
     }
 
-    const colXCenter = (col: number) => (width / 3) * col + width / 6;
-    const NODE_W = 18;
-    const HEADER_Y = 18;
+    const colXCenter = (col: number) => MARGIN_X + (col / 2) * (WIDTH - MARGIN_X * 2);
+    const HEADER_Y = 16;
 
     return (
-        <div style={{width: '100%'}}>
+        <div style={{width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
             <svg
-                viewBox={`0 0 ${width} ${height}`}
+                viewBox={`0 0 ${WIDTH} ${height}`}
                 preserveAspectRatio="xMidYMid meet"
-                style={{width: '100%', height: 'auto', maxHeight: height, display: 'block'}}
+                style={{width: '100%', maxWidth: maxRenderWidth, height: 'auto', display: 'block'}}
             >
-                <text
-                    x={colXCenter(0)}
-                    y={HEADER_Y}
-                    fontSize={13}
-                    fill={tokens.colors.textFaint}
-                    textAnchor="middle"
-                    fontWeight={700}
-                    letterSpacing="0.12em"
-                >
-                    {columns[0].label.toUpperCase()}
-                </text>
-                <text
-                    x={colXCenter(1)}
-                    y={HEADER_Y}
-                    fontSize={13}
-                    fill={tokens.colors.textFaint}
-                    textAnchor="middle"
-                    fontWeight={700}
-                    letterSpacing="0.12em"
-                >
-                    {columns[1].label.toUpperCase()}
-                </text>
-                <text
-                    x={colXCenter(2)}
-                    y={HEADER_Y}
-                    fontSize={13}
-                    fill={tokens.colors.textFaint}
-                    textAnchor="middle"
-                    fontWeight={700}
-                    letterSpacing="0.12em"
-                >
-                    {columns[2].label.toUpperCase()}
-                </text>
+                {[0, 1, 2].map(col => (
+                    <text
+                        key={col}
+                        x={colXCenter(col)}
+                        y={HEADER_Y}
+                        fontSize={12}
+                        fill={tokens.colors.textMuted}
+                        textAnchor="middle"
+                        fontWeight={700}
+                        letterSpacing="0.14em"
+                    >
+                        {(columns[col]?.label ?? '').toUpperCase()}
+                    </text>
+                ))}
 
-                {/* Bands first (under nodes) */}
+                {/* Bands under nodes */}
                 {bands.map((b, i) => {
                     const x1 = colXCenter(b.sourceCol) + NODE_W / 2;
                     const x2 = colXCenter(b.sourceCol + 1) - NODE_W / 2;
@@ -132,14 +128,14 @@ export function SankeyChart({records, columns, onDrill, height = 360, bandColorS
                             key={i}
                             d={d}
                             fill={b.color}
-                            fillOpacity={0.32}
+                            fillOpacity={0.3}
                             stroke="none"
                             style={{cursor: 'pointer', transition: 'fill-opacity 120ms ease'}}
                             onMouseEnter={e => {
-                                (e.currentTarget as SVGPathElement).style.fillOpacity = '0.6';
+                                (e.currentTarget as SVGPathElement).style.fillOpacity = '0.62';
                             }}
                             onMouseLeave={e => {
-                                (e.currentTarget as SVGPathElement).style.fillOpacity = '0.32';
+                                (e.currentTarget as SVGPathElement).style.fillOpacity = '0.3';
                             }}
                             onClick={() => onDrill(b.records, `${b.sourceKey} → ${b.targetKey}`)}
                         >
@@ -148,9 +144,12 @@ export function SankeyChart({records, columns, onDrill, height = 360, bandColorS
                     );
                 })}
 
-                {/* Nodes on top of bands */}
+                {/* Nodes on top */}
                 {nodes.map(n => {
                     const x = colXCenter(n.column) - NODE_W / 2;
+                    const isRight = n.column === 2;
+                    const labelX = n.column === 0 ? x - 10 : x + NODE_W + 10;
+                    const maxChars = n.column === 1 ? 24 : 22;
                     return (
                         <g
                             key={`${n.column}-${n.key}`}
@@ -163,24 +162,24 @@ export function SankeyChart({records, columns, onDrill, height = 360, bandColorS
                                 width={NODE_W}
                                 height={Math.max(2, n.h)}
                                 fill={n.color}
-                                rx={2}
+                                rx={3}
                             >
                                 <title>{`${n.label}: ${n.total}`}</title>
                             </rect>
                             <text
-                                x={n.column === 0 ? x - 10 : x + NODE_W + 10}
-                                y={n.y + n.h / 2 + 5}
-                                fontSize={14}
+                                x={labelX}
+                                y={n.y + n.h / 2 + 4}
+                                fontSize={12.5}
                                 fill={tokens.colors.text}
-                                textAnchor={n.column === 0 ? 'end' : 'start'}
+                                textAnchor={isRight ? 'start' : n.column === 0 ? 'end' : 'start'}
                                 fontWeight={600}
                             >
-                                <tspan>{truncate(n.label, n.column === 1 ? 22 : 28)}</tspan>
+                                <tspan>{truncate(n.label, maxChars)}</tspan>
                                 <tspan
-                                    dx={8}
+                                    dx={7}
                                     fill={tokens.colors.textFaint}
                                     fontFamily={tokens.fonts.mono}
-                                    fontSize={12}
+                                    fontSize={11}
                                 >
                                     {n.total}
                                 </tspan>
@@ -193,7 +192,9 @@ export function SankeyChart({records, columns, onDrill, height = 360, bandColorS
                 style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    marginTop: 6,
+                    width: '100%',
+                    maxWidth: maxRenderWidth,
+                    marginTop: 8,
                     fontSize: 10,
                     color: tokens.colors.textFaint,
                     letterSpacing: '0.04em',
@@ -218,17 +219,12 @@ function buildLayout(
     height: number,
     bandColorSource: 'source' | 'target',
 ) {
-    const width = 1240;
-    const padTop = 36;
-    const padBottom = 18;
+    const padTop = 34;
+    const padBottom = 16;
     const inner = height - padTop - padBottom;
-    const NODE_GAP = 6;
+    const NODE_GAP = 7;
 
-    const valuesPerCol: [Set<string>, Set<string>, Set<string>] = [
-        new Set(),
-        new Set(),
-        new Set(),
-    ];
+    const valuesPerCol: [Set<string>, Set<string>, Set<string>] = [new Set(), new Set(), new Set()];
     const triples: Array<{a: string; b: string; c: string; record: Impact}> = [];
 
     for (const rec of records) {
@@ -249,28 +245,18 @@ function buildLayout(
         colTotals[2]?.set(t.c, (colTotals[2]?.get(t.c) ?? 0) + 1);
     }
 
-    const totalsByCol: [number, number, number] = [
-        triples.length,
-        triples.length,
-        triples.length,
-    ];
+    const totalsByCol: [number, number, number] = [triples.length, triples.length, triples.length];
 
     const orderColumn = (col: 0 | 1 | 2): string[] => {
         const fromData = [...valuesPerCol[col]];
         const order = columns[col].order;
-        if (order) {
-            return order.filter(v => valuesPerCol[col].has(v));
-        }
+        if (order) return order.filter(v => valuesPerCol[col].has(v));
         return fromData.sort(
             (a, b) => (colTotals[col]?.get(b) ?? 0) - (colTotals[col]?.get(a) ?? 0) || a.localeCompare(b),
         );
     };
 
-    const orderedValues: [string[], string[], string[]] = [
-        orderColumn(0),
-        orderColumn(1),
-        orderColumn(2),
-    ];
+    const orderedValues: [string[], string[], string[]] = [orderColumn(0), orderColumn(1), orderColumn(2)];
 
     const palettes: [Map<string, string>, Map<string, string>, Map<string, string>] = [
         applyCustomOrPalette(columns[0], orderedValues[0]),
@@ -294,7 +280,7 @@ function buildLayout(
         let cursor = padTop;
         for (const v of values) {
             const c = colTotals[col]?.get(v) ?? 0;
-            const h = (c / total) * heightForNodes;
+            const h = Math.max(3, (c / total) * heightForNodes);
             yPositions[col]?.set(v, {y: cursor, h});
             cursor += h + NODE_GAP;
         }
@@ -324,7 +310,7 @@ function buildLayout(
         for (const t of triples) {
             const src = link.from === 0 ? t.a : t.b;
             const tgt = link.to === 1 ? t.b : t.c;
-            const k = src + "\u0001" + tgt;
+            const k = src + '' + tgt;
             let entry = flows.get(k);
             if (!entry) {
                 entry = {source: src, target: tgt, records: []};
@@ -333,15 +319,14 @@ function buildLayout(
             entry.records.push(t.record);
         }
 
-        const flowArr = [...flows.values()]
-            .sort((a, b) => {
-                const ai = (orderedValues[link.from] ?? []).indexOf(a.source);
-                const bi = (orderedValues[link.from] ?? []).indexOf(b.source);
-                if (ai !== bi) return ai - bi;
-                const aj = (orderedValues[link.to] ?? []).indexOf(a.target);
-                const bj = (orderedValues[link.to] ?? []).indexOf(b.target);
-                return aj - bj;
-            });
+        const flowArr = [...flows.values()].sort((a, b) => {
+            const ai = (orderedValues[link.from] ?? []).indexOf(a.source);
+            const bi = (orderedValues[link.from] ?? []).indexOf(b.source);
+            if (ai !== bi) return ai - bi;
+            const aj = (orderedValues[link.to] ?? []).indexOf(a.target);
+            const bj = (orderedValues[link.to] ?? []).indexOf(b.target);
+            return aj - bj;
+        });
 
         const sourceOffsets = new Map<string, number>();
         const targetOffsets = new Map<string, number>();
@@ -377,7 +362,7 @@ function buildLayout(
         }
     }
 
-    return {nodes, bands, totalsByCol, width};
+    return {nodes, bands, totalsByCol};
 }
 
 function appendToRecords(map: Map<string, Impact[]>, key: string, record: Impact): void {
