@@ -1,4 +1,4 @@
-import {useMemo} from 'react';
+import {useId, useMemo, useState} from 'react';
 import {tokens} from '../../styles/tokens';
 import {type Impact} from '../../utils/schema';
 import {EmptyState} from './EmptyState';
@@ -16,8 +16,6 @@ interface Props {
     columns: [SankeyDimension, SankeyDimension, SankeyDimension];
     onDrill: (records: Impact[], title: string) => void;
     height?: number;
-    /** Use the third column's colors to tint bands. Default: source-column tint. */
-    bandColorSource?: 'source' | 'target';
     /** Natural (max) rendered width in px. */
     maxRenderWidth?: number;
 }
@@ -42,9 +40,6 @@ function paletteFor(values: ReadonlyArray<string>): Map<string, string> {
     return m;
 }
 
-// Layout geometry (in viewBox units). Wide side margins reserve room for
-// the left column's right-aligned labels and the right column's left-aligned
-// labels so nothing clips at the edges.
 const WIDTH = 1200;
 const MARGIN_X = 190;
 const NODE_W = 16;
@@ -67,21 +62,19 @@ interface BandLayout {
     sourceY: number;
     targetY: number;
     h: number;
-    color: string;
+    sourceColor: string;
+    targetColor: string;
     records: Impact[];
 }
 
-export function SankeyChart({
-    records,
-    columns,
-    onDrill,
-    height = 380,
-    bandColorSource = 'source',
-    maxRenderWidth = 1100,
-}: Props) {
+export function SankeyChart({records, columns, onDrill, height = 380, maxRenderWidth = 1100}: Props) {
+    const [hovered, setHovered] = useState<string | null>(null);
+    const uid = useId().replace(/:/g, '');
+    const gradId = (i: number) => `sankey-grad-${uid}-${i}`;
+
     const {nodes, bands, totalsByCol} = useMemo(() => {
-        return buildLayout(records, columns, height, bandColorSource);
-    }, [records, columns, height, bandColorSource]);
+        return buildLayout(records, columns, height);
+    }, [records, columns, height]);
 
     if (nodes.length === 0) {
         return <EmptyState line="No data in scope for this flow." />;
@@ -90,6 +83,12 @@ export function SankeyChart({
     const colXCenter = (col: number) => MARGIN_X + (col / 2) * (WIDTH - MARGIN_X * 2);
     const HEADER_Y = 16;
 
+    const nodeId = (col: number, key: string) => `${col}${key}`;
+    const bandTouchesHover = (b: BandLayout): boolean => {
+        if (!hovered) return false;
+        return hovered === nodeId(b.sourceCol, b.sourceKey) || hovered === nodeId(b.sourceCol + 1, b.targetKey);
+    };
+
     return (
         <div style={{width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
             <svg
@@ -97,6 +96,27 @@ export function SankeyChart({
                 preserveAspectRatio="xMidYMid meet"
                 style={{width: '100%', maxWidth: maxRenderWidth, height: 'auto', display: 'block'}}
             >
+                <defs>
+                    {bands.map((b, i) => {
+                        const x1 = colXCenter(b.sourceCol) + NODE_W / 2;
+                        const x2 = colXCenter(b.sourceCol + 1) - NODE_W / 2;
+                        return (
+                            <linearGradient
+                                key={i}
+                                id={gradId(i)}
+                                gradientUnits="userSpaceOnUse"
+                                x1={x1}
+                                y1={0}
+                                x2={x2}
+                                y2={0}
+                            >
+                                <stop offset="0%" stopColor={b.sourceColor} />
+                                <stop offset="100%" stopColor={b.targetColor} />
+                            </linearGradient>
+                        );
+                    })}
+                </defs>
+
                 {[0, 1, 2].map(col => (
                     <text
                         key={col}
@@ -112,7 +132,7 @@ export function SankeyChart({
                     </text>
                 ))}
 
-                {/* Bands under nodes */}
+                {/* Bands (gradient source→target) */}
                 {bands.map((b, i) => {
                     const x1 = colXCenter(b.sourceCol) + NODE_W / 2;
                     const x2 = colXCenter(b.sourceCol + 1) - NODE_W / 2;
@@ -123,20 +143,17 @@ export function SankeyChart({
                     const y2Top = b.targetY;
                     const y2Bot = b.targetY + b.h;
                     const d = `M ${x1} ${y1Top} C ${cx1} ${y1Top}, ${cx2} ${y2Top}, ${x2} ${y2Top} L ${x2} ${y2Bot} C ${cx2} ${y2Bot}, ${cx1} ${y1Bot}, ${x1} ${y1Bot} Z`;
+                    const opacity = hovered ? (bandTouchesHover(b) ? 0.66 : 0.08) : 0.34;
                     return (
                         <path
                             key={i}
                             d={d}
-                            fill={b.color}
-                            fillOpacity={0.3}
+                            fill={`url(#${gradId(i)})`}
+                            fillOpacity={opacity}
                             stroke="none"
-                            style={{cursor: 'pointer', transition: 'fill-opacity 120ms ease'}}
-                            onMouseEnter={e => {
-                                (e.currentTarget as SVGPathElement).style.fillOpacity = '0.62';
-                            }}
-                            onMouseLeave={e => {
-                                (e.currentTarget as SVGPathElement).style.fillOpacity = '0.3';
-                            }}
+                            style={{cursor: 'pointer', transition: 'fill-opacity 140ms ease'}}
+                            onMouseEnter={() => setHovered(nodeId(b.sourceCol, b.sourceKey))}
+                            onMouseLeave={() => setHovered(null)}
                             onClick={() => onDrill(b.records, `${b.sourceKey} → ${b.targetKey}`)}
                         >
                             <title>{`${b.sourceKey} → ${b.targetKey}: ${b.records.length}`}</title>
@@ -144,16 +161,19 @@ export function SankeyChart({
                     );
                 })}
 
-                {/* Nodes on top */}
+                {/* Nodes */}
                 {nodes.map(n => {
                     const x = colXCenter(n.column) - NODE_W / 2;
                     const isRight = n.column === 2;
                     const labelX = n.column === 0 ? x - 10 : x + NODE_W + 10;
                     const maxChars = n.column === 1 ? 24 : 22;
+                    const dim = hovered && hovered !== nodeId(n.column, n.key);
                     return (
                         <g
                             key={`${n.column}-${n.key}`}
-                            style={{cursor: 'pointer'}}
+                            style={{cursor: 'pointer', opacity: dim ? 0.45 : 1, transition: 'opacity 140ms ease'}}
+                            onMouseEnter={() => setHovered(nodeId(n.column, n.key))}
+                            onMouseLeave={() => setHovered(null)}
                             onClick={() => onDrill(n.records, `${columns[n.column]?.label ?? ''} · ${n.label}`)}
                         >
                             <rect
@@ -163,6 +183,7 @@ export function SankeyChart({
                                 height={Math.max(2, n.h)}
                                 fill={n.color}
                                 rx={3}
+                                style={{filter: `drop-shadow(0 1px 2px ${n.color}55)`}}
                             >
                                 <title>{`${n.label}: ${n.total}`}</title>
                             </rect>
@@ -202,7 +223,7 @@ export function SankeyChart({
                 }}
             >
                 <span>{totalsByCol[0]} {columns[0].label.toLowerCase()}</span>
-                <span>Click any band or node to drill</span>
+                <span>Hover to trace · click to drill</span>
                 <span>{totalsByCol[2]} {columns[2].label.toLowerCase()}</span>
             </div>
         </div>
@@ -217,7 +238,6 @@ function buildLayout(
     records: Impact[],
     columns: [SankeyDimension, SankeyDimension, SankeyDimension],
     height: number,
-    bandColorSource: 'source' | 'target',
 ) {
     const padTop = 34;
     const padBottom = 16;
@@ -343,10 +363,6 @@ function buildLayout(
             const sOffset = sourceOffsets.get(f.source) ?? 0;
             const tOffset = targetOffsets.get(f.target) ?? 0;
             const bandH = Math.min(srcH, tgtH);
-            const color =
-                bandColorSource === 'target'
-                    ? palettes[link.to]?.get(f.target) ?? '#5C544A'
-                    : palettes[link.from]?.get(f.source) ?? '#5C544A';
             bands.push({
                 sourceCol: link.from,
                 sourceKey: f.source,
@@ -354,7 +370,8 @@ function buildLayout(
                 sourceY: srcPos.y + sOffset,
                 targetY: tgtPos.y + tOffset,
                 h: bandH,
-                color,
+                sourceColor: palettes[link.from]?.get(f.source) ?? '#5C544A',
+                targetColor: palettes[link.to]?.get(f.target) ?? '#5C544A',
                 records: f.records,
             });
             sourceOffsets.set(f.source, sOffset + srcH);

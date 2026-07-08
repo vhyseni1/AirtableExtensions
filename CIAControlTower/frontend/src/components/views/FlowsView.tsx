@@ -63,13 +63,12 @@ export function FlowsView({filtered, onDrill}: Props) {
             <Panel
                 eyebrow="Flow · 01"
                 title="Affiliate → Change_Category → Change_Impact"
-                subtitle="Where the heat is, regionally — bands colored by impact severity"
+                subtitle="Where the heat is, regionally — hover any node to trace its flow"
             >
                 <SankeyChart
                     records={filtered}
                     columns={[affiliate, categoryCol, impactCol]}
                     onDrill={onDrill}
-                    bandColorSource="target"
                     height={420}
                 />
             </Panel>
@@ -77,13 +76,12 @@ export function FlowsView({filtered, onDrill}: Props) {
             <Panel
                 eyebrow="Flow · 02"
                 title="Role → Change_Category → Tag"
-                subtitle="Who's exposed to what kind of issue — bands colored by tag"
+                subtitle="Who's exposed to what kind of issue — hover any node to trace its flow"
             >
                 <SankeyChart
                     records={tagFlattened}
                     columns={[role, categoryCol, tagCol]}
                     onDrill={(records, title) => onDrill(dedupeById(records), title)}
-                    bandColorSource="target"
                     height={480}
                 />
             </Panel>
@@ -97,7 +95,6 @@ export function FlowsView({filtered, onDrill}: Props) {
                     records={archetypeFlattened}
                     columns={[archetypeCol, categoryCol, impactCol]}
                     onDrill={(records, title) => onDrill(dedupeById(records), title)}
-                    bandColorSource="target"
                     height={420}
                 />
             </Panel>

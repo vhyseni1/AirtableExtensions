@@ -266,32 +266,54 @@ function Masthead({
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 gap: tokens.space.md,
-                paddingBottom: tokens.space.sm,
-                borderBottom: `1px solid ${tokens.colors.rule}`,
+                padding: `${tokens.space.md} ${tokens.space.lg}`,
+                borderRadius: tokens.radius.lg,
+                background: `linear-gradient(100deg, ${tokens.colors.accentDeep} 0%, ${tokens.colors.accent} 100%)`,
+                boxShadow: '0 4px 16px -4px rgba(2,35,102,0.4)',
                 flexWrap: 'wrap',
             }}
         >
-            <div style={{display: 'flex', alignItems: 'baseline', gap: tokens.space.md, minWidth: 0}}>
-                <h1
+            <div style={{display: 'flex', alignItems: 'center', gap: tokens.space.md, minWidth: 0}}>
+                <span
+                    aria-hidden
                     style={{
-                        margin: 0,
-                        fontFamily: tokens.fonts.serif,
-                        fontSize: 'clamp(16px, 1.8vw, 22px)',
-                        fontWeight: 600,
-                        letterSpacing: '-0.01em',
-                        color: tokens.colors.text,
-                        lineHeight: 1.15,
-                        whiteSpace: 'nowrap',
+                        width: 30,
+                        height: 30,
+                        borderRadius: 7,
+                        background: 'rgba(255,255,255,0.16)',
+                        border: '1px solid rgba(255,255,255,0.4)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#FFFFFF',
+                        fontSize: 15,
+                        flexShrink: 0,
                     }}
                 >
-                    Change Impact · Control Tower
-                </h1>
-                <span
-                    className="cia-eyebrow"
-                    style={{letterSpacing: '0.16em', color: tokens.colors.accent, fontSize: 9}}
-                >
-                    ELEVATE-CIA
+                    ◆
                 </span>
+                <div style={{display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0}}>
+                    <h1
+                        style={{
+                            margin: 0,
+                            fontFamily: tokens.fonts.serif,
+                            fontSize: 'clamp(16px, 1.8vw, 22px)',
+                            fontWeight: 600,
+                            letterSpacing: '-0.01em',
+                            color: '#FFFFFF',
+                            lineHeight: 1.1,
+                            whiteSpace: 'nowrap',
+                        }}
+                    >
+                        Change Impact · Control Tower
+                    </h1>
+                    <span
+                        className="cia-eyebrow"
+                        style={{letterSpacing: '0.18em', color: tokens.colors.accentTint, fontSize: 9}}
+                    >
+                        ELEVATE-CIA
+                    </span>
+                </div>
             </div>
             <div
                 style={{
@@ -302,49 +324,30 @@ function Masthead({
                     flexWrap: 'wrap',
                 }}
             >
-                <Tabs active={tab} onChange={onTabChange} />
-                <span
-                    aria-hidden
-                    style={{width: 1, height: 22, background: tokens.colors.rule}}
-                />
-                <ActionButton onClick={onNarrative} disabled={runCount === 0}>
+                <Tabs active={tab} onChange={onTabChange} dark />
+                <span aria-hidden style={{width: 1, height: 22, background: 'rgba(255,255,255,0.25)'}} />
+                <button
+                    type="button"
+                    onClick={onNarrative}
+                    disabled={runCount === 0}
+                    style={{
+                        padding: '6px 14px',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        letterSpacing: '0.08em',
+                        textTransform: 'uppercase',
+                        border: '1px solid rgba(255,255,255,0.4)',
+                        borderRadius: tokens.radius.sm,
+                        background: 'rgba(255,255,255,0.16)',
+                        color: '#FFFFFF',
+                        opacity: runCount === 0 ? 0.4 : 1,
+                        cursor: runCount === 0 ? 'default' : 'pointer',
+                    }}
+                >
                     Narrative ▶
-                </ActionButton>
+                </button>
             </div>
         </header>
-    );
-}
-
-function ActionButton({
-    onClick,
-    children,
-    disabled,
-}: {
-    onClick: () => void;
-    children: React.ReactNode;
-    disabled?: boolean;
-}) {
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            disabled={disabled}
-            style={{
-                padding: '6px 12px',
-                fontSize: 11,
-                fontWeight: 600,
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                border: `1px solid ${tokens.colors.rule}`,
-                borderRadius: tokens.radius.sm,
-                background: tokens.colors.bgPanel,
-                color: tokens.colors.text,
-                opacity: disabled ? 0.4 : 1,
-                cursor: disabled ? 'default' : 'pointer',
-            }}
-        >
-            {children}
-        </button>
     );
 }
 

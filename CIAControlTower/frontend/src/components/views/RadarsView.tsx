@@ -23,13 +23,14 @@ export function RadarsView({filtered, roles, onDrill}: Props) {
         <div
             style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(480px, 1fr))',
+                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
                 gap: tokens.space.md,
             }}
         >
             <RoleProfilePanel filtered={filtered} roles={roles} onDrill={onDrill} />
             <AffiliateRiskPanel filtered={filtered} roles={roles} onDrill={onDrill} />
             <CategorySeverityPanel filtered={filtered} onDrill={onDrill} />
+            <CategoryTagPanel filtered={filtered} onDrill={onDrill} />
         </div>
     );
 }
@@ -215,6 +216,47 @@ function CategorySeverityPanel({
             eyebrow="Radar · 03"
             title="Category severity profile"
             subtitle="Which change pillars carry High / Medium / Low impact — one polygon per severity"
+        >
+            <RadarChart spokes={[...CHANGE_CATEGORIES]} series={seriesData} onDrill={onDrill} />
+        </Panel>
+    );
+}
+
+const TAG_SERIES: ReadonlyArray<{key: 'Heatmap' | 'Pressure' | 'Gap' | 'Friction'; color: string}> = [
+    {key: 'Heatmap', color: '#FF7D29'},
+    {key: 'Pressure', color: '#C40000'},
+    {key: 'Gap', color: '#ED4A0D'},
+    {key: 'Friction', color: '#BC36F0'},
+];
+
+function CategoryTagPanel({
+    filtered,
+    onDrill,
+}: {
+    filtered: Impact[];
+    onDrill: (records: Impact[], title: string) => void;
+}) {
+    const seriesData = useMemo<RadarSeries[]>(() => {
+        const spokeList = [...CHANGE_CATEGORIES];
+        return TAG_SERIES.map(tag => {
+            const values: number[] = [];
+            const records: Impact[][] = [];
+            for (const cat of spokeList) {
+                const recs = filtered.filter(
+                    r => r.changeCategory === cat && r.tags.includes(tag.key),
+                );
+                values.push(recs.length);
+                records.push(recs);
+            }
+            return {label: tag.key, color: tag.color, values, records};
+        });
+    }, [filtered]);
+
+    return (
+        <Panel
+            eyebrow="Radar · 04"
+            title="Category signal profile"
+            subtitle="Where Heatmap / Pressure / Gap / Friction concentrate across the 8 change pillars"
         >
             <RadarChart spokes={[...CHANGE_CATEGORIES]} series={seriesData} onDrill={onDrill} />
         </Panel>

@@ -146,6 +146,47 @@ export function WaterfallsView({filtered, allImpacts, runs, onDrill}: Props) {
         ];
     }, [filtered]);
 
+    const readinessSteps = useMemo<WaterfallStep[]>(() => {
+        const all = filtered;
+        const noAction = all.filter(r => !r.actionRequired.trim());
+        const afterAction = all.filter(r => r.actionRequired.trim());
+        const noOwner = afterAction.filter(r => !(r.actionOwner.trim() || r.responsible));
+        const afterOwner = afterAction.filter(r => r.actionOwner.trim() || r.responsible);
+        const noTimeline = afterOwner.filter(r => !r.timeline.trim());
+        const ready = afterOwner.filter(r => r.timeline.trim());
+        return [
+            {label: 'All reviewed', value: all.length, kind: 'start', records: all, drillTitle: 'All reviewed impacts'},
+            {
+                label: 'No action stated',
+                value: noAction.length,
+                kind: 'negative',
+                records: noAction,
+                drillTitle: 'Impacts with no action stated',
+            },
+            {
+                label: 'No owner',
+                value: noOwner.length,
+                kind: 'negative',
+                records: noOwner,
+                drillTitle: 'Impacts with no owner',
+            },
+            {
+                label: 'No timeline',
+                value: noTimeline.length,
+                kind: 'negative',
+                records: noTimeline,
+                drillTitle: 'Impacts with no timeline',
+            },
+            {
+                label: 'Execution-ready',
+                value: ready.length,
+                kind: 'end',
+                records: ready,
+                drillTitle: 'Execution-ready impacts',
+            },
+        ];
+    }, [filtered]);
+
     const runDeltaSteps = useMemo<WaterfallStep[]>(() => {
         const current = runs[0];
         const previous = runs[1];
@@ -232,9 +273,20 @@ export function WaterfallsView({filtered, allImpacts, runs, onDrill}: Props) {
             >
                 <WaterfallChart steps={confidenceSteps} onDrill={onDrill} />
             </Panel>
+            <Panel
+                eyebrow="Waterfall · 05"
+                title="Action readiness"
+                subtitle="All reviewed → drops at each execution gate → execution-ready"
+            >
+                <WaterfallChart
+                    steps={readinessSteps}
+                    onDrill={onDrill}
+                    emptyLine="No impacts in scope."
+                />
+            </Panel>
             {runDeltaSteps.length ? (
                 <Panel
-                    eyebrow="Waterfall · 05"
+                    eyebrow="Waterfall · 06"
                     title="Run-over-run delta"
                     subtitle="Prior run → +new → −resolved → current run"
                 >
