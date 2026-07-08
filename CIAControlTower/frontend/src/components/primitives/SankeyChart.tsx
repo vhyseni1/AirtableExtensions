@@ -126,7 +126,7 @@ function activeSets(active: string | null, bands: BandLayout[]): {bandIdx: Set<n
     return {bandIdx, nodes: nodeSet};
 }
 
-export function SankeyChart({records, columns, onDrill, height = 440, maxRenderWidth = 1120}: Props) {
+export function SankeyChart({records, columns, onDrill, height = 440, maxRenderWidth = 920}: Props) {
     const [hovered, setHovered] = useState<string | null>(null);
     const [pinned, setPinned] = useState<string | null>(null);
     const uid = useId().replace(/:/g, '');
@@ -139,7 +139,8 @@ export function SankeyChart({records, columns, onDrill, height = 440, maxRenderW
     // Clear a stale pin if the pinned node no longer exists after a data change.
     const pinnedExists = pinned ? nodes.some(n => nodeId(n.column, n.key) === pinned) : true;
     const effectivePinned = pinnedExists ? pinned : null;
-    const active = hovered ?? effectivePinned;
+    // A pin FREEZES the trace: hover only previews when nothing is pinned.
+    const active = effectivePinned ?? hovered;
 
     const {bandIdx: activeBands, nodes: activeNodes} = useMemo(
         () => activeSets(active, bands),
@@ -162,9 +163,9 @@ export function SankeyChart({records, columns, onDrill, height = 440, maxRenderW
     const togglePin = (id: string) => setPinned(prev => (prev === id ? null : id));
 
     return (
-        <div style={{display: 'flex', flexDirection: 'column', gap: tokens.space.md}}>
-            {/* Three count tables, side by side, equal thirds */}
-            <div style={{display: 'flex', gap: tokens.space.sm, flexWrap: 'wrap'}}>
+        <div style={{display: 'flex', gap: tokens.space.lg, alignItems: 'flex-start', flexWrap: 'wrap'}}>
+            {/* Left: three count tables, side by side */}
+            <div style={{flex: '1 1 400px', minWidth: 300, display: 'flex', gap: tokens.space.sm}}>
                 {[0, 1, 2].map(col => (
                     <NodeTable
                         key={col}
@@ -179,8 +180,8 @@ export function SankeyChart({records, columns, onDrill, height = 440, maxRenderW
                 ))}
             </div>
 
-            {/* The flow chart, full width */}
-            <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
+            {/* Right: the flow chart */}
+            <div style={{flex: '2 1 460px', minWidth: 360, display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
                 <svg
                     viewBox={`0 0 ${WIDTH} ${height}`}
                     preserveAspectRatio="xMidYMid meet"
@@ -389,8 +390,8 @@ function NodeTable({title, nodes, total, activeId, pinnedId, onHover, onToggle}:
     return (
         <div
             style={{
-                flex: '1 1 200px',
-                minWidth: 180,
+                flex: '1 1 0',
+                minWidth: 0,
                 display: 'flex',
                 flexDirection: 'column',
                 border: `1px solid ${tokens.colors.rule}`,
@@ -430,7 +431,7 @@ function NodeTable({title, nodes, total, activeId, pinnedId, onHover, onToggle}:
                     {total}
                 </span>
             </div>
-            <div className="cia-scroll" style={{overflowY: 'auto', maxHeight: 220, padding: 4}}>
+            <div className="cia-scroll" style={{overflowY: 'auto', maxHeight: 380, padding: 4}}>
                 {nodes.map(n => {
                     const id = nodeId(n.column, n.key);
                     const isActive = activeId === id;
