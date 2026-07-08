@@ -74,13 +74,16 @@ const nodeId = (col: number, key: string) => `${col}${key}`;
  * Returns the set of highlighted band indices and the set of node ids that
  * stay lit; everything else fades.
  */
-function activeSets(active: string | null, bands: BandLayout[]): {bandIdx: Set<number>; nodes: Set<string>} {
+function activeSets(
+    activeNode: {column: number; key: string} | null,
+    bands: BandLayout[],
+): {bandIdx: Set<number>; nodes: Set<string>} {
     const bandIdx = new Set<number>();
     const nodeSet = new Set<string>();
-    if (!active) return {bandIdx, nodes: nodeSet};
-    nodeSet.add(active);
-    const col = Number(active[0]);
-    const key = active.slice(1);
+    if (!activeNode) return {bandIdx, nodes: nodeSet};
+    const col = activeNode.column;
+    const key = activeNode.key;
+    nodeSet.add(nodeId(col, key));
     const reachedMid = new Set<string>();
 
     if (col === 0) {
@@ -141,10 +144,11 @@ export function SankeyChart({records, columns, onDrill, height = 440, maxRenderW
     const effectivePinned = pinnedExists ? pinned : null;
     // A pin FREEZES the trace: hover only previews when nothing is pinned.
     const active = effectivePinned ?? hovered;
+    const activeNode = active ? nodes.find(n => nodeId(n.column, n.key) === active) ?? null : null;
 
     const {bandIdx: activeBands, nodes: activeNodes} = useMemo(
-        () => activeSets(active, bands),
-        [active, bands],
+        () => activeSets(activeNode, bands),
+        [activeNode, bands],
     );
 
     if (nodes.length === 0) {
@@ -218,6 +222,7 @@ export function SankeyChart({records, columns, onDrill, height = 440, maxRenderW
                             textAnchor="middle"
                             fontWeight={700}
                             letterSpacing="0.14em"
+                            style={{pointerEvents: 'none'}}
                         >
                             {(columns[col]?.label ?? '').toUpperCase()}
                         </text>
@@ -235,14 +240,16 @@ export function SankeyChart({records, columns, onDrill, height = 440, maxRenderW
                         const y2Bot = b.targetY + b.h;
                         const d = `M ${x1} ${y1Top} C ${cx1} ${y1Top}, ${cx2} ${y2Top}, ${x2} ${y2Top} L ${x2} ${y2Bot} C ${cx2} ${y2Bot}, ${cx1} ${y1Bot}, ${x1} ${y1Bot} Z`;
                         const isHi = activeBands.has(i);
-                        const opacity = active ? (isHi ? 0.72 : 0.06) : 0.34;
+                        const opacity = active ? (isHi ? 0.82 : 0.04) : 0.34;
                         return (
                             <path
                                 key={i}
                                 d={d}
                                 fill={`url(#${gradId(i)})`}
                                 fillOpacity={opacity}
-                                stroke="none"
+                                stroke={isHi ? b.targetColor : 'none'}
+                                strokeOpacity={isHi ? 0.9 : 0}
+                                strokeWidth={isHi ? 1 : 0}
                                 style={{cursor: 'pointer', transition: 'fill-opacity 140ms ease'}}
                                 onMouseEnter={() => setHovered(nodeId(b.sourceCol, b.sourceKey))}
                                 onMouseLeave={() => setHovered(null)}
@@ -319,6 +326,7 @@ export function SankeyChart({records, columns, onDrill, height = 440, maxRenderW
                                     fill={tokens.colors.text}
                                     textAnchor={isRight ? 'start' : n.column === 0 ? 'end' : 'start'}
                                     fontWeight={600}
+                                    style={{pointerEvents: 'none'}}
                                 >
                                     <tspan>{truncate(n.label, maxChars)}</tspan>
                                     <tspan

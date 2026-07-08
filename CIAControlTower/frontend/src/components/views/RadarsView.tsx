@@ -5,7 +5,8 @@ import {
     CHANGE_CATEGORIES,
     type Impact,
 } from '../../utils/schema';
-import {Panel} from '../primitives/Panel';
+import {ChartPanel} from '../primitives/ChartPanel';
+import {MultiSelectDropdown, type DropdownOption} from '../primitives/MultiSelectDropdown';
 import {RadarChart, type RadarSeries} from '../primitives/RadarChart';
 
 interface Props {
@@ -45,12 +46,6 @@ function RoleProfilePanel({filtered, roles, onDrill}: Props) {
         }
     }, [roles, selectedRoles.length]);
 
-    const toggleRole = (p: string) => {
-        setSelectedRoles(prev =>
-            prev.includes(p) ? prev.filter(x => x !== p) : prev.length >= 5 ? prev : [...prev, p],
-        );
-    };
-
     const {spokes, seriesData} = useMemo(() => {
         const {spokeList, valuesBySeries, recordsBySeries} = computeRoleSpokes(
             filtered,
@@ -70,56 +65,44 @@ function RoleProfilePanel({filtered, roles, onDrill}: Props) {
         return {spokes: spokeList, seriesData: series};
     }, [filtered, axis, selectedRoles]);
 
+    const roleOptions: DropdownOption[] = roles.map(r => ({value: r, label: r}));
+
     return (
-        <Panel
+        <ChartPanel
             eyebrow="Radar · 01"
             title="Role profile"
             subtitle="Compare how different roles are exposed across categories, tags, or top components"
-        >
-            <div
-                style={{
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: tokens.space.lg,
-                    marginBottom: tokens.space.md,
-                    padding: `${tokens.space.sm} ${tokens.space.md}`,
-                    background: tokens.colors.bgAlt,
-                    borderRadius: tokens.radius.sm,
-                }}
-            >
-                <Field label="Spoke dimension">
+            actions={
+                <>
                     <select
                         value={axis}
                         onChange={e => setAxis(e.target.value as ProfileAxis)}
                         style={selectStyle}
+                        title="Spoke dimension"
                     >
-                        <option value="category">Change_Category (8)</option>
+                        <option value="category">Categories (8)</option>
                         <option value="tag">Tags (4)</option>
-                        <option value="topComponents">Top 6 Change_Components</option>
+                        <option value="topComponents">Top components</option>
                     </select>
-                </Field>
-                <Field label="Roles to overlay (max 5)">
-                    <div style={{display: 'flex', gap: 4, flexWrap: 'wrap'}}>
-                        {roles.map(p => {
-                            const active = selectedRoles.includes(p);
-                            return (
-                                <button
-                                    key={p}
-                                    type="button"
-                                    onClick={() => toggleRole(p)}
-                                    style={chipStyle(active)}
-                                    title={p}
-                                >
-                                    {p}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </Field>
-            </div>
-
-            <RadarChart spokes={spokes} series={seriesData} onDrill={onDrill} />
-        </Panel>
+                    <MultiSelectDropdown
+                        label="Roles"
+                        options={roleOptions}
+                        selected={selectedRoles}
+                        onChange={next => setSelectedRoles(next.slice(0, 6))}
+                        width={280}
+                    />
+                </>
+            }
+        >
+            {fs => (
+                <RadarChart
+                    spokes={spokes}
+                    series={seriesData}
+                    onDrill={onDrill}
+                    maxRenderWidth={fs ? 900 : 620}
+                />
+            )}
+        </ChartPanel>
     );
 }
 
@@ -168,19 +151,22 @@ function AffiliateRiskPanel({filtered, onDrill}: Props) {
     ];
 
     return (
-        <Panel
+        <ChartPanel
             eyebrow="Radar · 02"
             title="Affiliate risk profile"
             subtitle="Composite risk shape per affiliate — one polygon per region, five risk densities"
         >
-            <RadarChart
-                spokes={spokes}
-                series={seriesData}
-                max={100}
-                valueFormatter={n => `${Math.round(n)}%`}
-                onDrill={onDrill}
-            />
-        </Panel>
+            {fs => (
+                <RadarChart
+                    spokes={spokes}
+                    series={seriesData}
+                    max={100}
+                    valueFormatter={n => `${Math.round(n)}%`}
+                    onDrill={onDrill}
+                    maxRenderWidth={fs ? 900 : 620}
+                />
+            )}
+        </ChartPanel>
     );
 }
 
@@ -212,13 +198,20 @@ function CategorySeverityPanel({
     }, [filtered]);
 
     return (
-        <Panel
+        <ChartPanel
             eyebrow="Radar · 03"
             title="Category severity profile"
             subtitle="Which change pillars carry High / Medium / Low impact — one polygon per severity"
         >
-            <RadarChart spokes={[...CHANGE_CATEGORIES]} series={seriesData} onDrill={onDrill} />
-        </Panel>
+            {fs => (
+                <RadarChart
+                    spokes={[...CHANGE_CATEGORIES]}
+                    series={seriesData}
+                    onDrill={onDrill}
+                    maxRenderWidth={fs ? 900 : 620}
+                />
+            )}
+        </ChartPanel>
     );
 }
 
@@ -253,13 +246,20 @@ function CategoryTagPanel({
     }, [filtered]);
 
     return (
-        <Panel
+        <ChartPanel
             eyebrow="Radar · 04"
             title="Category signal profile"
             subtitle="Where Heatmap / Pressure / Gap / Friction concentrate across the 8 change pillars"
         >
-            <RadarChart spokes={[...CHANGE_CATEGORIES]} series={seriesData} onDrill={onDrill} />
-        </Panel>
+            {fs => (
+                <RadarChart
+                    spokes={[...CHANGE_CATEGORIES]}
+                    series={seriesData}
+                    onDrill={onDrill}
+                    maxRenderWidth={fs ? 900 : 620}
+                />
+            )}
+        </ChartPanel>
     );
 }
 
@@ -330,36 +330,6 @@ function pct(n: number, total: number): number {
     return (n / total) * 100;
 }
 
-function Field({label, children}: {label: string; children: React.ReactNode}) {
-    return (
-        <label style={{display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0}}>
-            <span
-                style={{
-                    fontSize: 10,
-                    letterSpacing: '0.12em',
-                    textTransform: 'uppercase',
-                    color: tokens.colors.textFaint,
-                    fontWeight: 700,
-                }}
-            >
-                {label}
-            </span>
-            {children}
-        </label>
-    );
-}
-
-const chipStyle = (active: boolean): React.CSSProperties => ({
-    padding: '3px 9px',
-    background: active ? tokens.colors.text : 'transparent',
-    color: active ? tokens.colors.bg : tokens.colors.textMuted,
-    border: `1px solid ${active ? tokens.colors.text : tokens.colors.rule}`,
-    borderRadius: 999,
-    fontSize: 11,
-    fontWeight: 600,
-    letterSpacing: '0.04em',
-});
-
 const selectStyle: React.CSSProperties = {
     padding: '5px 10px',
     border: `1px solid ${tokens.colors.rule}`,
@@ -368,5 +338,5 @@ const selectStyle: React.CSSProperties = {
     background: tokens.colors.bg,
     fontFamily: tokens.fonts.mono,
     color: tokens.colors.text,
-    minWidth: 220,
+    minWidth: 150,
 };

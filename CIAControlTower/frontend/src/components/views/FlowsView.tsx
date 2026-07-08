@@ -6,7 +6,7 @@ import {
     CHANGE_IMPACTS,
     type Impact,
 } from '../../utils/schema';
-import {Panel} from '../primitives/Panel';
+import {ChartPanel} from '../primitives/ChartPanel';
 import {SankeyChart, type SankeyDimension} from '../primitives/SankeyChart';
 
 interface Props {
@@ -60,44 +60,53 @@ export function FlowsView({filtered, onDrill}: Props) {
                 gap: tokens.space.md,
             }}
         >
-            <Panel
+            <ChartPanel
                 eyebrow="Flow · 01"
                 title="Affiliate → Change_Category → Change_Impact"
-                subtitle="Where the heat is, regionally — hover any node to trace its flow"
+                subtitle="Where the heat is, regionally — click any node to pin its full path"
             >
-                <SankeyChart
-                    records={filtered}
-                    columns={[affiliate, categoryCol, impactCol]}
-                    onDrill={onDrill}
-                    height={520}
-                />
-            </Panel>
+                {fs => (
+                    <SankeyChart
+                        records={filtered}
+                        columns={[affiliate, categoryCol, impactCol]}
+                        onDrill={onDrill}
+                        height={fs ? 760 : 520}
+                        maxRenderWidth={fs ? 1700 : 920}
+                    />
+                )}
+            </ChartPanel>
 
-            <Panel
+            <ChartPanel
                 eyebrow="Flow · 02"
                 title="Role → Change_Category → Tag"
-                subtitle="Who's exposed to what kind of issue — hover any node to trace its flow"
+                subtitle="Who's exposed to what kind of issue — click any node to pin its full path"
             >
-                <SankeyChart
-                    records={tagFlattened}
-                    columns={[role, categoryCol, tagCol]}
-                    onDrill={(records, title) => onDrill(dedupeById(records), title)}
-                    height={560}
-                />
-            </Panel>
+                {fs => (
+                    <SankeyChart
+                        records={tagFlattened}
+                        columns={[role, categoryCol, tagCol]}
+                        onDrill={(records, title) => onDrill(dedupeById(records), title)}
+                        height={fs ? 820 : 560}
+                        maxRenderWidth={fs ? 1700 : 920}
+                    />
+                )}
+            </ChartPanel>
 
-            <Panel
+            <ChartPanel
                 eyebrow="Flow · 03"
                 title="Business_Archetype → Change_Category → Change_Impact"
                 subtitle="Which archetypes carry which pillars, at what severity"
             >
-                <SankeyChart
-                    records={archetypeFlattened}
-                    columns={[archetypeCol, categoryCol, impactCol]}
-                    onDrill={(records, title) => onDrill(dedupeById(records), title)}
-                    height={520}
-                />
-            </Panel>
+                {fs => (
+                    <SankeyChart
+                        records={archetypeFlattened}
+                        columns={[archetypeCol, categoryCol, impactCol]}
+                        onDrill={(records, title) => onDrill(dedupeById(records), title)}
+                        height={fs ? 720 : 520}
+                        maxRenderWidth={fs ? 1700 : 920}
+                    />
+                )}
+            </ChartPanel>
         </div>
     );
 }
