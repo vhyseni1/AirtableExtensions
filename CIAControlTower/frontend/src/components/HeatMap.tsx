@@ -138,9 +138,9 @@ function Matrix({matrix, max, onDrill}: MatrixProps) {
                 style={{
                     display: 'grid',
                     gridTemplateColumns: `170px repeat(${components.length}, ${colSize})`,
-                    gap: 0,
+                    gap: 6,
                     minWidth: 170 + components.length * 84,
-                    padding: 0,
+                    padding: '4px 2px 8px 2px',
                 }}
             >
                 <div />
@@ -228,7 +228,7 @@ function RowFragment({rowLabel, rowTotal, components, cells, max, onDrill}: RowF
                     fontWeight: 600,
                     letterSpacing: '0.04em',
                     borderRight: `1px solid ${tokens.colors.ruleSoft}`,
-                    gap: 0,
+                    gap: 6,
                     overflow: 'hidden',
                 }}
                 title={rowLabel}
@@ -278,7 +278,7 @@ function RowFragment({rowLabel, rowTotal, components, cells, max, onDrill}: RowF
                         style={{
                             background: gradient,
                             border: 'none',
-                            borderRadius: 0,
+                            borderRadius: 8,
                             minHeight: 48,
                             display: 'flex',
                             alignItems: 'center',
@@ -289,18 +289,27 @@ function RowFragment({rowLabel, rowTotal, components, cells, max, onDrill}: RowF
                             fontVariantNumeric: 'tabular-nums',
                             color: count === 0 ? tokens.colors.textFaint : cellTextColor(band, intensity),
                             cursor: count === 0 ? 'default' : 'pointer',
-                            boxShadow: 'none',
-                            transition: 'filter 140ms ease',
+                            boxShadow:
+                                count === 0
+                                    ? 'none'
+                                    : `0 1px 2px rgba(2,35,102,0.06), inset 0 1px 0 rgba(255,255,255,0.14)`,
+                            transition:
+                                'transform 140ms cubic-bezier(0.4,0,0.2,1), box-shadow 140ms ease',
                         }}
                         onMouseEnter={e => {
                             if (count > 0) {
                                 const el = e.currentTarget as HTMLButtonElement;
-                                el.style.filter = 'brightness(1.08)';
+                                el.style.transform = 'translateY(-1px) scale(1.03)';
+                                el.style.boxShadow = `0 6px 14px ${withAlpha(color, 0.28)}, 0 2px 4px rgba(2,35,102,0.10), inset 0 1px 0 rgba(255,255,255,0.2)`;
                             }
                         }}
                         onMouseLeave={e => {
                             const el = e.currentTarget as HTMLButtonElement;
-                            el.style.filter = 'none';
+                            el.style.transform = 'translateY(0) scale(1)';
+                            el.style.boxShadow =
+                                count === 0
+                                    ? 'none'
+                                    : `0 1px 2px rgba(2,35,102,0.06), inset 0 1px 0 rgba(255,255,255,0.14)`;
                         }}
                     >
                         {count > 0 ? count : ''}
