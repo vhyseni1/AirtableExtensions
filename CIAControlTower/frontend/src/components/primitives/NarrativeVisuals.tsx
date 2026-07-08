@@ -386,7 +386,6 @@ export function AnimatedStackedBars({
                             y={rowY}
                             width={trackWidth}
                             height={barHeight}
-                            rx={barHeight / 2}
                             fill="rgba(255,255,255,0.10)"
                         />
                         {item.segments.map((seg, si) => {
@@ -394,8 +393,6 @@ export function AnimatedStackedBars({
                             const segW = (seg.value / total) * filledTotalW;
                             const x = trackX + cursor;
                             cursor += segW;
-                            const isFirst = si === 0;
-                            const isLast = si === item.segments.length - 1 || cursor >= filledTotalW - 0.5;
                             return (
                                 <rect
                                     key={si}
@@ -404,7 +401,6 @@ export function AnimatedStackedBars({
                                     width={Math.max(0, segW)}
                                     height={barHeight}
                                     fill={seg.color}
-                                    rx={isFirst || isLast ? barHeight / 2 : 0}
                                     style={{
                                         filter: `drop-shadow(0 1px 2px ${seg.color}66)`,
                                     }}

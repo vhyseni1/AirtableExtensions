@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useState} from 'react';
+import {useEffect, useMemo, useRef, useState} from 'react';
 import {tokens} from '../styles/tokens';
 import {type DashboardAggregations} from '../hooks/useAggregations';
 import {
@@ -186,6 +186,9 @@ const BEAT_MS = 5000;
 export function NarrativeMode({aggregations, onClose}: Props) {
     const beats = useMemo(() => buildBeats(aggregations), [aggregations]);
     const [idx, setIdx] = useState(0);
+    const [paused, setPaused] = useState(false);
+    const beatStartRef = useRef<number>(Date.now());
+    const remainingMsRef = useRef<number>(BEAT_MS);
 
     useEffect(() => {
         const previous = document.body.style.overflow;
@@ -200,12 +203,29 @@ export function NarrativeMode({aggregations, onClose}: Props) {
             if (e.key === 'Escape') onClose();
             if (e.key === 'ArrowRight') setIdx(i => Math.min(beats.length - 1, i + 1));
             if (e.key === 'ArrowLeft') setIdx(i => Math.max(0, i - 1));
+            if (e.key === ' ' || e.key === 'k') {
+                e.preventDefault();
+                setPaused(p => !p);
+            }
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
     }, [beats.length, onClose]);
 
+    // Reset the remaining time when the beat changes.
     useEffect(() => {
+        remainingMsRef.current = BEAT_MS;
+    }, [idx]);
+
+    // Auto-advance timer with pause-friendly bookkeeping.
+    useEffect(() => {
+        if (paused) {
+            // Capture how much of this beat has already played, subtract from remaining.
+            const elapsed = Date.now() - beatStartRef.current;
+            remainingMsRef.current = Math.max(0, remainingMsRef.current - elapsed);
+            return;
+        }
+        beatStartRef.current = Date.now();
         const t = window.setTimeout(() => {
             setIdx(i => {
                 if (i + 1 >= beats.length) {
@@ -214,9 +234,9 @@ export function NarrativeMode({aggregations, onClose}: Props) {
                 }
                 return i + 1;
             });
-        }, BEAT_MS);
+        }, remainingMsRef.current);
         return () => window.clearTimeout(t);
-    }, [idx, beats.length, onClose]);
+    }, [idx, paused, beats.length, onClose]);
 
     const beat = beats[idx];
     if (!beat) return null;
@@ -272,6 +292,7 @@ export function NarrativeMode({aggregations, onClose}: Props) {
                                     background: '#FFFFFF',
                                     transformOrigin: 'left center',
                                     animation: `cia-story-progress ${BEAT_MS}ms linear forwards`,
+                                    animationPlayState: paused ? 'paused' : 'running',
                                 }}
                             />
                         ) : null}
@@ -409,9 +430,58 @@ export function NarrativeMode({aggregations, onClose}: Props) {
                     color: 'rgba(255,255,255,0.72)',
                 }}
             >
-                <span>Click anywhere to close</span>
-                <span>← → navigate · Esc exit</span>
+                <span>Click background to close</span>
+                <PlayPauseButton paused={paused} onToggle={() => setPaused(p => !p)} />
+                <span>Space to pause · ← → navigate · Esc exit</span>
             </div>
         </div>
+    );
+}
+
+function PlayPauseButton({paused, onToggle}: {paused: boolean; onToggle: () => void}) {
+    return (
+        <button
+            type="button"
+            onClick={e => {
+                e.stopPropagation();
+                onToggle();
+            }}
+            aria-label={paused ? 'Play' : 'Pause'}
+            style={{
+                width: 44,
+                height: 44,
+                borderRadius: '50%',
+                background: 'rgba(255,255,255,0.14)',
+                border: '1px solid rgba(255,255,255,0.28)',
+                color: '#FFFFFF',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'background 140ms ease, transform 140ms ease',
+                flexShrink: 0,
+            }}
+            onMouseEnter={e => {
+                const el = e.currentTarget as HTMLButtonElement;
+                el.style.background = 'rgba(255,255,255,0.24)';
+                el.style.transform = 'scale(1.06)';
+            }}
+            onMouseLeave={e => {
+                const el = e.currentTarget as HTMLButtonElement;
+                el.style.background = 'rgba(255,255,255,0.14)';
+                el.style.transform = 'scale(1)';
+            }}
+        >
+            {paused ? (
+                <svg width={16} height={16} viewBox="0 0 16 16" aria-hidden>
+                    <path d="M3 1.5 L13 8 L3 14.5 Z" fill="currentColor" />
+                </svg>
+            ) : (
+                <svg width={16} height={16} viewBox="0 0 16 16" aria-hidden>
+                    <rect x={3.5} y={2} width={3} height={12} fill="currentColor" rx={0.5} />
+                    <rect x={9.5} y={2} width={3} height={12} fill="currentColor" rx={0.5} />
+                </svg>
+            )}
+        </button>
     );
 }
