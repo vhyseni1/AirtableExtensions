@@ -146,24 +146,27 @@ function DashboardBody({tableName}: {tableName: string}) {
                 gap: tokens.space.lg,
             }}
         >
-            <Masthead
-                onNarrative={() => setNarrative(true)}
-                runCount={aggregations.runs.length}
-                tab={tab}
-                onTabChange={setTab}
-            />
             <div
                 style={{
                     position: 'sticky',
                     top: 0,
                     zIndex: 20,
                     background: tokens.colors.bg,
+                    paddingTop: tokens.space.lg,
                     paddingBottom: tokens.space.sm,
+                    marginTop: `-${tokens.space.lg}`,
                     display: 'flex',
                     flexDirection: 'column',
                     gap: tokens.space.sm,
+                    boxShadow: '0 6px 12px -8px rgba(2,35,102,0.14)',
                 }}
             >
+                <Masthead
+                    onNarrative={() => setNarrative(true)}
+                    runCount={aggregations.runs.length}
+                    tab={tab}
+                    onTabChange={setTab}
+                />
                 <HeadlineBar
                     filtered={filtered}
                     aggregations={aggregations}
