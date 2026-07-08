@@ -69,7 +69,64 @@ interface BandLayout {
 
 const nodeId = (col: number, key: string) => `${col}${key}`;
 
-export function SankeyChart({records, columns, onDrill, height = 440, maxRenderWidth = 940}: Props) {
+/**
+ * Trace the full path (all three levels) reachable from an active node.
+ * Returns the set of highlighted band indices and the set of node ids that
+ * stay lit; everything else fades.
+ */
+function activeSets(active: string | null, bands: BandLayout[]): {bandIdx: Set<number>; nodes: Set<string>} {
+    const bandIdx = new Set<number>();
+    const nodeSet = new Set<string>();
+    if (!active) return {bandIdx, nodes: nodeSet};
+    nodeSet.add(active);
+    const col = Number(active[0]);
+    const key = active.slice(1);
+    const reachedMid = new Set<string>();
+
+    if (col === 0) {
+        bands.forEach((b, i) => {
+            if (b.sourceCol === 0 && b.sourceKey === key) {
+                bandIdx.add(i);
+                nodeSet.add(nodeId(1, b.targetKey));
+                reachedMid.add(b.targetKey);
+            }
+        });
+        bands.forEach((b, i) => {
+            if (b.sourceCol === 1 && reachedMid.has(b.sourceKey)) {
+                bandIdx.add(i);
+                nodeSet.add(nodeId(2, b.targetKey));
+            }
+        });
+    } else if (col === 1) {
+        bands.forEach((b, i) => {
+            if (b.sourceCol === 0 && b.targetKey === key) {
+                bandIdx.add(i);
+                nodeSet.add(nodeId(0, b.sourceKey));
+            }
+            if (b.sourceCol === 1 && b.sourceKey === key) {
+                bandIdx.add(i);
+                nodeSet.add(nodeId(2, b.targetKey));
+            }
+        });
+    } else {
+        bands.forEach((b, i) => {
+            if (b.sourceCol === 1 && b.targetKey === key) {
+                bandIdx.add(i);
+                nodeSet.add(nodeId(1, b.sourceKey));
+                reachedMid.add(b.sourceKey);
+            }
+        });
+        bands.forEach((b, i) => {
+            if (b.sourceCol === 0 && reachedMid.has(b.targetKey)) {
+                bandIdx.add(i);
+                nodeSet.add(nodeId(0, b.sourceKey));
+            }
+        });
+    }
+    return {bandIdx, nodes: nodeSet};
+}
+
+export function SankeyChart({records, columns, onDrill, height = 440, maxRenderWidth = 1120}: Props) {
     const [hovered, setHovered] = useState<string | null>(null);
     const [pinned, setPinned] = useState<string | null>(null);
     const uid = useId().replace(/:/g, '');
@@ -84,17 +141,17 @@ export function SankeyChart({records, columns, onDrill, height = 440, maxRenderW
     const effectivePinned = pinnedExists ? pinned : null;
     const active = hovered ?? effectivePinned;
 
+    const {bandIdx: activeBands, nodes: activeNodes} = useMemo(
+        () => activeSets(active, bands),
+        [active, bands],
+    );
+
     if (nodes.length === 0) {
         return <EmptyState line="No data in scope for this flow." />;
     }
 
     const colXCenter = (col: number) => MARGIN_X + (col / 2) * (WIDTH - MARGIN_X * 2);
     const HEADER_Y = 16;
-
-    const bandTouchesActive = (b: BandLayout): boolean => {
-        if (!active) return false;
-        return active === nodeId(b.sourceCol, b.sourceKey) || active === nodeId(b.sourceCol + 1, b.targetKey);
-    };
 
     const nodesByCol: [NodeLayout[], NodeLayout[], NodeLayout[]] = [
         nodes.filter(n => n.column === 0),
@@ -105,19 +162,9 @@ export function SankeyChart({records, columns, onDrill, height = 440, maxRenderW
     const togglePin = (id: string) => setPinned(prev => (prev === id ? null : id));
 
     return (
-        <div style={{display: 'flex', gap: tokens.space.lg, alignItems: 'stretch', flexWrap: 'wrap'}}>
-            {/* Left rail: three count tables */}
-            <div
-                style={{
-                    width: 268,
-                    flex: '1 1 240px',
-                    maxWidth: 300,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: tokens.space.sm,
-                    minWidth: 0,
-                }}
-            >
+        <div style={{display: 'flex', flexDirection: 'column', gap: tokens.space.md}}>
+            {/* Three count tables, side by side, equal thirds */}
+            <div style={{display: 'flex', gap: tokens.space.sm, flexWrap: 'wrap'}}>
                 {[0, 1, 2].map(col => (
                     <NodeTable
                         key={col}
@@ -128,13 +175,12 @@ export function SankeyChart({records, columns, onDrill, height = 440, maxRenderW
                         pinnedId={effectivePinned}
                         onHover={setHovered}
                         onToggle={togglePin}
-                        onDrill={onDrill}
                     />
                 ))}
             </div>
 
-            {/* Right: the flow chart */}
-            <div style={{flex: '3 1 460px', minWidth: 360, display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
+            {/* The flow chart, full width */}
+            <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
                 <svg
                     viewBox={`0 0 ${WIDTH} ${height}`}
                     preserveAspectRatio="xMidYMid meet"
@@ -176,6 +222,7 @@ export function SankeyChart({records, columns, onDrill, height = 440, maxRenderW
                         </text>
                     ))}
 
+                    {/* Bands */}
                     {bands.map((b, i) => {
                         const x1 = colXCenter(b.sourceCol) + NODE_W / 2;
                         const x2 = colXCenter(b.sourceCol + 1) - NODE_W / 2;
@@ -186,7 +233,8 @@ export function SankeyChart({records, columns, onDrill, height = 440, maxRenderW
                         const y2Top = b.targetY;
                         const y2Bot = b.targetY + b.h;
                         const d = `M ${x1} ${y1Top} C ${cx1} ${y1Top}, ${cx2} ${y2Top}, ${x2} ${y2Top} L ${x2} ${y2Bot} C ${cx2} ${y2Bot}, ${cx1} ${y1Bot}, ${x1} ${y1Bot} Z`;
-                        const opacity = active ? (bandTouchesActive(b) ? 0.7 : 0.07) : 0.34;
+                        const isHi = activeBands.has(i);
+                        const opacity = active ? (isHi ? 0.72 : 0.06) : 0.34;
                         return (
                             <path
                                 key={i}
@@ -204,18 +252,48 @@ export function SankeyChart({records, columns, onDrill, height = 440, maxRenderW
                         );
                     })}
 
+                    {/* Band count labels — shown when highlighted, or when the band is thick enough */}
+                    {bands.map((b, i) => {
+                        const isHi = activeBands.has(i);
+                        const show = active ? isHi : b.h >= 15;
+                        if (!show) return null;
+                        const x1 = colXCenter(b.sourceCol) + NODE_W / 2;
+                        const x2 = colXCenter(b.sourceCol + 1) - NODE_W / 2;
+                        const mx = (x1 + x2) / 2;
+                        const my = (b.sourceY + b.targetY) / 2 + b.h / 2;
+                        return (
+                            <text
+                                key={`bc-${i}`}
+                                x={mx}
+                                y={my + 3.5}
+                                fontSize={10}
+                                fontWeight={700}
+                                fontFamily={tokens.fonts.mono}
+                                textAnchor="middle"
+                                fill={tokens.colors.text}
+                                stroke="#FFFFFF"
+                                strokeWidth={3}
+                                paintOrder="stroke"
+                                style={{pointerEvents: 'none'}}
+                            >
+                                {b.records.length}
+                            </text>
+                        );
+                    })}
+
+                    {/* Nodes */}
                     {nodes.map(n => {
                         const x = colXCenter(n.column) - NODE_W / 2;
                         const isRight = n.column === 2;
                         const labelX = n.column === 0 ? x - 10 : x + NODE_W + 10;
                         const maxChars = n.column === 1 ? 24 : 22;
                         const id = nodeId(n.column, n.key);
-                        const dim = active && active !== id;
+                        const dim = active && !activeNodes.has(id);
                         const isPinned = effectivePinned === id;
                         return (
                             <g
                                 key={`${n.column}-${n.key}`}
-                                style={{cursor: 'pointer', opacity: dim ? 0.4 : 1, transition: 'opacity 140ms ease'}}
+                                style={{cursor: 'pointer', opacity: dim ? 0.35 : 1, transition: 'opacity 140ms ease'}}
                                 onMouseEnter={() => setHovered(id)}
                                 onMouseLeave={() => setHovered(null)}
                                 onClick={() => onDrill(n.records, `${columns[n.column]?.label ?? ''} · ${n.label}`)}
@@ -270,7 +348,7 @@ export function SankeyChart({records, columns, onDrill, height = 440, maxRenderW
                         textTransform: 'uppercase',
                     }}
                 >
-                    <span>Hover to trace · click a table row to pin</span>
+                    <span>Hover to trace the full path · click a table row to pin</span>
                     {effectivePinned ? (
                         <button
                             type="button"
@@ -305,15 +383,14 @@ interface NodeTableProps {
     pinnedId: string | null;
     onHover: (id: string | null) => void;
     onToggle: (id: string) => void;
-    onDrill: (records: Impact[], title: string) => void;
 }
 
 function NodeTable({title, nodes, total, activeId, pinnedId, onHover, onToggle}: NodeTableProps) {
     return (
         <div
             style={{
-                flex: '1 1 0',
-                minHeight: 92,
+                flex: '1 1 200px',
+                minWidth: 180,
                 display: 'flex',
                 flexDirection: 'column',
                 border: `1px solid ${tokens.colors.rule}`,
@@ -353,7 +430,7 @@ function NodeTable({title, nodes, total, activeId, pinnedId, onHover, onToggle}:
                     {total}
                 </span>
             </div>
-            <div className="cia-scroll" style={{overflowY: 'auto', flex: 1, padding: 4}}>
+            <div className="cia-scroll" style={{overflowY: 'auto', maxHeight: 220, padding: 4}}>
                 {nodes.map(n => {
                     const id = nodeId(n.column, n.key);
                     const isActive = activeId === id;
