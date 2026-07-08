@@ -297,7 +297,7 @@ export function SankeyChart({records, columns, onDrill, height = 440, maxRenderW
                                 style={{cursor: 'pointer', opacity: dim ? 0.35 : 1, transition: 'opacity 140ms ease'}}
                                 onMouseEnter={() => setHovered(id)}
                                 onMouseLeave={() => setHovered(null)}
-                                onClick={() => onDrill(n.records, `${columns[n.column]?.label ?? ''} · ${n.label}`)}
+                                onClick={() => togglePin(id)}
                             >
                                 <rect
                                     x={x}
@@ -349,7 +349,7 @@ export function SankeyChart({records, columns, onDrill, height = 440, maxRenderW
                         textTransform: 'uppercase',
                     }}
                 >
-                    <span>Hover to trace the full path · click a table row to pin</span>
+                    <span>Click any node or table row to pin its full path · click a band to drill</span>
                     {effectivePinned ? (
                         <button
                             type="button"
