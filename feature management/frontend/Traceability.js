@@ -91,12 +91,13 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
 
     const W = Math.max(w || 980, 680);
     const padT = 20;
-    const labelArea = 92;                       // bottom: badges + angled team names
+    const labelArea = 96;                       // bottom: badges + wrapped team names
     const labelW = Math.min(172, W * 0.19);
     const H = padT + plotH + labelArea;
     const axisY = padT + plotH + 8;
     const nCols = teams.length + 1;             // + Delivered terminal
     const colX = i => labelW + ((i + 1) * (W - labelW - 30)) / nCols;
+    const colStep = (W - labelW - 30) / nCols;
     const colIdx = t => teams.indexOf(t);
 
     const endX = ln => (ln.delivered ? colX(teams.length) : colX(colIdx(ln.visited[ln.visited.length - 1])));
@@ -151,10 +152,9 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                     );
                 })}
 
-                {/* bottom axis: badges + team names */}
+                {/* bottom axis: badges + horizontal wrapped team names */}
                 {teams.map((t, i) => {
                     const stopped = stoppedAt(t);
-                    const short = t.length > 26 ? `${t.slice(0, 25)}…` : t;
                     return (
                         <g key={t} className="fp-flow-node" onClick={() => onPick(`At ${t}`, stopped.map(l => l.attr))}>
                             {stopped.length > 0 && (
@@ -163,13 +163,17 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                                     <text x={colX(i)} y={axisY + 12} textAnchor="middle" dominantBaseline="central" className="fp-flow-badge-n">{stopped.length}</text>
                                 </g>
                             )}
-                            <text x={colX(i)} y={axisY + 34} textAnchor="end" className="fp-flow-name" transform={`rotate(-30 ${colX(i)} ${axisY + 34})`}>{short}</text>
+                            <foreignObject x={colX(i) - colStep / 2 + 3} y={axisY + 24} width={colStep - 6} height={labelArea - 28}>
+                                <div xmlns="http://www.w3.org/1999/xhtml" className="fp-flow-label" title={t}>{t}</div>
+                            </foreignObject>
                             <title>{`${t} — ${stopped.length} attribute${stopped.length === 1 ? '' : 's'} here now`}</title>
                         </g>
                     );
                 })}
                 <g className="fp-flow-node" onClick={() => onPick('Delivered', lines.filter(l => l.delivered).map(l => l.attr))}>
-                    <text x={colX(teams.length)} y={axisY + 34} textAnchor="end" className="fp-flow-name done" transform={`rotate(-30 ${colX(teams.length)} ${axisY + 34})`}>✓ Delivered</text>
+                    <foreignObject x={colX(teams.length) - colStep / 2 + 3} y={axisY + 24} width={colStep - 6} height={labelArea - 28}>
+                        <div xmlns="http://www.w3.org/1999/xhtml" className="fp-flow-label done" title="Delivered">✓ Delivered</div>
+                    </foreignObject>
                 </g>
 
                 {/* feature labels on the y-axis (hover isolates the feature) */}
@@ -318,11 +322,21 @@ export default function Traceability({model}) {
                 </div>
                 {shownFeatures.map(f => {
                     const list = attrsOf(f);
+                    const feat = model.features.find(x => x.name === f);
+                    const delivered = list.filter(a => a.isDelivered).length;
                     return (
-                        <div key={f} className="fp-featgroup">
-                            <div className="fp-featgroup-head clickable" onClick={() => drill.openAttrs(f, list)}>
-                                <i style={{background: featureColorOf(f)}} />
-                                {f} <span className="fp-col-count">{list.length}</span>
+                        <div key={f} className="fp-featcard" style={{'--fc': featureColorOf(f)}}>
+                            <div className="fp-featcard-head clickable" onClick={() => drill.openAttrs(f, list)} title="See as list">
+                                <div className="fp-featcard-title">
+                                    <span className="fp-featcard-kicker">Feature</span>
+                                    <span className="fp-featcard-name">{f}</span>
+                                </div>
+                                <div className="fp-featcard-meta">
+                                    <span><b>{list.length}</b> attributes</span>
+                                    <span><b>{delivered}</b> delivered</span>
+                                    {feat && <span><b>{feat.pct}%</b> mature</span>}
+                                    {feat && feat.goLive && <span>go-live <b>{feat.goLive}</b></span>}
+                                </div>
                             </div>
                             <ul className="fp-arows">
                                 {list.map(a => (
