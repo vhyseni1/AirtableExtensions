@@ -126,14 +126,18 @@ export const PHASE_GROUPS = [
     'Report',
 ];
 
+// Validated categorical palette (dataviz six checks: lightness band, chroma
+// floor, adjacent-pair CVD, contrast). Amber↔orange sits in the CVD floor band,
+// which is legal because phase colors are always paired with direct labels and
+// fills keep a 2px surface gap.
 export const PHASE_COLORS = {
-    Requirements: '#4f8cff',
-    Modelling: '#a371f7',
-    Transformation: '#2dd4bf',
-    Sourcing: '#34d399',
-    'Sub-ledger': '#fb923c',
-    Calculate: '#fbbf24',
-    Report: '#f87171',
+    Requirements: '#2a78d6',
+    Modelling: '#4a3aa7',
+    Transformation: '#0d9488',
+    Sourcing: '#008300',
+    'Sub-ledger': '#eb6834',
+    Calculate: '#c28a00',
+    Report: '#e34948',
 };
 
 export const STATUS_COLORS = {

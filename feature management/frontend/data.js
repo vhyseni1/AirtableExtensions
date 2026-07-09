@@ -316,6 +316,8 @@ export function useModel() {
                 action: str(r, handshakes.fields.action),
                 decisionMaker: str(r, handshakes.fields.decisionMaker),
                 timestamp: str(r, handshakes.fields.timestamp),
+                comments: str(r, handshakes.fields.comments),
+                cycleNumber: str(r, handshakes.fields.cycleNumber),
             }))
             .sort((a, b) => (a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0));
 

@@ -7,6 +7,7 @@ import Executive from './Executive';
 import Roadmap from './Roadmap';
 import TeamView from './TeamView';
 import Workflow from './Workflow';
+import Traceability from './Traceability';
 import Narrative from './Narrative';
 import Logo from './Logo';
 import './style.css';
@@ -16,6 +17,7 @@ const MODES = [
     {key: 'roadmap', label: 'Pipeline Tracker Overview'},
     {key: 'team', label: 'By team'},
     {key: 'workflow', label: 'Workflow'},
+    {key: 'trace', label: 'Traceability'},
 ];
 
 // The data-loading shell. Only mounted once every table exists, so useModel()'s
@@ -62,8 +64,10 @@ function Dashboard() {
                 <Roadmap model={model} />
             ) : mode === 'team' ? (
                 <TeamView model={model} />
-            ) : (
+            ) : mode === 'workflow' ? (
                 <Workflow model={model} />
+            ) : (
+                <Traceability model={model} />
             )}
 
             {model.missing.length > 0 && (
