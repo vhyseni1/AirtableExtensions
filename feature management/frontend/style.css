@@ -487,6 +487,7 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-flow-line { cursor: pointer; }
 .fp-flow-hit { fill: none; stroke: transparent; stroke-width: 12; }
 .fp-flow-path { fill: none; stroke-linecap: round; transition: opacity .18s ease, stroke-width .18s ease; }
+.fp-flow-tick { stroke: #fff; stroke-width: 1.25; transition: opacity .18s ease; }
 .fp-flow-end { stroke: #fff; stroke-width: 1.75; transition: opacity .18s ease; }
 .fp-flow-feat { cursor: pointer; }
 .fp-flow-featname { font-size: 11px; font-weight: 700; fill: var(--fp-text); }

@@ -34,17 +34,16 @@ function useMeasuredWidth() {
 // Columns (x) = teams in pipeline order. Each line traces the teams the
 // attribute has ACTUALLY passed through and stops — with an end dot — at the
 // team where it sits today; delivered lines run through to the ✓ terminal.
-function AttributeFlow({model, featureColorOf, hoverFeature, onPick}) {
+function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, onPick}) {
     const [ref, w] = useMeasuredWidth();
     const {attrs, featureOrder} = model;
     const [hoverId, setHoverId] = useState(null);
 
-    const LANE = 13;      // vertical spacing between attribute lines
-    const FGAP = 16;      // extra gap between feature blocks
+    const LANE = 14;      // vertical spacing between attribute tracks
+    const FGAP = 18;      // extra gap between feature blocks
 
     const {teams, lines, features, plotH} = useMemo(() => {
         const teamOf = code => (model.stagesByCode[code] ? model.stagesByCode[code].responsibleTeamName : '');
-        const featIdx = f => { const i = featureOrder.indexOf(f); return i < 0 ? 999 : i; };
 
         // Per attribute: the teams traversed so far (up to & incl. current stage)
         const raws = attrs.map(a => {
@@ -71,108 +70,63 @@ function AttributeFlow({model, featureColorOf, hoverFeature, onPick}) {
         });
         const teamList = Object.keys(firstCode).sort((a, b) => firstCode[a] - firstCode[b]);
 
-        // y start slots: features stacked in fixed order, attributes within
+        // Each attribute keeps ONE horizontal track for its whole journey
+        // (no re-bundling → tracks never cross → nothing to misread).
         const featList = featureOrder.filter(f => raws.some(r => r.feature === f));
         if (raws.some(r => r.feature === 'Unassigned')) featList.push('Unassigned');
         let y = 0;
         const featBlocks = [];
-        const sorted = [];
+        const lineList = [];
         featList.forEach(f => {
             const rows = raws.filter(r => r.feature === f).sort((a, b) => (a.attr.attributeId > b.attr.attributeId ? 1 : -1));
             const top = y;
-            rows.forEach(r => { sorted.push({...r, yStart: y + LANE / 2}); y += LANE; });
+            rows.forEach(r => { lineList.push({...r, yStart: y + LANE / 2}); y += LANE; });
             featBlocks.push({name: f, top, height: rows.length * LANE});
             y += FGAP;
         });
-        const height = Math.max(y - FGAP, 120);
-
-        // Per-column lanes: lines through a team stack by start order (keeps
-        // features contiguous), bundle centred on the plot's midline.
-        const mid = height / 2;
-        const laneY = {};
-        teamList.forEach(t => {
-            const through = sorted.filter(r => r.visited.includes(t));
-            const top = mid - ((through.length - 1) * LANE) / 2;
-            through.forEach((r, i) => { laneY[`${t}|${r.attr.id}`] = top + i * LANE; });
-        });
-
-        const lineList = sorted.map(r => ({
-            ...r,
-            pts: [{x: -1, y: r.yStart}, ...r.visited.map((t, i) => ({x: teamList.indexOf(t), y: laneY[`${t}|${r.attr.id}`], team: t, last: i === r.visited.length - 1}))],
-            fi: featIdx(r.feature),
-        }));
-        return {teams: teamList, lines: lineList, features: featBlocks, plotH: height};
+        return {teams: teamList, lines: lineList, features: featBlocks, plotH: Math.max(y - FGAP, 120)};
     }, [attrs, model, featureOrder]);
 
     if (!lines.length) return <div className="fp-muted">Nothing to draw yet.</div>;
 
     const W = Math.max(w || 980, 680);
-    const padT = 54;
-    const padB = 18;
-    const labelW = Math.min(170, W * 0.18);
-    const H = padT + plotH + padB;
-    const nCols = teams.length + 1; // + Delivered terminal
-    const colX = i => labelW + ((i + 1) * (W - labelW - 26)) / nCols;
-    const xOf = p => (p.x === -1 ? labelW : colX(p.x));
-    const yOf = p => padT + p.y;
+    const padT = 20;
+    const labelArea = 92;                       // bottom: badges + angled team names
+    const labelW = Math.min(172, W * 0.19);
+    const H = padT + plotH + labelArea;
+    const axisY = padT + plotH + 8;
+    const nCols = teams.length + 1;             // + Delivered terminal
+    const colX = i => labelW + ((i + 1) * (W - labelW - 30)) / nCols;
+    const colIdx = t => teams.indexOf(t);
 
-    const pathFor = ln => {
-        let d = '';
-        const pts = ln.pts;
-        for (let i = 0; i < pts.length; i++) {
-            const x = xOf(pts[i]);
-            const y = yOf(pts[i]);
-            if (i === 0) { d = `M ${x} ${y}`; continue; }
-            const px = xOf(pts[i - 1]);
-            const py = yOf(pts[i - 1]);
-            const mx = (px + x) / 2;
-            d += ` C ${mx} ${py}, ${mx} ${y}, ${x} ${y}`;
-        }
-        if (ln.delivered) {
-            const lastPt = pts[pts.length - 1];
-            const x = xOf(lastPt);
-            const y = yOf(lastPt);
-            const dx = colX(teams.length);
-            d += ` C ${(x + dx) / 2} ${y}, ${(x + dx) / 2} ${y}, ${dx} ${y}`;
-        }
-        return d;
-    };
-
-    const stoppedAt = t => lines.filter(l => !l.delivered && l.pts[l.pts.length - 1].team === t);
+    const endX = ln => (ln.delivered ? colX(teams.length) : colX(colIdx(ln.visited[ln.visited.length - 1])));
+    const stoppedAt = t => lines.filter(l => !l.delivered && l.visited[l.visited.length - 1] === t);
     const isDim = ln => (hoverId && hoverId !== ln.attr.id) || (hoverFeature && hoverFeature !== ln.feature);
     const isHot = ln => hoverId === ln.attr.id || hoverFeature === ln.feature;
 
     return (
         <div className="fp-flow" ref={ref}>
             <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`}>
-                {/* team columns */}
-                {teams.map((t, i) => {
-                    const stopped = stoppedAt(t);
-                    const short = t.length > 20 ? `${t.slice(0, 19)}…` : t;
-                    return (
-                        <g key={t} className="fp-flow-node" onClick={() => onPick(`At ${t}`, stopped.map(l => l.attr))}>
-                            <line x1={colX(i)} x2={colX(i)} y1={padT - 8} y2={H - padB} className="fp-flow-guide" />
-                            <text x={colX(i)} y={padT - 26} textAnchor="start" className="fp-flow-name" transform={`rotate(-22 ${colX(i)} ${padT - 26})`}>{short}</text>
-                            {stopped.length > 0 && (
-                                <g>
-                                    <circle cx={colX(i)} cy={padT - 12} r={9} className="fp-flow-badge" />
-                                    <text x={colX(i)} y={padT - 12} textAnchor="middle" dominantBaseline="central" className="fp-flow-badge-n">{stopped.length}</text>
-                                </g>
-                            )}
-                            <title>{`${t} — ${stopped.length} attribute${stopped.length === 1 ? '' : 's'} here now`}</title>
-                        </g>
-                    );
-                })}
-                {/* delivered terminal */}
-                <g className="fp-flow-node" onClick={() => onPick('Delivered', lines.filter(l => l.delivered).map(l => l.attr))}>
-                    <line x1={colX(teams.length)} x2={colX(teams.length)} y1={padT - 8} y2={H - padB} className="fp-flow-guide done" />
-                    <text x={colX(teams.length)} y={padT - 26} textAnchor="start" className="fp-flow-name done" transform={`rotate(-22 ${colX(teams.length)} ${padT - 26})`}>✓ Delivered</text>
-                </g>
+                {/* soft canvas behind the tracks */}
+                <defs>
+                    <linearGradient id="fpFlowShade" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#f8fafd" />
+                        <stop offset="100%" stopColor="#eef2f8" />
+                    </linearGradient>
+                </defs>
+                <rect x={labelW - 6} y={padT - 12} width={W - labelW - 10} height={plotH + 26} rx={14} fill="url(#fpFlowShade)" />
 
-                {/* one line per attribute */}
+                {/* column guides */}
+                {teams.map((t, i) => (
+                    <line key={t} x1={colX(i)} x2={colX(i)} y1={padT - 6} y2={axisY} className="fp-flow-guide" />
+                ))}
+                <line x1={colX(teams.length)} x2={colX(teams.length)} y1={padT - 6} y2={axisY} className="fp-flow-guide done" />
+
+                {/* one track per attribute */}
                 {lines.map(ln => {
                     const c = featureColorOf(ln.feature);
-                    const endPt = ln.delivered ? {x: colX(teams.length), y: yOf(ln.pts[ln.pts.length - 1])} : {x: xOf(ln.pts[ln.pts.length - 1]), y: yOf(ln.pts[ln.pts.length - 1])};
+                    const yy = padT + ln.yStart;
+                    const ex = endX(ln);
                     return (
                         <g
                             key={ln.attr.id}
@@ -181,24 +135,55 @@ function AttributeFlow({model, featureColorOf, hoverFeature, onPick}) {
                             onMouseLeave={() => setHoverId(null)}
                             onClick={() => expandRecord(ln.attr.record)}
                         >
-                            <path d={pathFor(ln)} className="fp-flow-hit" />
-                            <path
-                                d={pathFor(ln)}
+                            <line x1={labelW} y1={yy} x2={ex} y2={yy} className="fp-flow-hit" />
+                            <line
+                                x1={labelW} y1={yy} x2={ex} y2={yy}
                                 className="fp-flow-path"
-                                style={{stroke: c, opacity: isDim(ln) ? 0.08 : isHot(ln) ? 1 : 0.62, strokeWidth: isHot(ln) ? 3.5 : 2.25}}
+                                style={{stroke: c, opacity: isDim(ln) ? 0.08 : isHot(ln) ? 1 : 0.6, strokeWidth: isHot(ln) ? 3.5 : 2.25}}
                             />
-                            <circle cx={endPt.x} cy={endPt.y} r={isHot(ln) ? 5.5 : 4} className={`fp-flow-end${ln.delivered ? ' done' : ''}`} style={{fill: ln.delivered ? '#16a34a' : c, opacity: isDim(ln) ? 0.15 : 1}} />
-                            <title>{`${ln.attr.businessName || ln.attr.attributeId} · ${ln.feature}\n${ln.delivered ? 'Delivered ✓' : `Now: ${stageLabel(ln.attr.currentStageName)} (${ln.pts[ln.pts.length - 1].team})`} · ${ln.attr.status}`}</title>
+                            {/* ticks: only the teams this attribute actually passed */}
+                            {ln.visited.slice(0, ln.delivered ? ln.visited.length : -1).map(t => (
+                                <circle key={t} cx={colX(colIdx(t))} cy={yy} r={isHot(ln) ? 3.2 : 2.6} className="fp-flow-tick" style={{fill: c, opacity: isDim(ln) ? 0.12 : 1}} />
+                            ))}
+                            <circle cx={ex} cy={yy} r={isHot(ln) ? 5.5 : 4} className="fp-flow-end" style={{fill: ln.delivered ? '#16a34a' : c, opacity: isDim(ln) ? 0.15 : 1}} />
+                            <title>{`${ln.attr.businessName || ln.attr.attributeId} · ${ln.feature}\n${ln.delivered ? 'Delivered ✓' : `Now: ${stageLabel(ln.attr.currentStageName)} (${ln.visited[ln.visited.length - 1]})`} · ${ln.attr.status}`}</title>
                         </g>
                     );
                 })}
 
-                {/* feature labels on the y-axis */}
+                {/* bottom axis: badges + team names */}
+                {teams.map((t, i) => {
+                    const stopped = stoppedAt(t);
+                    const short = t.length > 26 ? `${t.slice(0, 25)}…` : t;
+                    return (
+                        <g key={t} className="fp-flow-node" onClick={() => onPick(`At ${t}`, stopped.map(l => l.attr))}>
+                            {stopped.length > 0 && (
+                                <g>
+                                    <circle cx={colX(i)} cy={axisY + 12} r={9} className="fp-flow-badge" />
+                                    <text x={colX(i)} y={axisY + 12} textAnchor="middle" dominantBaseline="central" className="fp-flow-badge-n">{stopped.length}</text>
+                                </g>
+                            )}
+                            <text x={colX(i)} y={axisY + 34} textAnchor="end" className="fp-flow-name" transform={`rotate(-30 ${colX(i)} ${axisY + 34})`}>{short}</text>
+                            <title>{`${t} — ${stopped.length} attribute${stopped.length === 1 ? '' : 's'} here now`}</title>
+                        </g>
+                    );
+                })}
+                <g className="fp-flow-node" onClick={() => onPick('Delivered', lines.filter(l => l.delivered).map(l => l.attr))}>
+                    <text x={colX(teams.length)} y={axisY + 34} textAnchor="end" className="fp-flow-name done" transform={`rotate(-30 ${colX(teams.length)} ${axisY + 34})`}>✓ Delivered</text>
+                </g>
+
+                {/* feature labels on the y-axis (hover isolates the feature) */}
                 {features.map(f => (
-                    <g key={f.name} className="fp-flow-feat" onClick={() => onPick(f.name, attrs.filter(a => (a.featureName || 'Unassigned') === f.name))}>
+                    <g
+                        key={f.name}
+                        className="fp-flow-feat"
+                        onMouseEnter={() => setHoverFeature(f.name)}
+                        onMouseLeave={() => setHoverFeature(null)}
+                        onClick={() => onPick(f.name, attrs.filter(a => (a.featureName || 'Unassigned') === f.name))}
+                    >
                         <rect x={4} y={padT + f.top - 2} width={5} height={f.height + 4} rx={2.5} fill={featureColorOf(f.name)} />
                         <text x={15} y={padT + f.top + f.height / 2} dominantBaseline="middle" className="fp-flow-featname">
-                            {f.name.length > 20 ? `${f.name.slice(0, 19)}…` : f.name}
+                            {f.name.length > 21 ? `${f.name.slice(0, 20)}…` : f.name}
                         </text>
                         <title>{f.name}</title>
                     </g>
@@ -310,26 +295,14 @@ export default function Traceability({model}) {
         <div className="fp-mode">
             <div className="fp-section-title">Attribute flow — every line is one attribute travelling across teams</div>
             <div className="fp-panel fp-panel-roomy">
-                <div className="fp-legend fp-legend-top">
-                    {featureNames.map(f => (
-                        <span
-                            key={f}
-                            className={`clickable${hoverFeature && hoverFeature !== f ? ' fp-dim' : ''}`}
-                            onMouseEnter={() => setHoverFeature(f)}
-                            onMouseLeave={() => setHoverFeature(null)}
-                            onClick={() => drill.openAttrs(f, attrsOf(f))}
-                        >
-                            <i style={{background: featureColorOf(f)}} />{f}
-                        </span>
-                    ))}
-                </div>
                 <AttributeFlow
                     model={model}
                     featureColorOf={featureColorOf}
                     hoverFeature={hoverFeature}
+                    setHoverFeature={setHoverFeature}
                     onPick={(title, items) => drill.openAttrs(title, items)}
                 />
-                <div className="fp-panel-hint">Lines start on their feature (left) and trace the teams the attribute has passed through — a line <b>stops with a dot at the team it sits with today</b>; the badge on each column counts them. Delivered attributes run through to the ✓ terminal. Hover to follow one attribute or one feature; click a line to open its record, a column for the list.</div>
+                <div className="fp-panel-hint">Each line is one attribute on its own track, grouped by feature (left). A <b>tick</b> marks every team it has passed through — no tick means that team isn’t on its path — and the line <b>ends with a dot at the team it sits with today</b>; the badge under each column counts them. Delivered attributes run to the ✓ terminal. Hover a line or a feature label to isolate it; click a line to open its record, a column for the list.</div>
             </div>
 
             <div className="fp-section-title">Attribute traceability — where each attribute is on its journey</div>
