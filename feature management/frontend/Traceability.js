@@ -29,122 +29,180 @@ function useMeasuredWidth() {
     return [ref, w];
 }
 
-// ─── Multi-node Sankey: attributes flowing team → team along their paths ──────
-// x = teams (in pipeline order), node height & ribbon thickness = number of
-// attributes, ribbons colored by feature. Hover a feature (ribbon or legend)
-// to isolate its flow; click a ribbon/node for the list → records.
-function TeamFlow({model, featureColorOf, hoverFeature, setHoverFeature, onPick}) {
+// ─── Attribute flow: one line per attribute, features on the y-axis ───────────
+// Left edge: features stacked (each attribute starts on its feature's block).
+// Columns (x) = teams in pipeline order. Each line traces the teams the
+// attribute has ACTUALLY passed through and stops — with an end dot — at the
+// team where it sits today; delivered lines run through to the ✓ terminal.
+function AttributeFlow({model, featureColorOf, hoverFeature, onPick}) {
     const [ref, w] = useMeasuredWidth();
     const {attrs, featureOrder} = model;
+    const [hoverId, setHoverId] = useState(null);
 
-    const {teams, links} = useMemo(() => {
+    const LANE = 13;      // vertical spacing between attribute lines
+    const FGAP = 16;      // extra gap between feature blocks
+
+    const {teams, lines, features, plotH} = useMemo(() => {
         const teamOf = code => (model.stagesByCode[code] ? model.stagesByCode[code].responsibleTeamName : '');
-        const teamFirstCode = {};
-        const nodeItems = {};
-        const linkMap = new Map();
+        const featIdx = f => { const i = featureOrder.indexOf(f); return i < 0 ? 999 : i; };
 
-        attrs.forEach(a => {
-            const codes = pathStages(model, a).map(s => s.code);
-            const seq = [];
-            codes.forEach(c => {
-                const t = teamOf(c);
-                if (t && seq[seq.length - 1] !== t) seq.push(t);
-                if (t && !(t in teamFirstCode)) teamFirstCode[t] = CODE_ORDER.indexOf(c);
-                if (t && CODE_ORDER.indexOf(c) < teamFirstCode[t]) teamFirstCode[t] = CODE_ORDER.indexOf(c);
+        // Per attribute: the teams traversed so far (up to & incl. current stage)
+        const raws = attrs.map(a => {
+            const stages = pathStages(model, a);
+            const curIdx = stages.findIndex(s => s.code === a.currentCode);
+            const upto = a.isDelivered ? stages : stages.slice(0, Math.max(curIdx, 0) + 1);
+            const visited = [];
+            upto.forEach(s => {
+                const t = teamOf(s.code);
+                if (t && visited[visited.length - 1] !== t) visited.push(t);
             });
-            seq.forEach(t => { (nodeItems[t] = nodeItems[t] || []).push(a); });
-            const f = a.featureName || 'Unassigned';
-            for (let i = 0; i + 1 < seq.length; i++) {
-                const key = `${seq[i]}→${seq[i + 1]}|${f}`;
-                if (!linkMap.has(key)) linkMap.set(key, {from: seq[i], to: seq[i + 1], feature: f, items: []});
-                linkMap.get(key).items.push(a);
-            }
+            return {attr: a, feature: a.featureName || 'Unassigned', visited, delivered: a.isDelivered};
+        }).filter(r => r.visited.length);
+
+        // Column order: teams by their earliest stage in the canonical ladder
+        // (built from FULL paths so columns don't jump as work progresses).
+        const firstCode = {};
+        attrs.forEach(a => {
+            pathStages(model, a).forEach(s => {
+                const t = teamOf(s.code);
+                const i = CODE_ORDER.indexOf(s.code);
+                if (t && (!(t in firstCode) || i < firstCode[t])) firstCode[t] = i;
+            });
+        });
+        const teamList = Object.keys(firstCode).sort((a, b) => firstCode[a] - firstCode[b]);
+
+        // y start slots: features stacked in fixed order, attributes within
+        const featList = featureOrder.filter(f => raws.some(r => r.feature === f));
+        if (raws.some(r => r.feature === 'Unassigned')) featList.push('Unassigned');
+        let y = 0;
+        const featBlocks = [];
+        const sorted = [];
+        featList.forEach(f => {
+            const rows = raws.filter(r => r.feature === f).sort((a, b) => (a.attr.attributeId > b.attr.attributeId ? 1 : -1));
+            const top = y;
+            rows.forEach(r => { sorted.push({...r, yStart: y + LANE / 2}); y += LANE; });
+            featBlocks.push({name: f, top, height: rows.length * LANE});
+            y += FGAP;
+        });
+        const height = Math.max(y - FGAP, 120);
+
+        // Per-column lanes: lines through a team stack by start order (keeps
+        // features contiguous), bundle centred on the plot's midline.
+        const mid = height / 2;
+        const laneY = {};
+        teamList.forEach(t => {
+            const through = sorted.filter(r => r.visited.includes(t));
+            const top = mid - ((through.length - 1) * LANE) / 2;
+            through.forEach((r, i) => { laneY[`${t}|${r.attr.id}`] = top + i * LANE; });
         });
 
-        const teamList = Object.keys(nodeItems)
-            .sort((a, b) => (teamFirstCode[a] ?? 99) - (teamFirstCode[b] ?? 99))
-            .map(name => ({name, items: nodeItems[name]}));
-        const colOf = {};
-        teamList.forEach((t, i) => (colOf[t.name] = i));
-        const featIdx = f => { const i = featureOrder.indexOf(f); return i < 0 ? 999 : i; };
-        const linkList = [...linkMap.values()].sort(
-            (a, b) => colOf[a.from] - colOf[b.from] || colOf[a.to] - colOf[b.to] || featIdx(a.feature) - featIdx(b.feature),
-        );
-        return {teams: teamList, links: linkList};
+        const lineList = sorted.map(r => ({
+            ...r,
+            pts: [{x: -1, y: r.yStart}, ...r.visited.map((t, i) => ({x: teamList.indexOf(t), y: laneY[`${t}|${r.attr.id}`], team: t, last: i === r.visited.length - 1}))],
+            fi: featIdx(r.feature),
+        }));
+        return {teams: teamList, lines: lineList, features: featBlocks, plotH: height};
     }, [attrs, model, featureOrder]);
 
-    if (!teams.length) return <div className="fp-muted">Nothing to draw yet.</div>;
+    if (!lines.length) return <div className="fp-muted">Nothing to draw yet.</div>;
 
-    const W = Math.max(w || 960, 640);
-    const H = 400;
-    const padT = 46;
-    const padB = 16;
-    const plotH = H - padT - padB;
-    const nodeW = 14;
-    const colX = i => 20 + (i * (W - 40 - nodeW)) / Math.max(teams.length - 1, 1);
-    const colOf = {};
-    teams.forEach((t, i) => (colOf[t.name] = i));
+    const W = Math.max(w || 980, 680);
+    const padT = 54;
+    const padB = 18;
+    const labelW = Math.min(170, W * 0.18);
+    const H = padT + plotH + padB;
+    const nCols = teams.length + 1; // + Delivered terminal
+    const colX = i => labelW + ((i + 1) * (W - labelW - 26)) / nCols;
+    const xOf = p => (p.x === -1 ? labelW : colX(p.x));
+    const yOf = p => padT + p.y;
 
-    const maxVal = Math.max(...teams.map(t => t.items.length));
-    const scale = (plotH * 0.78) / maxVal;
+    const pathFor = ln => {
+        let d = '';
+        const pts = ln.pts;
+        for (let i = 0; i < pts.length; i++) {
+            const x = xOf(pts[i]);
+            const y = yOf(pts[i]);
+            if (i === 0) { d = `M ${x} ${y}`; continue; }
+            const px = xOf(pts[i - 1]);
+            const py = yOf(pts[i - 1]);
+            const mx = (px + x) / 2;
+            d += ` C ${mx} ${py}, ${mx} ${y}, ${x} ${y}`;
+        }
+        if (ln.delivered) {
+            const lastPt = pts[pts.length - 1];
+            const x = xOf(lastPt);
+            const y = yOf(lastPt);
+            const dx = colX(teams.length);
+            d += ` C ${(x + dx) / 2} ${y}, ${(x + dx) / 2} ${y}, ${dx} ${y}`;
+        }
+        return d;
+    };
 
-    // Node geometry: vertically centered; in/out flows stacked from the top,
-    // the smaller side centered within the node.
-    const node = {};
-    teams.forEach(t => {
-        const inLinks = links.filter(l => l.to === t.name);
-        const outLinks = links.filter(l => l.from === t.name);
-        const inV = inLinks.reduce((s, l) => s + l.items.length, 0);
-        const outV = outLinks.reduce((s, l) => s + l.items.length, 0);
-        const h = Math.max(t.items.length, 1) * scale;
-        const y = padT + (plotH - h) / 2;
-        node[t.name] = {y, h, inOff: y + (h - inV * scale) / 2, outOff: y + (h - outV * scale) / 2};
-    });
-
-    const ribbons = links.map(l => {
-        const s = node[l.from];
-        const t = node[l.to];
-        const lh = l.items.length * scale;
-        const sy = s.outOff; s.outOff += lh;
-        const ty = t.inOff; t.inOff += lh;
-        const x0 = colX(colOf[l.from]) + nodeW;
-        const x1 = colX(colOf[l.to]);
-        const mx = (x0 + x1) / 2;
-        const d = `M ${x0} ${sy} C ${mx} ${sy}, ${mx} ${ty}, ${x1} ${ty}`
-            + ` L ${x1} ${ty + lh} C ${mx} ${ty + lh}, ${mx} ${sy + lh}, ${x0} ${sy + lh} Z`;
-        return {...l, d};
-    });
-
-    const faded = f => hoverFeature && hoverFeature !== f;
+    const stoppedAt = t => lines.filter(l => !l.delivered && l.pts[l.pts.length - 1].team === t);
+    const isDim = ln => (hoverId && hoverId !== ln.attr.id) || (hoverFeature && hoverFeature !== ln.feature);
+    const isHot = ln => hoverId === ln.attr.id || hoverFeature === ln.feature;
 
     return (
         <div className="fp-flow" ref={ref}>
             <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`}>
-                {ribbons.map(r => (
-                    <path
-                        key={`${r.from}|${r.to}|${r.feature}`}
-                        d={r.d}
-                        className="fp-flow-link"
-                        style={{fill: featureColorOf(r.feature), opacity: hoverFeature === r.feature ? 0.78 : faded(r.feature) ? 0.08 : 0.42}}
-                        onMouseEnter={() => setHoverFeature(r.feature)}
-                        onMouseLeave={() => setHoverFeature(null)}
-                        onClick={() => onPick(`${r.feature}: ${r.from} → ${r.to}`, r.items)}
-                    >
-                        <title>{`${r.feature} · ${r.from} → ${r.to} · ${r.items.length} attribute${r.items.length === 1 ? '' : 's'}`}</title>
-                    </path>
-                ))}
+                {/* team columns */}
                 {teams.map((t, i) => {
-                    const n = node[t.name];
-                    const short = t.name.length > 22 ? `${t.name.slice(0, 21)}…` : t.name;
+                    const stopped = stoppedAt(t);
+                    const short = t.length > 20 ? `${t.slice(0, 19)}…` : t;
                     return (
-                        <g key={t.name} className="fp-flow-node" onClick={() => onPick(t.name, attrs.filter(a => a.assignedTeamName === t.name))}>
-                            <rect x={colX(i)} y={n.y} width={nodeW} height={n.h} rx={4} />
-                            <text x={colX(i) + nodeW / 2} y={n.y - 22} textAnchor="middle" className="fp-flow-name" transform={`rotate(-14 ${colX(i) + nodeW / 2} ${n.y - 22})`}>{short}</text>
-                            <text x={colX(i) + nodeW / 2} y={n.y - 8} textAnchor="middle" className="fp-flow-count">{t.items.length}</text>
-                            <title>{`${t.name} · ${t.items.length} attributes pass through`}</title>
+                        <g key={t} className="fp-flow-node" onClick={() => onPick(`At ${t}`, stopped.map(l => l.attr))}>
+                            <line x1={colX(i)} x2={colX(i)} y1={padT - 8} y2={H - padB} className="fp-flow-guide" />
+                            <text x={colX(i)} y={padT - 26} textAnchor="start" className="fp-flow-name" transform={`rotate(-22 ${colX(i)} ${padT - 26})`}>{short}</text>
+                            {stopped.length > 0 && (
+                                <g>
+                                    <circle cx={colX(i)} cy={padT - 12} r={9} className="fp-flow-badge" />
+                                    <text x={colX(i)} y={padT - 12} textAnchor="middle" dominantBaseline="central" className="fp-flow-badge-n">{stopped.length}</text>
+                                </g>
+                            )}
+                            <title>{`${t} — ${stopped.length} attribute${stopped.length === 1 ? '' : 's'} here now`}</title>
                         </g>
                     );
                 })}
+                {/* delivered terminal */}
+                <g className="fp-flow-node" onClick={() => onPick('Delivered', lines.filter(l => l.delivered).map(l => l.attr))}>
+                    <line x1={colX(teams.length)} x2={colX(teams.length)} y1={padT - 8} y2={H - padB} className="fp-flow-guide done" />
+                    <text x={colX(teams.length)} y={padT - 26} textAnchor="start" className="fp-flow-name done" transform={`rotate(-22 ${colX(teams.length)} ${padT - 26})`}>✓ Delivered</text>
+                </g>
+
+                {/* one line per attribute */}
+                {lines.map(ln => {
+                    const c = featureColorOf(ln.feature);
+                    const endPt = ln.delivered ? {x: colX(teams.length), y: yOf(ln.pts[ln.pts.length - 1])} : {x: xOf(ln.pts[ln.pts.length - 1]), y: yOf(ln.pts[ln.pts.length - 1])};
+                    return (
+                        <g
+                            key={ln.attr.id}
+                            className="fp-flow-line"
+                            onMouseEnter={() => setHoverId(ln.attr.id)}
+                            onMouseLeave={() => setHoverId(null)}
+                            onClick={() => expandRecord(ln.attr.record)}
+                        >
+                            <path d={pathFor(ln)} className="fp-flow-hit" />
+                            <path
+                                d={pathFor(ln)}
+                                className="fp-flow-path"
+                                style={{stroke: c, opacity: isDim(ln) ? 0.08 : isHot(ln) ? 1 : 0.62, strokeWidth: isHot(ln) ? 3.5 : 2.25}}
+                            />
+                            <circle cx={endPt.x} cy={endPt.y} r={isHot(ln) ? 5.5 : 4} className={`fp-flow-end${ln.delivered ? ' done' : ''}`} style={{fill: ln.delivered ? '#16a34a' : c, opacity: isDim(ln) ? 0.15 : 1}} />
+                            <title>{`${ln.attr.businessName || ln.attr.attributeId} · ${ln.feature}\n${ln.delivered ? 'Delivered ✓' : `Now: ${stageLabel(ln.attr.currentStageName)} (${ln.pts[ln.pts.length - 1].team})`} · ${ln.attr.status}`}</title>
+                        </g>
+                    );
+                })}
+
+                {/* feature labels on the y-axis */}
+                {features.map(f => (
+                    <g key={f.name} className="fp-flow-feat" onClick={() => onPick(f.name, attrs.filter(a => (a.featureName || 'Unassigned') === f.name))}>
+                        <rect x={4} y={padT + f.top - 2} width={5} height={f.height + 4} rx={2.5} fill={featureColorOf(f.name)} />
+                        <text x={15} y={padT + f.top + f.height / 2} dominantBaseline="middle" className="fp-flow-featname">
+                            {f.name.length > 20 ? `${f.name.slice(0, 19)}…` : f.name}
+                        </text>
+                        <title>{f.name}</title>
+                    </g>
+                ))}
             </svg>
         </div>
     );
@@ -250,7 +308,7 @@ export default function Traceability({model}) {
 
     return (
         <div className="fp-mode">
-            <div className="fp-section-title">Flow of work — how attributes travel across teams</div>
+            <div className="fp-section-title">Attribute flow — every line is one attribute travelling across teams</div>
             <div className="fp-panel fp-panel-roomy">
                 <div className="fp-legend fp-legend-top">
                     {featureNames.map(f => (
@@ -265,14 +323,13 @@ export default function Traceability({model}) {
                         </span>
                     ))}
                 </div>
-                <TeamFlow
+                <AttributeFlow
                     model={model}
                     featureColorOf={featureColorOf}
                     hoverFeature={hoverFeature}
-                    setHoverFeature={setHoverFeature}
                     onPick={(title, items) => drill.openAttrs(title, items)}
                 />
-                <div className="fp-panel-hint">Each ribbon is a feature’s attributes handed from one team to the next along their delivery path — thickness = number of attributes. Hover a feature to isolate its flow; click a ribbon or team for the list, then any row to open the record.</div>
+                <div className="fp-panel-hint">Lines start on their feature (left) and trace the teams the attribute has passed through — a line <b>stops with a dot at the team it sits with today</b>; the badge on each column counts them. Delivered attributes run through to the ✓ terminal. Hover to follow one attribute or one feature; click a line to open its record, a column for the list.</div>
             </div>
 
             <div className="fp-section-title">Attribute traceability — where each attribute is on its journey</div>
