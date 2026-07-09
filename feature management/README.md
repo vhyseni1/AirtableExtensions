@@ -12,11 +12,12 @@ A single Airtable Blocks SDK extension (UBS-themed) with a four-way view toggle:
   Approved·advance). Dragging a card performs the transition: dropping into **In review** promotes,
   into **Approved·advance** accepts and advances the stage, and dragging a review card back prompts
   a return — each handoff writes a **Handshake** audit row. Blocked/return drops prompt for a reason.
-- **Traceability** — **work by team** as stacked columns (x = team, y = attribute count, segments
-  = features, clickable to drill) plus **attribute traceability**: pick a feature and see all its
-  attributes with a mini progress track showing where each sits on its own path; expand any row
-  for the full named-step journey (start → finish, gateway/sourcing branches included) and the
-  handoff log (what · who · when, returns highlighted) built from Handshakes.
+- **Traceability** — a **multi-node Sankey**: teams as columns in pipeline order, ribbons =
+  attributes flowing team → team along their delivery paths (thickness = count, colored by
+  feature; hover isolates a feature's flow, clicks drill). Below, **attribute traceability**:
+  per feature, every attribute as a **process-arrow strip** (its own path start → finish,
+  solid = done, highlighted = current); expand a row for the handoff log
+  (what · who · when, returns highlighted) built from Handshakes.
 
 The extension holds **no data** — it binds to the live base at runtime (`useBase`/`useRecords`)
 and joins/aggregates client-side. The base is small (~hundreds of rows), so no native
