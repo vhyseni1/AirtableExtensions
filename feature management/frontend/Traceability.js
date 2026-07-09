@@ -109,13 +109,7 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
         <div className="fp-flow" ref={ref}>
             <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`}>
                 {/* soft canvas behind the tracks */}
-                <defs>
-                    <linearGradient id="fpFlowShade" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#f8fafd" />
-                        <stop offset="100%" stopColor="#eef2f8" />
-                    </linearGradient>
-                </defs>
-                <rect x={labelW - 6} y={padT - 12} width={W - labelW - 10} height={plotH + 26} rx={14} fill="url(#fpFlowShade)" />
+                <rect x={labelW - 6} y={padT - 8} width={W - labelW - 10} height={plotH + 22} rx={14} className="fp-flow-canvas" />
 
                 {/* column guides */}
                 {teams.map((t, i) => (
@@ -128,8 +122,8 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                     const n = stoppedAt(t).length;
                     return (
                         <g key={`clamp-${t}`} className="fp-flow-node" onClick={() => onPick(`At ${t}`, stoppedAt(t).map(l => l.attr))}>
-                            <rect x={colX(i) - 15} y={12} width={30} height={24} rx={12} className={`fp-flow-clamp${n ? '' : ' empty'}`} />
-                            <text x={colX(i)} y={24} textAnchor="middle" dominantBaseline="central" className={`fp-flow-clamp-n${n ? '' : ' empty'}`}>{n}</text>
+                            <rect x={colX(i) - 17} y={10} width={34} height={28} rx={14} className={`fp-flow-clamp${n ? '' : ' empty'}`} />
+                            <text x={colX(i)} y={25} textAnchor="middle" className={`fp-flow-clamp-n${n ? '' : ' empty'}`}>{n}</text>
                             <title>{`${t} — ${n} attribute${n === 1 ? '' : 's'} here now`}</title>
                         </g>
                     );
@@ -138,8 +132,8 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                     const n = lines.filter(l => l.delivered).length;
                     return (
                         <g className="fp-flow-node" onClick={() => onPick('Delivered', lines.filter(l => l.delivered).map(l => l.attr))}>
-                            <rect x={colX(teams.length) - 15} y={12} width={30} height={24} rx={12} className={`fp-flow-clamp done${n ? '' : ' empty'}`} />
-                            <text x={colX(teams.length)} y={24} textAnchor="middle" dominantBaseline="central" className="fp-flow-clamp-n done">{n}</text>
+                            <rect x={colX(teams.length) - 17} y={10} width={34} height={28} rx={14} className={`fp-flow-clamp done${n ? '' : ' empty'}`} />
+                            <text x={colX(teams.length)} y={25} textAnchor="middle" className="fp-flow-clamp-n done">{n}</text>
                             <title>{`Delivered — ${n}`}</title>
                         </g>
                     );
