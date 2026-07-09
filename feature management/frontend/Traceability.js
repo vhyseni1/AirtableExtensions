@@ -90,8 +90,8 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
     if (!lines.length) return <div className="fp-muted">Nothing to draw yet.</div>;
 
     const W = Math.max(w || 980, 680);
-    const padT = 20;
-    const labelArea = 96;                       // bottom: badges + wrapped team names
+    const padT = 48;                            // top: team clamp nodes
+    const labelArea = 92;                       // bottom: wrapped team names
     const labelW = Math.min(172, W * 0.19);
     const H = padT + plotH + labelArea;
     const axisY = padT + plotH + 8;
@@ -119,9 +119,31 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
 
                 {/* column guides */}
                 {teams.map((t, i) => (
-                    <line key={t} x1={colX(i)} x2={colX(i)} y1={padT - 6} y2={axisY} className="fp-flow-guide" />
+                    <line key={t} x1={colX(i)} x2={colX(i)} y1={padT - 4} y2={axisY} className="fp-flow-guide" />
                 ))}
-                <line x1={colX(teams.length)} x2={colX(teams.length)} y1={padT - 6} y2={axisY} className="fp-flow-guide done" />
+                <line x1={colX(teams.length)} x2={colX(teams.length)} y1={padT - 4} y2={axisY} className="fp-flow-guide done" />
+
+                {/* team clamp nodes (count = attributes sitting here now) */}
+                {teams.map((t, i) => {
+                    const n = stoppedAt(t).length;
+                    return (
+                        <g key={`clamp-${t}`} className="fp-flow-node" onClick={() => onPick(`At ${t}`, stoppedAt(t).map(l => l.attr))}>
+                            <rect x={colX(i) - 15} y={12} width={30} height={24} rx={12} className={`fp-flow-clamp${n ? '' : ' empty'}`} />
+                            <text x={colX(i)} y={24} textAnchor="middle" dominantBaseline="central" className={`fp-flow-clamp-n${n ? '' : ' empty'}`}>{n}</text>
+                            <title>{`${t} — ${n} attribute${n === 1 ? '' : 's'} here now`}</title>
+                        </g>
+                    );
+                })}
+                {(() => {
+                    const n = lines.filter(l => l.delivered).length;
+                    return (
+                        <g className="fp-flow-node" onClick={() => onPick('Delivered', lines.filter(l => l.delivered).map(l => l.attr))}>
+                            <rect x={colX(teams.length) - 15} y={12} width={30} height={24} rx={12} className={`fp-flow-clamp done${n ? '' : ' empty'}`} />
+                            <text x={colX(teams.length)} y={24} textAnchor="middle" dominantBaseline="central" className="fp-flow-clamp-n done">{n}</text>
+                            <title>{`Delivered — ${n}`}</title>
+                        </g>
+                    );
+                })()}
 
                 {/* one track per attribute */}
                 {lines.map(ln => {
@@ -152,26 +174,16 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                     );
                 })}
 
-                {/* bottom axis: badges + horizontal wrapped team names */}
-                {teams.map((t, i) => {
-                    const stopped = stoppedAt(t);
-                    return (
-                        <g key={t} className="fp-flow-node" onClick={() => onPick(`At ${t}`, stopped.map(l => l.attr))}>
-                            {stopped.length > 0 && (
-                                <g>
-                                    <circle cx={colX(i)} cy={axisY + 12} r={9} className="fp-flow-badge" />
-                                    <text x={colX(i)} y={axisY + 12} textAnchor="middle" dominantBaseline="central" className="fp-flow-badge-n">{stopped.length}</text>
-                                </g>
-                            )}
-                            <foreignObject x={colX(i) - colStep / 2 + 3} y={axisY + 24} width={colStep - 6} height={labelArea - 28}>
-                                <div xmlns="http://www.w3.org/1999/xhtml" className="fp-flow-label" title={t}>{t}</div>
-                            </foreignObject>
-                            <title>{`${t} — ${stopped.length} attribute${stopped.length === 1 ? '' : 's'} here now`}</title>
-                        </g>
-                    );
-                })}
+                {/* bottom axis: horizontal wrapped team names */}
+                {teams.map((t, i) => (
+                    <g key={t} className="fp-flow-node" onClick={() => onPick(`At ${t}`, stoppedAt(t).map(l => l.attr))}>
+                        <foreignObject x={colX(i) - colStep / 2 + 3} y={axisY + 6} width={colStep - 6} height={labelArea - 12}>
+                            <div xmlns="http://www.w3.org/1999/xhtml" className="fp-flow-label" title={t}>{t}</div>
+                        </foreignObject>
+                    </g>
+                ))}
                 <g className="fp-flow-node" onClick={() => onPick('Delivered', lines.filter(l => l.delivered).map(l => l.attr))}>
-                    <foreignObject x={colX(teams.length) - colStep / 2 + 3} y={axisY + 24} width={colStep - 6} height={labelArea - 28}>
+                    <foreignObject x={colX(teams.length) - colStep / 2 + 3} y={axisY + 6} width={colStep - 6} height={labelArea - 12}>
                         <div xmlns="http://www.w3.org/1999/xhtml" className="fp-flow-label done" title="Delivered">✓ Delivered</div>
                     </foreignObject>
                 </g>
@@ -239,37 +251,56 @@ function JourneyLog({model, attr}) {
     );
 }
 
-// ─── The pointy strip: an attribute's path as process arrows ──────────────────
+// ─── One attribute: a lean line collapsed; pointy journey + log expanded ──────
 function AttributeRow({model, attr, expanded, onToggle}) {
     const stages = pathStages(model, attr);
     const curIdx = stages.findIndex(s => s.code === attr.currentCode);
+    const done = attr.isDelivered ? stages.length : Math.max(curIdx, 0);
 
     return (
         <li className={`fp-arow${expanded ? ' open' : ''}`}>
-            <div className="fp-arow-head clickable" onClick={onToggle} title={expanded ? 'Collapse' : 'Show journey log'}>
+            <div className="fp-arow-head clickable" onClick={onToggle} title={expanded ? 'Collapse' : 'Show full journey'}>
                 <span className="fp-arow-chev" aria-hidden>{expanded ? '▾' : '▸'}</span>
                 <span className="fp-arow-name" onClick={e => { e.stopPropagation(); expandRecord(attr.record); }} title="Open record">
                     {attr.businessName || attr.attributeId}
                 </span>
-                {attr.isDelivered ? <span className="fp-arow-done">✓ Delivered</span> : <StatusChip status={attr.status} />}
+                <span className="fp-mini" role="img" aria-label={`${done} of ${stages.length} steps done`}>
+                    {stages.map((s, i) => {
+                        const state = attr.isDelivered || i < curIdx ? 'done' : i === curIdx ? 'current' : 'todo';
+                        return (
+                            <i
+                                key={s.code}
+                                className={`fp-mini-seg ${state}`}
+                                style={state === 'todo' ? undefined : {background: PHASE_COLORS[s.phaseGroup] || '#94a3b8'}}
+                                title={`${s.name}${state === 'current' ? ' — current' : ''}`}
+                            />
+                        );
+                    })}
+                </span>
+                <span className="fp-arow-pos">{attr.isDelivered ? 'Delivered' : stageLabel(attr.currentStageName)}</span>
+                {attr.isDelivered ? <span className="fp-arow-done">✓</span> : <StatusChip status={attr.status} />}
             </div>
-            <div className="fp-chevs" role="img" aria-label={`Journey: step ${Math.max(curIdx, 0) + 1} of ${stages.length}`}>
-                {stages.map((s, i) => {
-                    const state = attr.isDelivered || i < curIdx ? 'done' : i === curIdx ? 'current' : 'todo';
-                    const c = PHASE_COLORS[s.phaseGroup] || '#94a3b8';
-                    return (
-                        <div
-                            key={s.code}
-                            className={`fp-chevron ${state}`}
-                            style={state === 'todo' ? undefined : {background: c}}
-                            title={`${s.name} · ${s.phaseGroup} phase${state === 'current' ? ' — current' : state === 'done' ? ' — done' : ''}`}
-                        >
-                            <span>{stageLabel(s.name)}</span>
-                        </div>
-                    );
-                })}
-            </div>
-            {expanded && <JourneyLog model={model} attr={attr} />}
+            {expanded && (
+                <div className="fp-arow-body">
+                    <div className="fp-chevs" role="img" aria-label={`Journey: step ${Math.max(curIdx, 0) + 1} of ${stages.length}`}>
+                        {stages.map((s, i) => {
+                            const state = attr.isDelivered || i < curIdx ? 'done' : i === curIdx ? 'current' : 'todo';
+                            const c = PHASE_COLORS[s.phaseGroup] || '#94a3b8';
+                            return (
+                                <div
+                                    key={s.code}
+                                    className={`fp-chevron ${state}`}
+                                    style={state === 'todo' ? undefined : {background: c}}
+                                    title={`${s.name} · ${s.phaseGroup} phase${state === 'current' ? ' — current' : state === 'done' ? ' — done' : ''}`}
+                                >
+                                    <span>{stageLabel(s.name)}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <JourneyLog model={model} attr={attr} />
+                </div>
+            )}
         </li>
     );
 }
