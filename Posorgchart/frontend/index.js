@@ -6,8 +6,7 @@ import {
     expandRecord,
     colorUtils,
 } from '@airtable/blocks/interface/ui';
-import {createContext, useContext, useState, useRef, useEffect, useMemo, useCallback} from 'react';
-import html2canvas from 'html2canvas';
+import {createContext, useContext, useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback} from 'react';
 import {jsPDF} from 'jspdf';
 import './style.css';
 
@@ -21,7 +20,7 @@ import './style.css';
 //                       field-name string to use a specific field.
 //   jobTitleField     : job title shown on the card (null to hide).
 //   departmentField   : department / org shown on the card (null to hide).
-//   statusField       : optional colored accent + legend (null to disable).
+//   statusField       : optional status shown as a colored chip (null to disable).
 //   parentLinkField   : field pointing to a person's manager. May be a
 //                       linked-record field OR a lookup.
 //   employeeIdField   : OPTIONAL. Each person's unique id (e.g. position/worker
@@ -56,10 +55,33 @@ const FIELDS = {
     primaryNameSource: '[E] First Name, Last Name',
     jobTitleField: 'REF Title [F]',
     departmentField: '[F] Supervisory Organization 🔗',
-    statusField: null,
+    // Status shown as a colored chip AND offered as a filter. It's a single-select
+    // ("pills"), so the chip inherits each option's native Airtable colour.
+    statusField: '[F] Decision Status for Org',
+    // Position status, used only to detect "New Position" seats (to hide their
+    // location). Not shown as the chip anymore.
+    newPositionField: '[T] Position Status ⚙️',
+    // Location shown under the team. Hidden for "New position" seats (no
+    // incumbent / location yet).
+    locationField: '[F] Location',
     parentLinkField: 'Future Manager',
+    // ─── Core parent→child relationship ──────────────────────────────────────
+    // Every record has a "Unique ID"; its parent is the record whose Unique ID
+    // equals this record's "[F] Manager ID". This works for new positions too
+    // (they have a Unique ID even when they have no position id).
+    uniqueIdField: 'Unique ID',
+    managerIdField: '[F] Manager ID 🔎',
+    // ─── Legacy / fallback matching (used only if the Unique-ID join misses) ──
     employeeIdField: '[E] Employee ID',
-    managerIdField: '[F] Manager ID',
+    // Position-based linking so a VACANT manager (no incumbent, so no name or
+    // employee id to match) still connects its branch to the level above.
+    //   positionIdField        : each record's OWN position id.
+    //   managerPositionIdField : the manager's position id on each record.
+    // Both tolerate values like "50692845 - Global Head … (Name)" — the leading
+    // number is used. If positionIdField doesn't resolve, the record's primary
+    // field is parsed for a leading id as a fallback.
+    positionIdField: '[F] Position ID',
+    managerPositionIdField: '[F] Manager ID 🔎',
     // Field powering the "Organization" checkbox filter. Falls back to the
     // department field if this name doesn't resolve.
     orgFilterField: 'Future Organization',
@@ -113,9 +135,66 @@ function normName(s) {
     return String(s == null ? '' : s).normalize('NFKC').trim().toLowerCase();
 }
 
+// Map a raw "[T] Position Status ⚙️" value to a clean display label: drops the
+// verbose suffixes (e.g. "Employee mapped - position …") and fixes casing.
+// Matches on distinctive substrings so it's tolerant of leading codes/icons or
+// trailing detail. Unknown values pass through unchanged.
+function normalizeStatus(raw) {
+    const s = (raw || '').trim();
+    if (!s) return '';
+    const low = s.toLowerCase();
+    if (low.includes('new position'))   return 'New position';
+    if (low.includes('out of scope'))   return 'Out of scope';
+    if (low.includes('at risk'))        return 'Employee at risk';
+    if (low.includes('mapped'))         return 'Employee mapped';
+    if (low.includes('decision pending') || low.includes('pending')) return 'Decision pending';
+    return s;
+}
+const STATUS_NEW_POSITION = 'New position';
+
+// Light chip colours per decision status (matched by substring so wording can
+// vary). Anything unrecognised — including "Unknown" — falls back to grey.
+const DECISION_STATUS_STYLES = [
+    [/out of scope/i,  {bg: '#eef2f6', fg: '#475569'}],   // grey
+    [/at risk/i,       {bg: '#fee2e2', fg: '#b91c1c'}],   // red
+    [/new position/i,  {bg: '#dbeafe', fg: '#1d4ed8'}],   // blue
+    [/in selection/i,  {bg: '#e0f2fe', fg: '#0369a1'}],   // lighter blue
+    [/recruit/i,       {bg: '#bbf7d0', fg: '#166534'}],   // darker green
+    [/mapp/i,          {bg: '#dcfce7', fg: '#15803d'}],   // green
+    [/unknown/i,       {bg: '#eef2f6', fg: '#475569'}],   // grey
+];
+function decisionStatusStyle(s) {
+    const v = String(s == null ? '' : s);
+    if (!v.trim()) return null;
+    for (const [re, st] of DECISION_STATUS_STYLES) if (re.test(v)) return st;
+    return {bg: '#eef2f6', fg: '#475569'};   // default grey
+}
+
 // Normalize a hierarchical short code for prefix matching (e.g. "dsg a" → "DSGA").
 function normCode(s) {
     return String(s == null ? '' : s).normalize('NFKC').replace(/\s+/g, '').toUpperCase();
+}
+
+// Pull a position id out of a value that may be a bare id ("50692845") or a
+// formatted label ("50692845 - Global Head … (Name)"): the first run of 3+
+// digits, else the whole trimmed/normalized token.
+function parsePositionId(s) {
+    const str = String(s == null ? '' : s);
+    const m = str.match(/\d{3,}/);
+    if (m) return m[0];
+    const t = str.normalize('NFKC').trim().toLowerCase();
+    return t;
+}
+
+// Pull the position TITLE out of a manager reference ("50692845 - Global Head …
+// (Garret Nolan)" → "global head …"). New positions have no id, so this is how
+// a child links to a new-position manager. Strips a leading id/dash and a
+// trailing "(incumbent)".
+function parseManagerTitle(s) {
+    let t = String(s == null ? '' : s).normalize('NFKC');
+    t = t.replace(/^[\s\d–-]+/, '');        // leading id, dashes, spaces
+    t = t.replace(/\s*\([^)]*\)\s*$/, '');   // trailing "(incumbent)"
+    return t.trim().toLowerCase();
 }
 
 // Emails of every collaborator in a multipleCollaborators cell (lowercased).
@@ -180,8 +259,19 @@ function extractParentRef(record, parentField) {
 
 function buildOrg(records, cfg) {
     const {parentField, nameField, jobTitleField, departmentField, statusField,
-        employeeIdField, managerIdField, orgFilterField, leaderEmailField,
+        newPositionField, locationField, uniqueIdField, employeeIdField, managerIdField,
+        positionIdField, managerPositionIdField, orgFilterField, leaderEmailField,
         shortCodeField, visibleLeadersField, employeeDecisionField} = cfg;
+
+    // Each record's own position id (works even for vacant seats). Prefer the
+    // dedicated field; fall back to a leading id parsed from the primary field.
+    const positionIdOf = r => {
+        const raw = positionIdField ? readText(r, positionIdField) : '';
+        if (raw) return parsePositionId(raw);
+        return parsePositionId(r.name);
+    };
+    const managerPositionIdOf = r =>
+        managerPositionIdField ? parsePositionId(readText(r, managerPositionIdField)) : '';
 
     // Map each decision value to its native Airtable colour (so the chip matches
     // the single-select swatches exactly). Keyed by normalised choice name.
@@ -199,9 +289,25 @@ function buildOrg(records, cfg) {
         });
     }
 
+    // Status chip colours: an explicit light palette per decision status.
+    const statusStyleFor = decisionStatusStyle;
+
     const nodeMap = {};
+    const idByUniqueId = {};     // Unique ID value → record id (the CORE join)
     const idByName = {};
-    const idByEmployeeId = {}; // employee-id value → record id
+    const idByEmployeeId = {};  // employee-id value → record id
+    const idByPositionId = {};  // position-id value → record id (survives vacancy)
+    const idByTitle = {};       // position title → record id (for new positions w/o id)
+    const titleCount = {};      // title → how many records share it (only unique titles link)
+
+    // Index a Unique ID under both its normalized text and its leading-number
+    // form, so a "[F] Manager ID" like "50692845 - Title (Name)" still matches a
+    // Unique ID of "50692845".
+    const addUniqueKey = (val, recId) => {
+        for (const k of [normName(val), parsePositionId(val)]) {
+            if (k && !(k in idByUniqueId)) idByUniqueId[k] = recId;
+        }
+    };
 
     records.forEach(r => {
         const incumbent = incumbentName(r, nameField);
@@ -219,6 +325,10 @@ function buildOrg(records, cfg) {
             department: readText(r, departmentField),
             org: readText(r, orgFilterField),
             status: readText(r, statusField),
+            statusStyle: statusStyleFor(readText(r, statusField)),
+            // New-position seats hide their location (no incumbent/location yet).
+            isNewPosition: normalizeStatus(readText(r, newPositionField)) === STATUS_NEW_POSITION,
+            location: readText(r, locationField),
             email: normName(readText(r, leaderEmailField)),
             shortCode: normCode(readText(r, shortCodeField)),
             visibleLeaders: readCollaboratorEmails(r, visibleLeadersField),
@@ -234,17 +344,52 @@ function buildOrg(records, cfg) {
                 if (k && !(k in idByName)) idByName[k] = r.id;
             });
         }
+        if (uniqueIdField) addUniqueKey(readText(r, uniqueIdField), r.id);
         if (employeeIdField) {
             const eid = normName(readText(r, employeeIdField));
             if (eid && !(eid in idByEmployeeId)) idByEmployeeId[eid] = r.id;
         }
+        const pid = positionIdOf(r);
+        if (pid && !(pid in idByPositionId)) idByPositionId[pid] = r.id;
+        // Index by position title so a child can find a manager that has no id
+        // (a "New Position"). Only UNIQUE titles are usable, to avoid mis-links.
+        const tkey = normName(jobTitle);
+        if (tkey) {
+            titleCount[tkey] = (titleCount[tkey] || 0) + 1;
+            if (!(tkey in idByTitle)) idByTitle[tkey] = r.id;
+        }
     });
 
-    // Prefer a true id over name matching (names are ambiguous for duplicates):
-    //   1. explicit manager-id → employee-id mapping (most reliable),
-    //   2. linked-record id from the manager lookup/link,
-    //   3. name match as a last resort.
+    // Match a manager TITLE to a unique position (used for managers that have no
+    // id — i.e. "New Position" seats).
+    const titleParent = (rawTitle, selfId) => {
+        const k = parseManagerTitle(rawTitle);
+        if (k && titleCount[k] === 1 && idByTitle[k] && idByTitle[k] !== selfId) return idByTitle[k];
+        return null;
+    };
+
+    // Resolution order (first match wins):
+    //   CORE. "[F] Manager ID" → a record's "Unique ID" (works for new records,
+    //         which have a Unique ID even with no position id),
+    //   then legacy fallbacks if the core join can't resolve:
+    //   a. manager POSITION id → position id (vacant-but-existing seats),
+    //   b. manager TITLE → unique position title (new positions w/o id),
+    //   c. employee-id mapping,
+    //   d. linked-record id from the manager lookup/link,
+    //   e. name (or title) text match.
     const resolveParentId = r => {
+        if (uniqueIdField && managerIdField) {
+            const mgr = readText(r, managerIdField);
+            for (const k of [normName(mgr), parsePositionId(mgr)]) {
+                if (k && idByUniqueId[k] && idByUniqueId[k] !== r.id) return idByUniqueId[k];
+            }
+        }
+        const mpid = managerPositionIdOf(r);
+        if (mpid && idByPositionId[mpid] && idByPositionId[mpid] !== r.id) return idByPositionId[mpid];
+        if (managerPositionIdField) {
+            const byTitle = titleParent(readText(r, managerPositionIdField), r.id);
+            if (byTitle) return byTitle;
+        }
         if (managerIdField) {
             const mid = normName(readText(r, managerIdField));
             if (mid && idByEmployeeId[mid] && idByEmployeeId[mid] !== r.id) return idByEmployeeId[mid];
@@ -254,8 +399,9 @@ function buildOrg(records, cfg) {
             if (nodeMap[id] && id !== r.id) return id;
         }
         for (const nm of names) {
-            const id = idByName[normName(nm)];
-            if (id && id !== r.id) return id;
+            const k = normName(nm);
+            if (idByName[k] && idByName[k] !== r.id) return idByName[k];
+            if (titleCount[k] === 1 && idByTitle[k] && idByTitle[k] !== r.id) return idByTitle[k];
         }
         return null;
     };
@@ -344,56 +490,10 @@ function initials(name) {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-const STATUS_PALETTE = [
-    '#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6',
-    '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#14b8a6',
-];
-
-function buildStatusColors(nodeMap) {
-    const vals = new Set();
-    Object.values(nodeMap).forEach(n => { if (n.status) vals.add(n.status); });
-    const m = {};
-    [...vals].sort().forEach((v, i) => { m[v] = STATUS_PALETTE[i % STATUS_PALETTE.length]; });
-    return m;
-}
-
-// ─── Export (PNG / PDF / paginated PDF) ──────────────────────────────────────
-
-async function renderChartCanvas(el, {scale = 2} = {}) {
-    el.classList.add('exporting');
-    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    try {
-        return await html2canvas(el, {
-            scale,
-            backgroundColor: '#ffffff',
-            useCORS: true,
-            logging: false,
-            width: el.scrollWidth,
-            height: el.scrollHeight,
-            windowWidth: el.scrollWidth,
-            windowHeight: el.scrollHeight,
-        });
-    } finally {
-        el.classList.remove('exporting');
-    }
-}
-
-function downloadDataUrl(dataUrl, filename) {
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-}
+// ─── Export (vector PDF) ─────────────────────────────────────────────────────
 
 function timestamp() {
     return new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-}
-
-async function exportPNG(boardEl) {
-    const canvas = await renderChartCanvas(boardEl, {scale: 3});
-    downloadDataUrl(canvas.toDataURL('image/png'), `org-chart-${timestamp()}.png`);
 }
 
 // ── Vector PDF ────────────────────────────────────────────────────────────
@@ -575,42 +675,23 @@ function exportVectorPDF(sections) {
     pdf.save(`org-chart-${timestamp()}.pdf`);
 }
 
-function ExportMenu({boardRef, getData}) {
-    const [open, setOpen] = useState(false);
+function ExportButton({getData}) {
     const [busy, setBusy] = useState(false);
-    const ref = useRef(null);
-
-    useEffect(() => {
-        if (!open) return;
-        const onDoc = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-        document.addEventListener('mousedown', onDoc);
-        return () => document.removeEventListener('mousedown', onDoc);
-    }, [open]);
-
-    const run = useCallback(async fn => {
+    const run = useCallback(async () => {
         setBusy(true);
-        setOpen(false);
         try {
-            await fn();
+            await exportVectorPDF(getData());
         } catch (err) {
             window.alert('Export failed: ' + (err && err.message ? err.message : err));
         } finally {
             setBusy(false);
         }
-    }, []);
+    }, [getData]);
 
     return (
-        <div className="export-wrap" ref={ref}>
-            <button className="tb-btn" onClick={() => setOpen(o => !o)} disabled={busy} title="Export">
-                {busy ? 'Exporting…' : 'Export ▾'}
-            </button>
-            {open && (
-                <div className="menu">
-                    <button onClick={() => run(() => exportVectorPDF(getData()))}>PDF (crisp vector)</button>
-                    <button onClick={() => run(() => boardRef.current && exportPNG(boardRef.current))}>PNG image</button>
-                </div>
-            )}
-        </div>
+        <button className="tb-btn" onClick={run} disabled={busy} title="Export the chart as a PDF">
+            {busy ? 'Exporting…' : 'Export PDF'}
+        </button>
     );
 }
 
@@ -755,21 +836,28 @@ function SearchBox({nodeMap, onJump}) {
 // avatar toggle, which is prop-drilled). Always false during export.
 const DecisionContext = createContext(false);
 
-function PersonCard({node, variant, directs, total, statusColor, showAvatar, onDrill, onOpen}) {
+function PersonCard({node, variant, directs, total, showAvatar, expanded, dimmed, onDrill, onOpen}) {
     const showDecision = useContext(DecisionContext);
     const drillable = variant === 'report' && directs > 0;
     const cls = ['person-card', `person-card-${variant}`, 'clickable'];
     if (!showAvatar) cls.push('no-avatar');
     if (node.vacant) cls.push('vacant');
+    if (expanded) cls.push('expanded');
+    if (dimmed) cls.push('dimmed');
     // Reports drill into their own subtree; the focus card opens the record.
     const onClick = variant === 'report' ? () => onDrill(node.id) : () => onOpen(node);
-    const title = variant === 'report'
-        ? `Drill into ${node.displayName}`
-        : `Open ${node.displayName} in Airtable`;
+    // `expanded` is a boolean in the inline-expand tree (▾ collapse / ▴), and
+    // undefined in the filtered views where a click re-roots ("drill").
+    const title = variant !== 'report'
+        ? `Open ${node.displayName} in Airtable`
+        : expanded === undefined
+            ? `Drill into ${node.displayName}`
+            : drillable
+                ? `${expanded ? 'Collapse' : 'Expand'} ${node.displayName}`
+                : `Open ${node.displayName} in Airtable`;
     return (
         <div
             className={cls.join(' ')}
-            style={statusColor ? {borderLeftColor: statusColor, borderLeftWidth: 4} : undefined}
             onClick={onClick}
             title={title}
         >
@@ -782,11 +870,32 @@ function PersonCard({node, variant, directs, total, statusColor, showAvatar, onD
                 </div>
             )}
             <div className="person-info">
-                <div className="person-name">{node.displayName}</div>
-                {node.vacant
-                    ? <div className="vacant-badge">Vacant</div>
-                    : (node.jobTitle && <div className="person-title">{node.jobTitle}</div>)}
-                {node.department && <div className="person-dept">{node.department}</div>}
+                {/* Name / title / department use fixed two-line slots (wrap to 2,
+                    centered when shorter) so every card stays the same height. */}
+                <div className="person-name"><span>{node.displayName}</span></div>
+                <div className="person-title">
+                    {node.vacant
+                        ? <span className="vacant-badge">Vacant</span>
+                        : <span>{node.jobTitle}</span>}
+                </div>
+                <div className="person-dept"><span>{node.department}</span></div>
+                {/* Location & status slots are ALWAYS rendered (empty when absent)
+                    so every card has the same rows in the same places. */}
+                <div className="person-loc">
+                    {!node.isNewPosition ? node.location : ''}
+                </div>
+                <div className="person-status">
+                    {node.status && (
+                        <span
+                            className="status-chip"
+                            style={node.statusStyle
+                                ? {background: node.statusStyle.bg, color: node.statusStyle.fg, borderColor: node.statusStyle.bg}
+                                : undefined}
+                        >
+                            {node.status}
+                        </span>
+                    )}
+                </div>
             </div>
             <div className="person-foot">
                 {directs > 0 ? (
@@ -809,13 +918,151 @@ function PersonCard({node, variant, directs, total, statusColor, showAvatar, onD
                     </span>
                 </div>
             )}
-            {drillable && <div className="person-drill">▾</div>}
+            {drillable && <div className="person-drill">{expanded ? '−' : '+'}</div>}
+        </div>
+    );
+}
+
+// A single level (row) of sibling cards with FLIP animation: freshly added cards
+// fade in, and if cards reorder the SAME elements glide to their new positions.
+// Card elements persist (keyed by id) so the slide is possible.
+const FLIP_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
+function reducedMotion() {
+    return typeof window !== 'undefined' && window.matchMedia
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+function TreeLevel({ids, nodeMap, totals, showAvatar, openChildId, nowrap, keepSet, matchSet, onToggle, onOpen}) {
+    const ref = useRef(null);
+    const prevRects = useRef(new Map());
+    useLayoutEffect(() => {
+        const el = ref.current;
+        if (!el) return;
+        const kids = Array.from(el.children);
+        const newRects = new Map();
+        const reduce = reducedMotion();
+        kids.forEach((node, i) => {
+            const cid = ids[i];
+            if (!cid) return;
+            const rect = node.getBoundingClientRect();
+            newRects.set(cid, rect);
+            if (reduce) return;
+            const prev = prevRects.current.get(cid);
+            if (prev) {
+                const dx = prev.left - rect.left;
+                const dy = prev.top - rect.top;
+                if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+                    node.animate(
+                        [{transform: `translate(${dx}px, ${dy}px)`}, {transform: 'translate(0, 0)'}],
+                        {duration: 520, easing: FLIP_EASING},
+                    );
+                }
+            } else {
+                // Newly revealed card — fade/slide in.
+                node.animate(
+                    [{opacity: 0, transform: 'translateY(-22px) scale(0.96)'}, {opacity: 1, transform: 'none'}],
+                    {duration: 560, easing: FLIP_EASING},
+                );
+            }
+        });
+        prevRects.current = newRects;
+    });
+    return (
+        <div className={`tree-level${nowrap ? ' tree-level-nowrap' : ''}`} ref={ref}>
+            {ids.map(cid => {
+                const child = nodeMap[cid];
+                const directs = keepSet
+                    ? child.childIds.filter(id => keepSet.has(id)).length
+                    : child.childIds.length;
+                return (
+                    <PersonCard
+                        key={cid}
+                        node={child}
+                        variant="report"
+                        directs={directs}
+                        total={totals[cid] || 0}
+                        showAvatar={showAvatar}
+                        expanded={cid === openChildId && directs > 0}
+                        dimmed={matchSet ? !matchSet.has(cid) : undefined}
+                        onDrill={onToggle}
+                        onOpen={onOpen}
+                    />
+                );
+            })}
+        </div>
+    );
+}
+
+// Drill-down WITHOUT peers (Workday "show this branch" style). The view is the
+// open path rendered as a vertical SPINE — the focus, then each manager you've
+// drilled into — and beneath the deepest one, ITS direct reports. Expanding a
+// report adds it to the spine and replaces the reports row with its own; the
+// expanded card's siblings are not shown, so reporting lines are unambiguous.
+function ExpandTree({focus, nodeMap, totals, showAvatar, openByParent, onToggle, onCollapseTo, onOpen, keepSet, matchSet}) {
+    // When filtering, a node's visible children are limited to the kept set
+    // (matches + ancestors); otherwise all real children.
+    const keptIds = node => node.childIds.filter(id => nodeMap[id] && (!keepSet || keepSet.has(id)));
+    const dimmedOf = id => (matchSet ? !matchSet.has(id) : undefined);
+
+    const path = [];
+    const guard = new Set();
+    let cur = focus;
+    while (cur && !guard.has(cur.id)) {
+        guard.add(cur.id);
+        path.push(cur);
+        const oc = openByParent[cur.id];
+        cur = (oc && nodeMap[oc] && keptIds(cur).includes(oc)) ? nodeMap[oc] : null;
+    }
+    const deepest = path[path.length - 1];
+    const fanIds = deepest ? keptIds(deepest) : [];
+    return (
+        <div className="tree-stack">
+            {path.map((p, idx) => {
+                const directs = keptIds(p).length;
+                return (
+                    <div className={`spine-node${idx === 0 ? ' spine-root' : ''}`} key={p.id}>
+                        {idx > 0 && <div className="connector-vertical" />}
+                        <div className="tree-level">
+                            <PersonCard
+                                node={p}
+                                variant="report"
+                                directs={directs}
+                                total={totals[p.id] || 0}
+                                showAvatar={showAvatar}
+                                expanded={directs > 0 ? true : undefined}
+                                dimmed={dimmedOf(p.id)}
+                                onDrill={onCollapseTo}
+                                onOpen={onOpen}
+                            />
+                        </div>
+                    </div>
+                );
+            })}
+            {fanIds.length > 0 && (
+                <div className="tree-section">
+                    <div className="connector-vertical" />
+                    {/* keyed by the deepest node so the reports row replays its
+                        entrance each time you drill or collapse. */}
+                    <TreeLevel
+                        key={deepest.id}
+                        ids={fanIds}
+                        nodeMap={nodeMap}
+                        totals={totals}
+                        showAvatar={showAvatar}
+                        openChildId={undefined}
+                        nowrap={false}
+                        keepSet={keepSet}
+                        matchSet={matchSet}
+                        onToggle={onToggle}
+                        onOpen={onOpen}
+                    />
+                </div>
+            )}
         </div>
     );
 }
 
 // A manager + their direct reports (used by the Manager filter view).
-function ManagerSection({node, nodeMap, totals, statusColors, showAvatar, onDrill, onOpen}) {
+function ManagerSection({node, nodeMap, totals, showAvatar, onDrill, onOpen}) {
     const children = node.childIds.map(id => nodeMap[id]);
     return (
         <div className="manager-section">
@@ -824,7 +1071,6 @@ function ManagerSection({node, nodeMap, totals, statusColors, showAvatar, onDril
                 variant="focus"
                 directs={node.childIds.length}
                 total={totals[node.id] || 0}
-                statusColor={node.status ? statusColors[node.status] : null}
                 showAvatar={showAvatar}
                 onDrill={onDrill}
                 onOpen={onOpen}
@@ -840,7 +1086,6 @@ function ManagerSection({node, nodeMap, totals, statusColors, showAvatar, onDril
                                 variant="report"
                                 directs={child.childIds.length}
                                 total={totals[child.id] || 0}
-                                statusColor={child.status ? statusColors[child.status] : null}
                                 showAvatar={showAvatar}
                                 onDrill={onDrill}
                                 onOpen={onOpen}
@@ -853,33 +1098,29 @@ function ManagerSection({node, nodeMap, totals, statusColors, showAvatar, onDril
     );
 }
 
-// An organization + the positions in it (used by the Organization filter view).
-function OrgSection({org, members, totals, statusColors, showAvatar, onDrill, onOpen}) {
-    return (
-        <div className="manager-section">
-            <div className="org-header">
-                <span className="org-header-name">{org}</span>
-                <span className="org-header-count">
-                    {members.length} position{members.length !== 1 ? 's' : ''}
-                </span>
-            </div>
-            <div className="reports-grid">
-                {members.map(n => (
-                    <PersonCard
-                        key={n.id}
-                        node={n}
-                        variant="report"
-                        directs={n.childIds.length}
-                        total={totals[n.id] || 0}
-                        statusColor={n.status ? statusColors[n.status] : null}
-                        showAvatar={showAvatar}
-                        onDrill={onDrill}
-                        onOpen={onOpen}
-                    />
-                ))}
-            </div>
-        </div>
-    );
+// A set of selected values → one group per value (positions whose field equals
+// it), each sorted managers-first then by name.
+function groupsForValues(nodeMap, filterSet, pick) {
+    return [...filterSet].sort((a, b) => a.localeCompare(b)).map(value => ({
+        title: value,
+        members: Object.values(nodeMap)
+            .filter(n => (pick(n) || '').trim() === value)
+            .sort((a, b) =>
+                (b.childIds.length > 0) - (a.childIds.length > 0) ||
+                a.displayName.localeCompare(b.displayName)),
+    }));
+}
+
+// Distinct non-empty values of a node field → filter options with a count.
+function distinctFieldOptions(nodeMap, pick) {
+    const counts = new Map();
+    Object.values(nodeMap).forEach(n => {
+        const v = (pick(n) || '').trim();
+        if (v) counts.set(v, (counts.get(v) || 0) + 1);
+    });
+    return [...counts.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([v, c]) => ({value: v, label: v, sub: `${c} position${c !== 1 ? 's' : ''}`}));
 }
 
 // ─── Main Workday-style chart ─────────────────────────────────────────────────
@@ -889,8 +1130,13 @@ function WorkdayChart({table}) {
     const [focusIdState, setFocusIdState] = useState(null);
     const [managerFilter, setManagerFilter] = useState(() => new Set());
     const [orgFilter, setOrgFilter] = useState(() => new Set());
+    const [locationFilter, setLocationFilter] = useState(() => new Set());
+    const [statusFilter, setStatusFilter] = useState(() => new Set());
     const [showAvatars, setShowAvatars] = useState(true);
     const [showDecision, setShowDecision] = useState(true);
+    // Inline expand/collapse tree: parentId → the id of its currently-open child
+    // (one open child per parent ⇒ siblings are mutually exclusive).
+    const [openByParent, setOpenByParent] = useState({});
     const boardRef = useRef(null);
 
     const cfg = useMemo(() => {
@@ -905,10 +1151,20 @@ function WorkdayChart({table}) {
             nameField,
             jobTitleField: findFieldByName(table, FIELDS.jobTitleField),
             departmentField,
-            statusField: findFieldByName(table, FIELDS.statusField),
+            statusField: findFieldByName(table, FIELDS.statusField)
+                || findFieldByName(table, 'Decision Status for Org'),
+            newPositionField: findFieldByName(table, FIELDS.newPositionField)
+                || findFieldByName(table, 'Position Status'),
+            locationField: findFieldByName(table, FIELDS.locationField)
+                || findFieldByName(table, 'Location'),
             parentField,
+            uniqueIdField: findFieldByName(table, FIELDS.uniqueIdField)
+                || findFieldByName(table, 'Unique ID'),
             employeeIdField: findFieldByName(table, FIELDS.employeeIdField),
             managerIdField: findFieldByName(table, FIELDS.managerIdField),
+            positionIdField: findFieldByName(table, FIELDS.positionIdField)
+                || findFieldByName(table, 'Position ID'),
+            managerPositionIdField: findFieldByName(table, FIELDS.managerPositionIdField),
             // Org filter field, falling back to the department/supervisory org.
             orgFilterField: findFieldByName(table, FIELDS.orgFilterField) || departmentField,
             leaderEmailField: findFieldByName(table, FIELDS.leaderEmailField),
@@ -994,9 +1250,6 @@ function WorkdayChart({table}) {
         return deriveRootsTotals(m);
     }, [scope, fullNodeMap]);
 
-    const statusColors = useMemo(() => buildStatusColors(nodeMap), [nodeMap]);
-    const hasStatus = Object.keys(statusColors).length > 0;
-
     // Managers = people with at least one direct report.
     const managerOptions = useMemo(() => {
         return Object.values(nodeMap)
@@ -1012,26 +1265,44 @@ function WorkdayChart({table}) {
     }, [nodeMap]);
 
     // Organizations = distinct values of the org field, with a position count.
-    const orgOptions = useMemo(() => {
-        const counts = new Map();
-        Object.values(nodeMap).forEach(n => {
-            const org = (n.org || '').trim();
-            if (org) counts.set(org, (counts.get(org) || 0) + 1);
-        });
-        return [...counts.entries()]
-            .sort((a, b) => a[0].localeCompare(b[0]))
-            .map(([org, c]) => ({value: org, label: org, sub: `${c} position${c !== 1 ? 's' : ''}`}));
-    }, [nodeMap]);
+    const orgOptions = useMemo(() => distinctFieldOptions(nodeMap, n => n.org), [nodeMap]);
+    // Locations = distinct values of the location field, with a position count.
+    const locationOptions = useMemo(() => distinctFieldOptions(nodeMap, n => n.location), [nodeMap]);
+    // Decision statuses = distinct values of the status field, with a count.
+    const statusOptions = useMemo(() => distinctFieldOptions(nodeMap, n => n.status), [nodeMap]);
 
-    // The Manager and Organization filters are mutually exclusive — selecting in
-    // one clears the other so the board shows a single, unambiguous view.
+    // The Manager / Organization / Location / Decision-status filters are mutually
+    // exclusive — selecting in one clears the others so the board shows a single
+    // view.
+    const clearAllFilters = useCallback(() => {
+        setManagerFilter(new Set());
+        setOrgFilter(new Set());
+        setLocationFilter(new Set());
+        setStatusFilter(new Set());
+    }, []);
+    // Reset the leader to their own top view: clear filters, drop any drill-down,
+    // and re-root to the default focus.
+    const jumpToTop = useCallback(() => {
+        clearAllFilters();
+        setFocusIdState(null);
+        setOpenByParent({});
+    }, [clearAllFilters]);
+    // Set one filter and, if it became non-empty, clear the other three.
     const selectManagers = useCallback(next => {
         setManagerFilter(next);
-        if (next.size) setOrgFilter(new Set());
+        if (next.size) { setOrgFilter(new Set()); setLocationFilter(new Set()); setStatusFilter(new Set()); }
     }, []);
     const selectOrgs = useCallback(next => {
         setOrgFilter(next);
-        if (next.size) setManagerFilter(new Set());
+        if (next.size) { setManagerFilter(new Set()); setLocationFilter(new Set()); setStatusFilter(new Set()); }
+    }, []);
+    const selectLocations = useCallback(next => {
+        setLocationFilter(next);
+        if (next.size) { setManagerFilter(new Set()); setOrgFilter(new Set()); setStatusFilter(new Set()); }
+    }, []);
+    const selectStatuses = useCallback(next => {
+        setStatusFilter(next);
+        if (next.size) { setManagerFilter(new Set()); setOrgFilter(new Set()); setLocationFilter(new Set()); }
     }, []);
 
     const defaultFocusId = useMemo(() => {
@@ -1056,25 +1327,99 @@ function WorkdayChart({table}) {
     }, []);
     const openRecord = useCallback(node => { if (node && node.record) expandRecord(node.record); }, []);
 
+    // Toggle a report's inline expansion. Opening a node sets it as its parent's
+    // open child (collapsing any sibling); a leaf has nothing to expand, so it
+    // opens its record instead.
+    const toggleExpand = useCallback(id => {
+        const n = nodeMap[id];
+        if (!n) return;
+        if (n.childIds.length === 0) { openRecord(n); return; }
+        const pid = n.parentId;
+        setOpenByParent(prev => {
+            const next = {...prev};
+            if (next[pid] === id) delete next[pid];
+            else next[pid] = id;
+            return next;
+        });
+    }, [nodeMap, openRecord]);
+
+    // Clicking a card already in the spine: an ancestor collapses everything
+    // below it (it becomes the deepest, showing its own reports); the deepest one
+    // collapses itself, going up a level.
+    const collapseTo = useCallback(id => {
+        const n = nodeMap[id];
+        if (!n) return;
+        setOpenByParent(prev => {
+            const next = {...prev};
+            if (next[id]) delete next[id];
+            else if (n.parentId) delete next[n.parentId];
+            return next;
+        });
+    }, [nodeMap]);
+
     const managerActive = managerFilter.size > 0;
     const orgActive = orgFilter.size > 0;
-    const filterActive = managerActive || orgActive;
+    const locationActive = locationFilter.size > 0;
+    const statusActive = statusFilter.size > 0;
+    const filterActive = managerActive || orgActive || locationActive || statusActive;
+
+    // Re-rooting (new focus) or toggling a filter on/off starts from a clean tree.
+    useEffect(() => { setOpenByParent({}); }, [focusId, filterActive]);
     const selectedManagers = useMemo(
         () => [...managerFilter].filter(id => nodeMap[id]),
         [managerFilter, nodeMap],
     );
-    // Selected orgs → the positions in each, sorted managers-first then by name.
-    const selectedOrgs = useMemo(() => {
-        if (!orgActive) return [];
-        return [...orgFilter].sort((a, b) => a.localeCompare(b)).map(org => ({
-            org,
-            members: Object.values(nodeMap)
-                .filter(n => (n.org || '').trim() === org)
-                .sort((a, b) =>
-                    (b.childIds.length > 0) - (a.childIds.length > 0) ||
-                    a.displayName.localeCompare(b.displayName)),
-        }));
-    }, [orgActive, orgFilter, nodeMap]);
+    // A value filter (org / location / status) → the positions in each group.
+    const selectedOrgs = useMemo(
+        () => (orgActive ? groupsForValues(nodeMap, orgFilter, n => n.org) : []),
+        [orgActive, orgFilter, nodeMap],
+    );
+    const selectedLocations = useMemo(
+        () => (locationActive ? groupsForValues(nodeMap, locationFilter, n => n.location) : []),
+        [locationActive, locationFilter, nodeMap],
+    );
+    const selectedStatuses = useMemo(
+        () => (statusActive ? groupsForValues(nodeMap, statusFilter, n => n.status) : []),
+        [statusActive, statusFilter, nodeMap],
+    );
+    // Which grouped (value) filter is active, if any.
+    const activeGroups = orgActive ? selectedOrgs
+        : locationActive ? selectedLocations
+        : statusActive ? selectedStatuses : null;
+    const groupNoun = orgActive ? 'organizations' : locationActive ? 'locations' : 'statuses';
+
+    // A value filter (org / location / decision status) prunes the ORG CHART:
+    // keep the matching positions PLUS their ancestor managers (to connect them
+    // up to the top), rooted at the top of the kept set. Non-matching ancestors
+    // are flagged so they render greyed-out.
+    const filterPrune = useMemo(() => {
+        const pick = orgActive ? (n => n.org)
+            : locationActive ? (n => n.location)
+            : statusActive ? (n => n.status) : null;
+        const sel = orgActive ? orgFilter : locationActive ? locationFilter : statusActive ? statusFilter : null;
+        if (!pick || !sel || sel.size === 0) return null;
+        const match = new Set();
+        for (const n of Object.values(nodeMap)) {
+            if (sel.has((pick(n) || '').trim())) match.add(n.id);
+        }
+        const keep = new Set(match);
+        for (const id of match) {
+            let p = nodeMap[id].parentId;
+            while (p && nodeMap[p] && !keep.has(p)) { keep.add(p); p = nodeMap[p].parentId; }
+        }
+        const roots = [...keep]
+            .filter(id => { const pid = nodeMap[id].parentId; return !pid || !keep.has(pid); })
+            .sort((a, b) => nodeMap[a].displayName.localeCompare(nodeMap[b].displayName));
+        return {match, keep, roots};
+    }, [orgActive, locationActive, statusActive, orgFilter, locationFilter, statusFilter, nodeMap]);
+    // Where the pruned spine roots: the normal focus if it's kept, else the top
+    // of the matching subtree.
+    const filterFocus = filterPrune
+        ? (focus && filterPrune.keep.has(focus.id) ? focus
+            : (filterPrune.roots[0] ? nodeMap[filterPrune.roots[0]] : null))
+        : null;
+    // The leader has navigated away from their top view (drilled in or re-rooted).
+    const drilled = (!!focusId && focusId !== defaultFocusId) || Object.keys(openByParent).length > 0;
 
     // Build the sections the vector PDF draws: a manager section (manager card +
     // direct reports) per manager, OR an org section (org banner + members) per
@@ -1089,10 +1434,10 @@ function WorkdayChart({table}) {
             total: totals[n.id] || 0,
             vacant: n.vacant,
         });
-        if (orgActive) {
-            return selectedOrgs.map(({org, members}) => ({
+        if (activeGroups) {
+            return activeGroups.map(({title, members}) => ({
                 kind: 'org',
-                header: {name: org, count: members.length},
+                header: {name: title, count: members.length},
                 reports: members.map(toCard),
             }));
         }
@@ -1104,7 +1449,7 @@ function WorkdayChart({table}) {
             header: toCard(nodeMap[id]),
             reports: nodeMap[id].childIds.map(c => toCard(nodeMap[c])),
         }));
-    }, [orgActive, selectedOrgs, managerActive, selectedManagers, focusId, nodeMap, totals]);
+    }, [activeGroups, managerActive, selectedManagers, focusId, nodeMap, totals]);
 
     if (noView) {
         return (
@@ -1159,30 +1504,43 @@ function WorkdayChart({table}) {
                             onChange={selectOrgs}
                         />
                     )}
+                    {cfg.locationField && (
+                        <CheckboxFilter
+                            label="Location"
+                            options={locationOptions}
+                            selected={locationFilter}
+                            onChange={selectLocations}
+                        />
+                    )}
+                    {cfg.statusField && (
+                        <CheckboxFilter
+                            label="Decision Status"
+                            options={statusOptions}
+                            selected={statusFilter}
+                            onChange={selectStatuses}
+                        />
+                    )}
                     {filterActive && (
                         <button
                             className="tb-btn tb-btn-clear"
-                            onClick={() => { setManagerFilter(new Set()); setOrgFilter(new Set()); }}
-                            title="Clear filters"
+                            onClick={clearAllFilters}
+                            title="Clear all filters"
                         >
-                            {orgActive
-                                ? `Clear · ${selectedOrgs.length} org${selectedOrgs.length !== 1 ? 's' : ''}`
-                                : `Clear · ${selectedManagers.length} manager${selectedManagers.length !== 1 ? 's' : ''}`}
+                            ✕ Clear filters
                         </button>
                     )}
-                </div>
-                <div className="toolbar-right">
-                    {hasStatus && (
-                        <div className="legend">
-                            {Object.entries(statusColors).map(([label, color]) => (
-                                <span key={label} className="legend-item">
-                                    <span className="legend-dot" style={{background: color}} />
-                                    {label}
-                                </span>
-                            ))}
-                        </div>
+                    {(filterActive || drilled) && (
+                        <button
+                            className="tb-btn tb-btn-top"
+                            onClick={jumpToTop}
+                            title="Clear everything and return to the top of your view"
+                        >
+                            ⤴ Jump to Top
+                        </button>
                     )}
                     <SearchBox nodeMap={nodeMap} onJump={drillFromFilter} />
+                </div>
+                <div className="toolbar-right">
                     <button
                         className={`tb-btn ${showAvatars ? 'tb-btn-active' : ''}`}
                         onClick={() => setShowAvatars(v => !v)}
@@ -1199,7 +1557,7 @@ function WorkdayChart({table}) {
                             Decision
                         </button>
                     )}
-                    <ExportMenu boardRef={boardRef} getData={buildExportData} />
+                    <ExportButton getData={buildExportData} />
                 </div>
             </div>
 
@@ -1219,23 +1577,27 @@ function WorkdayChart({table}) {
 
             {/* Board */}
             <div className="board-scroll">
-                {orgActive ? (
-                    <div className="board board-filtered" ref={boardRef}>
-                        {selectedOrgs.length === 0 && (
-                            <div className="no-reports">No matching organizations.</div>
-                        )}
-                        {selectedOrgs.map(({org, members}) => (
-                            <OrgSection
-                                key={org}
-                                org={org}
-                                members={members}
+                {filterPrune ? (
+                    <div className="board board-expandable" ref={boardRef}>
+                        {!filterFocus ? (
+                            <div className="no-reports">No matching {groupNoun}.</div>
+                        ) : (
+                            // Same spine/grid layout as the unfiltered view, but
+                            // pruned to the matches + their managers; non-matching
+                            // managers are greyed out.
+                            <ExpandTree
+                                focus={filterFocus}
+                                nodeMap={nodeMap}
                                 totals={totals}
-                                statusColors={statusColors}
                                 showAvatar={showAvatars}
-                                onDrill={drillFromFilter}
+                                openByParent={openByParent}
+                                onToggle={toggleExpand}
+                                onCollapseTo={collapseTo}
                                 onOpen={openRecord}
+                                keepSet={filterPrune.keep}
+                                matchSet={filterPrune.match}
                             />
-                        ))}
+                        )}
                     </div>
                 ) : managerActive ? (
                     <div className="board board-filtered" ref={boardRef}>
@@ -1250,7 +1612,6 @@ function WorkdayChart({table}) {
                                     node={nodeMap[id]}
                                     nodeMap={nodeMap}
                                     totals={totals}
-                                    statusColors={statusColors}
                                     showAvatar={showAvatars}
                                     onDrill={drillFromFilter}
                                     onOpen={openRecord}
@@ -1258,7 +1619,7 @@ function WorkdayChart({table}) {
                             ))}
                     </div>
                 ) : (
-                    <div className="board" ref={boardRef}>
+                    <div className="board board-expandable" ref={boardRef}>
                         {focus.parentId && nodeMap[focus.parentId] && (
                             <button
                                 className="up-btn"
@@ -1269,42 +1630,17 @@ function WorkdayChart({table}) {
                             </button>
                         )}
 
-                        <div className="focus-row">
-                            <PersonCard
-                                node={focus}
-                                variant="focus"
-                                directs={focus.childIds.length}
-                                total={totals[focus.id] || 0}
-                                statusColor={focus.status ? statusColors[focus.status] : null}
-                                showAvatar={showAvatars}
-                                onDrill={drill}
-                                onOpen={openRecord}
-                            />
-                        </div>
-
-                        {children.length > 0 ? (
-                            <>
-                                <div className="connector-vertical" />
-                                <div className="reports-label">
-                                    {children.length} direct report{children.length !== 1 ? 's' : ''}
-                                </div>
-                                <div className="reports-grid">
-                                    {children.map(child => (
-                                        <PersonCard
-                                            key={child.id}
-                                            node={child}
-                                            variant="report"
-                                            directs={child.childIds.length}
-                                            total={totals[child.id] || 0}
-                                            statusColor={child.status ? statusColors[child.status] : null}
-                                            showAvatar={showAvatars}
-                                            onDrill={drill}
-                                            onOpen={openRecord}
-                                        />
-                                    ))}
-                                </div>
-                            </>
-                        ) : (
+                        <ExpandTree
+                            focus={focus}
+                            nodeMap={nodeMap}
+                            totals={totals}
+                            showAvatar={showAvatars}
+                            openByParent={openByParent}
+                            onToggle={toggleExpand}
+                            onCollapseTo={collapseTo}
+                            onOpen={openRecord}
+                        />
+                        {children.length === 0 && (
                             <div className="no-reports">No direct reports</div>
                         )}
                     </div>
