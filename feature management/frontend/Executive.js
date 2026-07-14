@@ -234,14 +234,6 @@ export default function Executive({model}) {
             </section>
 
             {/* Initiative cards */}
-            {model._debug && (
-                <div className="fp-debug">
-                    <b>DEBUG (temporary)</b><br />
-                    Entity field resolved: <b>{model._debug.entityField}</b> · Initiative field resolved: <b>{model._debug.initiativeField}</b><br />
-                    Features table fields: {model._debug.featureFields}
-                    <ul>{model._debug.sample.map((s, i) => <li key={i}>{s}</li>)}</ul>
-                </div>
-            )}
             <div className="fp-section-title">By entity</div>
             <div className="fp-initgrid">
                 {byEntity.map(e => {
