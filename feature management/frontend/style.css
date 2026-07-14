@@ -512,6 +512,14 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-flow-conn { pointer-events: none; }
 .fp-flow-conn path { filter: drop-shadow(0 1px 1.5px rgba(255,255,255,.9)); }
 .fp-flow-knot { stroke: #fff; stroke-width: 1.25; transition: opacity .18s ease; }
+.fp-flow-legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 11px; color: var(--fp-muted); margin: 10px 2px 4px; }
+.fp-flow-legend .fp-lg { display: inline-flex; align-items: center; gap: 6px; }
+.fp-flow-legend b { font-weight: 800; }
+.fp-flow-legend .dia { color: #4a3aa7; font-size: 13px; }
+.fp-flow-legend .fork { color: #eb6834; font-size: 13px; }
+.fp-flow-legend .dot { color: #2a78d6; }
+.fp-flow-legend .clamp { background: #14274e; color: #fff; border-radius: 999px; padding: 1px 7px; font-size: 10px; }
+.fp-flow-legend .plus { border: 1.5px solid var(--fp-accent); color: var(--fp-accent); border-radius: 50%; width: 16px; height: 16px; display: inline-grid; place-items: center; font-size: 11px; }
 .fp-flow-rellabel { font-size: 10.5px; font-weight: 700; fill: var(--fp-ink); paint-order: stroke; stroke: #fff; stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
 .fp-flow-feat { cursor: pointer; }
 .fp-flow-featname { font-size: 11px; font-weight: 700; fill: var(--fp-text); }

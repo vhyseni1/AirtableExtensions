@@ -112,27 +112,25 @@ export async function forkOutCreate(model, attr, names) {
     const base = attr.attributeId || 'ATTR';
     const stamp = Date.now().toString(36).slice(-4).toUpperCase();
 
-    // Resolve the Features record to link children to by matching the parent's
-    // feature NAME against the Features table — robust, and independent of how
-    // the parent's Feature cell reads back (which can come back empty).
-    let featureLinkId = null;
-    if (attr.featureName && Array.isArray(model.features)) {
+    // Copy the parent's Feature cell in its NATIVE shape (link / select / text);
+    // fall back to a Features name-match if the cell can't be read (e.g. lookup).
+    let featureVal = copyCellValue(attr.record, af.feature);
+    if (featureVal === undefined && attr.featureName && Array.isArray(model.features)) {
         const fr = model.features.find(f => f.name === attr.featureName);
-        if (fr) featureLinkId = fr.id;
+        if (fr) featureVal = [{id: fr.id}];
     }
-    if (!featureLinkId) featureLinkId = attr.featureId || null;
-    if (af.feature && !featureLinkId) {
-        throw new Error(`Couldn't resolve the feature "${attr.featureName || '(none)'}" — is there a matching record in the Features table?`);
+    if (af.feature && featureVal === undefined) {
+        throw new Error(`Couldn't read a Feature to copy from "${attr.businessName || attr.attributeId}" — set the parent's Feature, then fork.`);
     }
 
-    // Duplicate the parent's catalogue fields — copy each cell in its OWN shape
-    // (single-select, checkbox or text all write correctly this way).
+    // Duplicate the parent's catalogue fields, each in its own cell shape.
     const copied = {};
     [af.sourcingType, af.isReferenceData, af.requiresGateway, af.fsdm, af.technicalName].forEach(f => {
         if (!f) return;
         const v = copyCellValue(attr.record, f);
         if (v !== undefined) copied[f.id] = v;
     });
+    if (af.feature && featureVal !== undefined) copied[af.feature.id] = featureVal;
 
     // 1) create the children (primary + name only — safe fields)
     const payload = names.map((nm, i) => ({
@@ -146,14 +144,14 @@ export async function forkOutCreate(model, attr, names) {
     }
     const newIds = await table.createRecordsAsync(payload);
 
-    // 2) set the links/fields on each child via update (errors surface clearly)
+    // 2) set the fields on each child. Stage/team pass BOTH linkId and name so
+    // they write whether those fields are links or single-selects/text.
     const updates = newIds.map(id => {
         const fields = writeObject([
-            [af.feature, {linkId: featureLinkId}],
-            [af.currentStage, {linkId: stage1 ? stage1.id : null}],
+            [af.currentStage, {linkId: stage1 ? stage1.id : null, name: stage1 ? stage1.name : null}],
             [af.status, {name: STATUS.notStarted}],
-            [af.assignedTeam, {linkId: stage1 ? stage1.responsibleTeamId : null}],
-            [af.approverTeam, {linkId: stage1 ? stage1.approverTeamId : null}],
+            [af.assignedTeam, {linkId: stage1 ? stage1.responsibleTeamId : null, name: stage1 ? stage1.responsibleTeamName : null}],
+            [af.approverTeam, {linkId: stage1 ? stage1.approverTeamId : null, name: stage1 ? stage1.approverTeamName : null}],
         ]);
         Object.assign(fields, copied);
         return {id, fields};

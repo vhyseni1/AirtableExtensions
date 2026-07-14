@@ -450,7 +450,14 @@ export default function Traceability({model}) {
                     onPick={(title, items) => drill.openAttrs(title, items)}
                     onRelate={openRel}
                 />
-                <div className="fp-panel-hint">Each line is one attribute on its own track, grouped by feature (left). A <b>tick</b> marks every team it has passed through — no tick means that team isn’t on its path — and the line <b>ends with a dot at the team it sits with today</b>; the badge under each column counts them. Delivered attributes run to the ✓ terminal. Hover a line or a feature label to isolate it; click a line to open its record, a column for the list.</div>
+                <div className="fp-flow-legend" aria-label="Legend">
+                    <span className="fp-lg"><b className="dia">◆</b> addressed by another attribute</span>
+                    <span className="fp-lg"><b className="fork">⑂</b> forks into others</span>
+                    <span className="fp-lg"><b className="dot">●</b> where it sits today</span>
+                    <span className="fp-lg"><b className="clamp">3</b> attributes here now</span>
+                    <span className="fp-lg"><b className="plus">+</b> add a relationship</span>
+                </div>
+                <div className="fp-panel-hint">Each line is one attribute on its own track, grouped by feature (left). A <b>tick</b> marks every team it has passed through — no tick means that team isn’t on its path — and the line <b>ends with a dot at the team it sits with today</b>. Hover a line to fan out its forks (bright) and see who addresses it; click a line to open its record, a column for the list.</div>
             </div>
 
             <div className="fp-section-title">Attribute traceability — where each attribute is on its journey</div>
