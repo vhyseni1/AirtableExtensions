@@ -90,7 +90,7 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
 
     if (!lines.length) return <div className="fp-muted">Nothing to draw yet.</div>;
 
-    const W = Math.max(w || 980, 680);
+    const W = Math.max(Math.floor(w) || 960, 680);
     const padT = 48;                            // top: team clamp nodes
     const labelArea = 92;                       // bottom: wrapped team names
     const labelW = Math.min(172, W * 0.19);
@@ -108,7 +108,7 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
 
     return (
         <div className="fp-flow" ref={ref}>
-            <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`}>
+            <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
                 {/* soft canvas behind the tracks */}
                 <rect x={labelW - 6} y={padT - 8} width={W - labelW - 10} height={plotH + 22} rx={14} className="fp-flow-canvas" />
 
