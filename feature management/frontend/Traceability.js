@@ -4,6 +4,7 @@ import {PHASE_COLORS} from './constants';
 import {pathStages} from './data';
 import {StatusChip} from './components';
 import {useDrill, DrillDrawer} from './drill';
+import RelEditor from './RelEditor';
 
 // Validated categorical order (dataviz six checks) — assigned to features in
 // fixed model order, never cycled; features beyond 8 fold into "Other" (gray).
@@ -34,7 +35,7 @@ function useMeasuredWidth() {
 // Columns (x) = teams in pipeline order. Each line traces the teams the
 // attribute has ACTUALLY passed through and stops — with an end dot — at the
 // team where it sits today; delivered lines run through to the ✓ terminal.
-function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, onPick}) {
+function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, onPick, onRelate}) {
     const [ref, w] = useMeasuredWidth();
     const {attrs, featureOrder} = model;
     const [hoverId, setHoverId] = useState(null);
@@ -174,6 +175,11 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                                 <path d={`M ${labelW - 9} ${yy - 3.5} l 0 7 l 5 -3.5 Z`} className="fp-flow-relmark" style={{fill: c, opacity: isDim(ln) ? 0.2 : 1}} />
                             )}
                             <circle cx={ex} cy={yy} r={isHot(ln) ? 5.5 : 4} className="fp-flow-end" style={{fill: ln.delivered ? '#16a34a' : c, opacity: isDim(ln) ? 0.15 : 1}} />
+                            <g className="fp-flow-add" onClick={e => { e.stopPropagation(); onRelate(ln.attr, 'menu'); }}>
+                                <circle cx={ex + 16} cy={yy} r={8.5} />
+                                <text x={ex + 16} y={yy} textAnchor="middle" dominantBaseline="central">+</text>
+                                <title>Relate — fork out or address by</title>
+                            </g>
                             <title>{`${ln.attr.businessName || ln.attr.attributeId} · ${ln.feature}\n${ln.delivered ? 'Delivered ✓' : `Now: ${stageLabel(ln.attr.currentStageName)} (${ln.visited[ln.visited.length - 1]})`} · ${ln.attr.status}${relNote}`}</title>
                         </g>
                     );
@@ -274,7 +280,7 @@ function relTitle(a) {
 }
 
 // ─── One attribute: a lean line collapsed; pointy journey + log expanded ──────
-function AttributeRow({model, attr, expanded, onToggle}) {
+function AttributeRow({model, attr, expanded, onToggle, onRelate}) {
     const stages = pathStages(model, attr);
     const curIdx = stages.findIndex(s => s.code === attr.currentCode);
     const done = attr.isDelivered ? stages.length : Math.max(curIdx, 0);
@@ -286,6 +292,7 @@ function AttributeRow({model, attr, expanded, onToggle}) {
                 <span className="fp-arow-name" onClick={e => { e.stopPropagation(); expandRecord(attr.record); }} title="Open record">
                     {attr.businessName || attr.attributeId}
                 </span>
+                <button type="button" className="fp-arow-relbtn" title="Relate — fork out or address by" onClick={e => { e.stopPropagation(); onRelate(attr, 'menu'); }}>+ relate</button>
                 {attr.hasRelations && (
                     <span className="fp-rel-badge" title={relTitle(attr)} aria-label="Related attributes">
                         {attr.addressedBy.length > 0 && <span className="fp-rel-in">↳{attr.addressedBy.length}</span>}
@@ -326,22 +333,24 @@ function AttributeRow({model, attr, expanded, onToggle}) {
                             );
                         })}
                     </div>
-                    {attr.hasRelations && (
-                        <div className="fp-rel">
-                            {attr.addressedBy.length > 0 && (
-                                <div className="fp-rel-row">
-                                    <span className="fp-rel-label"><b>↳ Addressed by</b> — resolved / satisfied by</span>
-                                    <span className="fp-rel-chips">{attr.addressedBy.map(x => <RelChip key={x.id} a={x} />)}</span>
-                                </div>
-                            )}
-                            {attr.forksInto.length > 0 && (
-                                <div className="fp-rel-row">
-                                    <span className="fp-rel-label"><b>⑂ Forks into</b> — spawns downstream attributes</span>
-                                    <span className="fp-rel-chips">{attr.forksInto.map(x => <RelChip key={x.id} a={x} />)}</span>
-                                </div>
-                            )}
+                    <div className="fp-rel">
+                        {attr.addressedBy.length > 0 && (
+                            <div className="fp-rel-row">
+                                <span className="fp-rel-label"><b>↳ Addressed by</b> — resolved / satisfied by</span>
+                                <span className="fp-rel-chips">{attr.addressedBy.map(x => <RelChip key={x.id} a={x} />)}</span>
+                            </div>
+                        )}
+                        {attr.forksInto.length > 0 && (
+                            <div className="fp-rel-row">
+                                <span className="fp-rel-label"><b>⑂ Forks into</b> — spawns downstream attributes</span>
+                                <span className="fp-rel-chips">{attr.forksInto.map(x => <RelChip key={x.id} a={x} />)}</span>
+                            </div>
+                        )}
+                        <div className="fp-rel-add">
+                            <button type="button" onClick={() => onRelate(attr, 'address')}>↳ Address by…</button>
+                            <button type="button" onClick={() => onRelate(attr, 'fork')}>⑂ Fork out…</button>
                         </div>
-                    )}
+                    </div>
                     <JourneyLog model={model} attr={attr} />
                 </div>
             )}
@@ -368,6 +377,8 @@ export default function Traceability({model}) {
     const ALL = '__all__';
     const [feature, setFeature] = useState(ALL);
     const [expandedId, setExpandedId] = useState(null);
+    const [rel, setRel] = useState(null); // {attr, mode}
+    const openRel = (attr, mode) => setRel({attr, mode});
     const shownFeatures = feature === ALL ? featureNames : [feature];
 
     return (
@@ -380,6 +391,7 @@ export default function Traceability({model}) {
                     hoverFeature={hoverFeature}
                     setHoverFeature={setHoverFeature}
                     onPick={(title, items) => drill.openAttrs(title, items)}
+                    onRelate={openRel}
                 />
                 <div className="fp-panel-hint">Each line is one attribute on its own track, grouped by feature (left). A <b>tick</b> marks every team it has passed through — no tick means that team isn’t on its path — and the line <b>ends with a dot at the team it sits with today</b>; the badge under each column counts them. Delivered attributes run to the ✓ terminal. Hover a line or a feature label to isolate it; click a line to open its record, a column for the list.</div>
             </div>
@@ -421,6 +433,7 @@ export default function Traceability({model}) {
                                         attr={a}
                                         expanded={expandedId === a.id}
                                         onToggle={() => setExpandedId(x => (x === a.id ? null : a.id))}
+                                        onRelate={openRel}
                                     />
                                 ))}
                             </ul>
@@ -430,6 +443,7 @@ export default function Traceability({model}) {
             </div>
 
             <DrillDrawer drill={drill} attrsOf={attrsOf} />
+            {rel && <RelEditor model={model} attr={rel.attr} initialMode={rel.mode} onClose={() => setRel(null)} />}
         </div>
     );
 }

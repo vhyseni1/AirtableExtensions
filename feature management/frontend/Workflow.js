@@ -3,6 +3,7 @@ import {useMemo, useRef, useState} from 'react';
 import {STATUS, APPROVAL} from './constants';
 import {StatusChip, Tag} from './components';
 import {useDrill, DrillDrawer} from './drill';
+import RelEditor from './RelEditor';
 import {promoteTask, decideTask, setStatus, remainingAcceptance} from './actions';
 
 const COLS = [
@@ -29,6 +30,7 @@ export default function Workflow({model}) {
     const [toast, setToast] = useState(null);
     const [overCol, setOverCol] = useState(null);
     const [modal, setModal] = useState(null); // {kind:'block'|'return', attr, text}
+    const [rel, setRel] = useState(null); // {attr, mode}
     const dragId = useRef(null);
     const drill = useDrill();
     const attrsOf = useMemo(() => name => attrs.filter(a => a.featureName === name), [attrs]);
@@ -149,6 +151,7 @@ export default function Workflow({model}) {
                                         </div>
                                         <div className="fp-kcard-meta">
                                             <span className="fp-tag clickable" title="See feature attributes" onClick={() => drill.openAttrs(`${a.featureName} · attributes`, attrsOf(a.featureName))}>{a.featureName}</span>
+                                            <button type="button" className="fp-kcard-rel" title="Relate — fork out or address by" onClick={e => { e.stopPropagation(); setRel({attr: a, mode: 'menu'}); }}>+ relate</button>
                                             {a.environment && a.environment !== 'N/A' && <Tag>{a.environment}</Tag>}
                                         </div>
                                         <div className="fp-kcard-stage">{a.currentStageName}</div>
@@ -194,6 +197,7 @@ export default function Workflow({model}) {
             )}
 
             <DrillDrawer drill={drill} attrsOf={attrsOf} />
+            {rel && <RelEditor model={model} attr={rel.attr} initialMode={rel.mode} onClose={() => setRel(null)} />}
         </div>
     );
 }

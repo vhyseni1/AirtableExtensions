@@ -75,6 +75,42 @@ export async function setStatus(model, attr, status, reason) {
     await updateAttribute(model, attr, writeObject(pairs));
 }
 
+// ── Relationships: address-by (link existing) / fork-out (create new) ─────────
+export async function linkAddressedBy(model, attr, targetIds) {
+    const af = model.fieldsRaw.attributes;
+    if (!af.addressedBy) throw new Error('Add an "Addressed By" link field (Link → Attributes) to the base first.');
+    const merged = [...new Set([...attr.addressedBy.map(x => x.id), ...targetIds])];
+    await updateAttribute(model, attr, {[af.addressedBy.id]: merged.map(id => ({id}))});
+}
+
+export async function forkOutCreate(model, attr, names) {
+    const table = model.tablesRaw.attributes;
+    const af = model.fieldsRaw.attributes;
+    if (!af.forksInto) throw new Error('Add a "Forks Into" link field (Link → Attributes) to the base first.');
+    const stage1 = model.stagesByCode['1'] || null;
+    const base = attr.attributeId || 'ATTR';
+    const stamp = Date.now().toString(36).slice(-4).toUpperCase();
+    const payload = names.map((nm, i) => ({
+        fields: writeObject([
+            [af.attributeId, {text: `${base}-F${stamp}${i + 1}`}],
+            [af.businessName, {text: (nm && nm.trim()) || `${attr.businessName || base} — fork ${i + 1}`}],
+            [af.feature, {linkId: attr.featureId}],
+            [af.sourcingType, {name: attr.sourcingType}],
+            [af.currentStage, {linkId: stage1 ? stage1.id : null}],
+            [af.status, {name: STATUS.notStarted}],
+            [af.assignedTeam, {linkId: stage1 ? stage1.responsibleTeamId : null}],
+            [af.approverTeam, {linkId: stage1 ? stage1.approverTeamId : null}],
+        ]),
+    }));
+    if (typeof table.hasPermissionToCreateRecords === 'function' && !table.hasPermissionToCreateRecords(payload)) {
+        throw new Error('You do not have permission to create attribute records.');
+    }
+    const newIds = await table.createRecordsAsync(payload);
+    const merged = [...attr.forksInto.map(x => x.id), ...newIds];
+    await updateAttribute(model, attr, {[af.forksInto.id]: merged.map(id => ({id}))});
+    return newIds;
+}
+
 // ── Promote: submit current stage for review (does not advance yet) ───────────
 export async function promoteTask(model, attr, session) {
     if (!allAcceptanceMet(attr.acceptance)) {

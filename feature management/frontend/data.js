@@ -173,6 +173,7 @@ export function useModel() {
                 attributeId: str(r, attributes.fields.attributeId),
                 businessName: str(r, attributes.fields.businessName),
                 featureName: str(r, attributes.fields.feature),
+                featureId: firstLinkId(r, attributes.fields.feature),
                 sourcingType,
                 requiresGateway,
                 isReferenceData: bool(r, attributes.fields.isReferenceData),
