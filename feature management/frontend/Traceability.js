@@ -188,7 +188,7 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                                 onMouseLeave={() => setHoverId(null)}
                                 onClick={() => expandRecord(ln.attr.record)}
                             >
-                                <path d={d} className="fp-flow-hit" fill="none" />
+                                <path d={`${d} L ${ex + 52} ${yy}`} className="fp-flow-hit" fill="none" />
                                 <path d={d} className="fp-flow-path" fill="none" style={{stroke: c, opacity: isDim(ln) ? 0.12 : isHot(ln) ? 1 : 0.72, strokeWidth: isHot(ln) ? 3.5 : 2.25}} />
                                 <circle cx={prevX} cy={pg.yy} r={3.2} className="fp-flow-tick" style={{fill: c, opacity: isDim(ln) ? 0.12 : 1}} />
                                 {ln.attr.addressedBy.length > 0 && (
@@ -196,7 +196,7 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                                 )}
                                 <circle cx={ex} cy={yy} r={isHot(ln) ? 5.5 : 4} className="fp-flow-end" style={{fill: ln.delivered ? '#16a34a' : c, opacity: isDim(ln) ? 0.15 : 1}} />
                                 <g className="fp-flow-add" onClick={e => { e.stopPropagation(); onRelate(ln.attr, 'menu'); }}>
-                                    <circle cx={ex + (ln.attr.addressedBy.length ? 36 : 18)} cy={yy} r={8.5} />
+                                    <circle cx={ex + (ln.attr.addressedBy.length ? 36 : 18)} cy={yy} r={10} />
                                     <text x={ex + (ln.attr.addressedBy.length ? 36 : 18)} y={yy} textAnchor="middle" dominantBaseline="central">+</text>
                                     <title>Relate — fork out or address by</title>
                                 </g>
@@ -217,7 +217,7 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                                 className="fp-flow-bar"
                                 style={{fill: c, opacity: isDim(ln) ? 0.04 : isHot(ln) ? 0.24 : 0.13}}
                             />
-                            <line x1={labelW} y1={yy} x2={ex} y2={yy} className="fp-flow-hit" />
+                            <line x1={labelW} y1={yy} x2={ex + 52} y2={yy} className="fp-flow-hit" />
                             <line
                                 x1={labelW} y1={yy} x2={ex} y2={yy}
                                 className="fp-flow-path"
@@ -246,7 +246,7 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                                 </text>
                             )}
                             <g className="fp-flow-add" onClick={e => { e.stopPropagation(); onRelate(ln.attr, 'menu'); }}>
-                                <circle cx={ex + (ln.attr.addressedBy.length ? 36 : 18)} cy={yy} r={8.5} />
+                                <circle cx={ex + (ln.attr.addressedBy.length ? 36 : 18)} cy={yy} r={10} />
                                 <text x={ex + (ln.attr.addressedBy.length ? 36 : 18)} y={yy} textAnchor="middle" dominantBaseline="central">+</text>
                                 <title>Relate — fork out or address by</title>
                             </g>

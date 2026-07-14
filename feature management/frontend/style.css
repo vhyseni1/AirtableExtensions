@@ -498,7 +498,7 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-flow-node:hover .fp-flow-label { color: var(--fp-accent); }
 .fp-flow-line { cursor: pointer; }
 .fp-flow-bar { transition: opacity .18s ease; }
-.fp-flow-hit { fill: none; stroke: transparent; stroke-width: 14; }
+.fp-flow-hit { fill: none; stroke: transparent; stroke-width: 18; }
 .fp-flow-path { fill: none; stroke-linecap: round; filter: drop-shadow(0 1.5px 1.5px rgba(20,39,78,.22)); transition: opacity .18s ease, stroke-width .18s ease; }
 .fp-flow-tick { stroke: #fff; stroke-width: 1.25; transition: opacity .18s ease; }
 .fp-flow-end { stroke: #fff; stroke-width: 1.75; transition: opacity .18s ease; }
