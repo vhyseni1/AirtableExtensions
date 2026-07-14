@@ -141,17 +141,18 @@ export function useModel() {
         teamList.forEach(t => (usersByTeam[t.name] = t.users));
 
         // ── Features (Entity + Initiative are flat fields on the feature) ──
-        // Tolerant entity field: accept "Entity", "By Entity", or any Features
-        // field whose name mentions entity (so a small naming difference still works).
-        const entityField = features.fields.entity
-            || (features.table && features.table.fields.find(f => /entity/i.test(f.name)))
-            || null;
+        // Tolerant Entity / Initiative fields: accept the exact name, else any
+        // Features field whose name mentions entity / initiative (so a small
+        // naming difference — "By Entity", "Initiatives" — still works).
+        const findField = (exact, re) => exact || (features.table && features.table.fields.find(f => re.test(f.name))) || null;
+        const entityField = findField(features.fields.entity, /entity/i);
+        const initiativeField = findField(features.fields.initiative, /initiative/i);
         const featureList = (featureRecords || []).map(r => ({
             id: r.id,
             record: r,
             name: str(r, features.fields.name),
             entity: str(r, entityField) || 'Unassigned',
-            initiative: str(r, features.fields.initiative) || 'Ungrouped',
+            initiative: str(r, initiativeField) || 'Ungrouped',
             owningTeam: str(r, features.fields.owningTeam),
             status: str(r, features.fields.status),
             priority: str(r, features.fields.priority),
