@@ -1,7 +1,7 @@
-Feature Name,Initiative,Owning Team,Status,Priority,Target Go-Live Date,Business Outcome / KDO Description
-Loans Disbursement,Balance Sheet Go-Live,Accounting / Reporting COE (Control Crew),In Progress,Critical,2026-07-25,Daily loan disbursement postings feeding the sub-ledger and liquidity reports.
-Customer Deposits,Balance Sheet Go-Live,Accounting / Reporting COE (Control Crew),Blocked,High,2026-07-26,Customer deposit balances and accrued interest for sub-ledger and balance-sheet reporting.
-Securities Holdings,Balance Sheet Go-Live,Accounting / Reporting COE (Control Crew),In Progress,High,2026-07-31,Securities positions and valuations sourced for sub-ledger posting and disclosure.
-Interest Rate Swaps,Treasury & Markets,Accounting / Reporting COE (Control Crew),In Progress,Critical,2026-08-01,IRS lifecycle events and valuations posted through FPSL into GL/GR and risk reporting.
-FX Spot & Forward,Treasury & Markets,Accounting / Reporting COE (Control Crew),In Progress,Medium,2026-10-16,"FX spot/forward capture, revaluation and posting for treasury and balance-sheet reporting."
-Repurchase Agreements,Treasury & Markets,Accounting / Reporting COE (Control Crew),In Progress,Medium,2026-09-04,Repo cash legs and collateral postings for liquidity and balance-sheet reporting.
+Feature Name,Entity,Initiative,Owning Team,Status,Priority,Target Go-Live Date,Business Outcome / KDO Description
+Loans Disbursement,UBS Switzerland AG,Balance Sheet Go-Live,Accounting / Reporting COE (Control Crew),In Progress,Critical,2026-07-25,Daily loan disbursement postings feeding the sub-ledger and liquidity reports.
+Customer Deposits,UBS Switzerland AG,Balance Sheet Go-Live,Accounting / Reporting COE (Control Crew),Blocked,High,2026-07-26,Customer deposit balances and accrued interest for sub-ledger and balance-sheet reporting.
+Securities Holdings,UBS Switzerland AG,Balance Sheet Go-Live,Accounting / Reporting COE (Control Crew),In Progress,High,2026-07-31,Securities positions and valuations sourced for sub-ledger posting and disclosure.
+Interest Rate Swaps,UBS AG,Treasury & Markets,Accounting / Reporting COE (Control Crew),In Progress,Critical,2026-08-01,IRS lifecycle events and valuations posted through FPSL into GL/GR and risk reporting.
+FX Spot & Forward,UBS AG,Treasury & Markets,Accounting / Reporting COE (Control Crew),In Progress,Medium,2026-10-16,"FX spot/forward capture, revaluation and posting for treasury and balance-sheet reporting."
+Repurchase Agreements,UBS AG,Treasury & Markets,Accounting / Reporting COE (Control Crew),In Progress,Medium,2026-09-04,Repo cash legs and collateral postings for liquidity and balance-sheet reporting.

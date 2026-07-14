@@ -89,7 +89,7 @@ function App() {
             : base.tables.find(t => t.name === name) || null;
 
     // Every table must exist before we mount Dashboard — see note on Dashboard.
-    const required = [TABLES.teams, TABLES.entities, TABLES.initiatives, TABLES.features, TABLES.attributes, TABLES.stages, TABLES.handshakes];
+    const required = [TABLES.teams, TABLES.features, TABLES.attributes, TABLES.stages, TABLES.handshakes];
     const missingTables = required.filter(n => !get(n)).map(n => ({table: n, field: null}));
 
     return (

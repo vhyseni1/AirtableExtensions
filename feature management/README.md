@@ -23,17 +23,16 @@ The extension holds **no data** — it binds to the live base at runtime (`useBa
 and joins/aggregates client-side. The base is small (~hundreds of rows), so no native
 rollup/formula fields are required.
 
-## Data model (7 tables)
+## Data model (5 tables)
 
-Hierarchy: **Entity → Initiative → Feature → Attribute**. Each **Attribute is the work item** and
-carries its own `Current Stage` (no per-attribute-per-stage cross-product).
+Hierarchy: **Entity → Initiative → Feature → Attribute**, where **Entity and Initiative are flat
+fields on the Feature** (not their own tables). Each **Attribute is the work item** and carries its
+own `Current Stage` (no per-attribute-per-stage cross-product).
 
 | Table | Role |
 |---|---|
-| **Entities** | Legal entities — top of the hierarchy. |
-| **Initiatives** | Programme initiatives; `Entity` (link→Entities) sets the entity. |
 | **Teams** | Teams **and** their users — `Users` is a multi-collaborator field. |
-| **Features** | One row per feature; `Initiative` (link→Initiatives) sets the initiative (and, through it, the entity). |
+| **Features** | One row per feature; `Entity` and `Initiative` fields set the hierarchy above it. |
 | **Attributes** | The work item: catalog fields **+** `Current Stage` (link→Stages), `Status`, `Assignee`, `Assigned/Approver Team`, `Acceptance Criteria`, `Addressed By`/`Forks Into` self-links, dates. |
 | **Stages** | Thin reference ladder: `Stage Code`, `Order`, `Phase Group`, `Responsible Team`, `Approver Team`. Drives order, phase and handoff routing. |
 | **Handshakes** | Audit log of every promote / accept / return. |

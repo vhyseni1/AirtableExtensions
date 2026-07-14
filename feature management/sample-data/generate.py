@@ -61,26 +61,15 @@ STAGE_NAME = {s[1]: s[0] for s in STAGES}
 STAGE_RESP = {s[1]: s[4] for s in STAGES}
 STAGE_APPR = {s[1]: s[5] for s in STAGES}
 
-# ── Entities → Initiatives (the hierarchy above Features) ─────────────────────
-# name, legal entity code, region
-ENTITIES = [
-    ("UBS Switzerland AG", "CH-SWB", "Switzerland"),
-    ("UBS AG", "CH-AG", "Group"),
-]
-# name, entity, sponsor, status
-INITIATIVES = [
-    ("Balance Sheet Go-Live", "UBS Switzerland AG", "Priya Anand", "In Progress"),
-    ("Treasury & Markets", "UBS AG", "Marco Reuter", "In Progress"),
-]
-
-# ── Features (each linked to one Initiative) ──────────────────────────────────
+# ── Features (Entity + Initiative are flat fields on the feature) ─────────────
+# name, entity, initiative, owning team, status, priority, go-live, KDO
 FEATURES = [
-    ("Loans Disbursement", "Balance Sheet Go-Live", COE, "In Progress", "Critical", "2026-07-25", "Daily loan disbursement postings feeding the sub-ledger and liquidity reports."),
-    ("Customer Deposits", "Balance Sheet Go-Live", COE, "Blocked", "High", "2026-07-26", "Customer deposit balances and accrued interest for sub-ledger and balance-sheet reporting."),
-    ("Securities Holdings", "Balance Sheet Go-Live", COE, "In Progress", "High", "2026-07-31", "Securities positions and valuations sourced for sub-ledger posting and disclosure."),
-    ("Interest Rate Swaps", "Treasury & Markets", COE, "In Progress", "Critical", "2026-08-01", "IRS lifecycle events and valuations posted through FPSL into GL/GR and risk reporting."),
-    ("FX Spot & Forward", "Treasury & Markets", COE, "In Progress", "Medium", "2026-10-16", "FX spot/forward capture, revaluation and posting for treasury and balance-sheet reporting."),
-    ("Repurchase Agreements", "Treasury & Markets", COE, "In Progress", "Medium", "2026-09-04", "Repo cash legs and collateral postings for liquidity and balance-sheet reporting."),
+    ("Loans Disbursement", "UBS Switzerland AG", "Balance Sheet Go-Live", COE, "In Progress", "Critical", "2026-07-25", "Daily loan disbursement postings feeding the sub-ledger and liquidity reports."),
+    ("Customer Deposits", "UBS Switzerland AG", "Balance Sheet Go-Live", COE, "Blocked", "High", "2026-07-26", "Customer deposit balances and accrued interest for sub-ledger and balance-sheet reporting."),
+    ("Securities Holdings", "UBS Switzerland AG", "Balance Sheet Go-Live", COE, "In Progress", "High", "2026-07-31", "Securities positions and valuations sourced for sub-ledger posting and disclosure."),
+    ("Interest Rate Swaps", "UBS AG", "Treasury & Markets", COE, "In Progress", "Critical", "2026-08-01", "IRS lifecycle events and valuations posted through FPSL into GL/GR and risk reporting."),
+    ("FX Spot & Forward", "UBS AG", "Treasury & Markets", COE, "In Progress", "Medium", "2026-10-16", "FX spot/forward capture, revaluation and posting for treasury and balance-sheet reporting."),
+    ("Repurchase Agreements", "UBS AG", "Treasury & Markets", COE, "In Progress", "Medium", "2026-09-04", "Repo cash legs and collateral postings for liquidity and balance-sheet reporting."),
 ]
 
 # Acceptance-criteria templates per phase (kept short for the demo).
@@ -207,16 +196,8 @@ def main():
               ["Stage Name", "Stage Code", "Order", "Phase Group", "Responsible Team", "Approver Team"],
               [[n, c, o, p, r, a] for (n, c, o, p, r, a) in STAGES])
 
-    write_csv("Entities.csv",
-              ["Entity Name", "Legal Entity Code", "Region"],
-              [list(e) for e in ENTITIES])
-
-    write_csv("Initiatives.csv",
-              ["Initiative Name", "Entity", "Sponsor", "Status"],
-              [list(i) for i in INITIATIVES])
-
     write_csv("Features.csv",
-              ["Feature Name", "Initiative", "Owning Team", "Status", "Priority",
+              ["Feature Name", "Entity", "Initiative", "Owning Team", "Status", "Priority",
                "Target Go-Live Date", "Business Outcome / KDO Description"],
               [list(f) for f in FEATURES])
 

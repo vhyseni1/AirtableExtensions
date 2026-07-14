@@ -14,8 +14,6 @@
 
 export const TABLES = {
     teams: 'Teams',
-    entities: 'Entities',
-    initiatives: 'Initiatives',
     features: 'Features',
     attributes: 'Attributes',
     stages: 'Stages',
@@ -30,20 +28,10 @@ export const FIELDS = {
         tool: 'Tool / Environment',
         email: 'Email',
     },
-    entities: {
-        name: 'Entity Name',
-        code: 'Legal Entity Code',
-        region: 'Region',
-    },
-    initiatives: {
-        name: 'Initiative Name',
-        entity: 'Entity', // link → Entities
-        sponsor: 'Sponsor',
-        status: 'Status',
-    },
     features: {
         name: 'Feature Name',
-        initiative: 'Initiative', // link → Initiatives (name resolved via the link)
+        entity: 'Entity',
+        initiative: 'Initiative',
         owningTeam: 'Owning Team',
         status: 'Status',
         priority: 'Priority',

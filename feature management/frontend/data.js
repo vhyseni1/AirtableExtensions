@@ -92,16 +92,12 @@ export function useModel() {
 
     const missing = [];
     const teams = bindTable(base, TABLES.teams, FIELDS.teams, missing);
-    const entities = bindTable(base, TABLES.entities, FIELDS.entities, missing);
-    const initiatives = bindTable(base, TABLES.initiatives, FIELDS.initiatives, missing);
     const features = bindTable(base, TABLES.features, FIELDS.features, missing);
     const attributes = bindTable(base, TABLES.attributes, FIELDS.attributes, missing);
     const stages = bindTable(base, TABLES.stages, FIELDS.stages, missing);
     const handshakes = bindTable(base, TABLES.handshakes, FIELDS.handshakes, missing);
 
     const teamRecords = useRecords(teams.table);
-    const entityRecords = useRecords(entities.table);
-    const initiativeRecords = useRecords(initiatives.table);
     const featureRecords = useRecords(features.table);
     const attributeRecords = useRecords(attributes.table);
     const stageRecords = useRecords(stages.table);
@@ -144,45 +140,22 @@ export function useModel() {
         const usersByTeam = {};
         teamList.forEach(t => (usersByTeam[t.name] = t.users));
 
-        // ── Entities → Initiatives (the hierarchy above Features) ──
-        const entityList = (entityRecords || []).map(r => ({
+        // ── Features (Entity + Initiative are flat fields on the feature) ──
+        const featureList = (featureRecords || []).map(r => ({
             id: r.id,
             record: r,
-            name: str(r, entities.fields.name),
-            code: str(r, entities.fields.code),
-            region: str(r, entities.fields.region),
+            name: str(r, features.fields.name),
+            entity: str(r, features.fields.entity) || 'Unassigned',
+            initiative: str(r, features.fields.initiative) || 'Ungrouped',
+            owningTeam: str(r, features.fields.owningTeam),
+            status: str(r, features.fields.status),
+            priority: str(r, features.fields.priority),
+            goLive: str(r, features.fields.goLive),
         }));
-        const entityNames = entityList.map(e => e.name).filter(Boolean);
-
-        const initiativeList = (initiativeRecords || []).map(r => ({
-            id: r.id,
-            record: r,
-            name: str(r, initiatives.fields.name),
-            entity: str(r, initiatives.fields.entity) || 'Unassigned',
-            sponsor: str(r, initiatives.fields.sponsor),
-            status: str(r, initiatives.fields.status),
-        }));
-        const initiativeOrder = initiativeList.map(i => i.name).filter(Boolean);
-        // Initiative name → its Entity (source of truth for the hierarchy).
-        const initToEntity = {};
-        initiativeList.forEach(i => (initToEntity[i.name] = i.entity));
-
-        // ── Features (Initiative link → Initiative name → Entity) ──
-        const featureList = (featureRecords || []).map(r => {
-            const initiative = str(r, features.fields.initiative) || 'Ungrouped';
-            return {
-                id: r.id,
-                record: r,
-                name: str(r, features.fields.name),
-                initiative,
-                entity: initToEntity[initiative] || 'Unassigned',
-                owningTeam: str(r, features.fields.owningTeam),
-                status: str(r, features.fields.status),
-                priority: str(r, features.fields.priority),
-                goLive: str(r, features.fields.goLive),
-            };
-        });
         const featureOrder = featureList.map(f => f.name).filter(Boolean);
+        // Initiative → its entity (from the features that belong to it).
+        const initToEntity = {};
+        featureList.forEach(f => { if (!initToEntity[f.initiative]) initToEntity[f.initiative] = f.entity; });
 
         // ── Attributes = work items ──
         const attrs = (attributeRecords || []).map(r => {
@@ -407,11 +380,6 @@ export function useModel() {
             stagesByCode,
             teamNames,
             usersByTeam,
-            entities: entityList,
-            entityNames,
-            initiativeList,
-            initiativeOrder,
-            initToEntity,
             byEntity,
             features: featureList,
             featureOrder,
@@ -425,7 +393,7 @@ export function useModel() {
             loading: ready && attributeRecords === null,
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [teamRecords, entityRecords, initiativeRecords, featureRecords, attributeRecords, stageRecords, handshakeRecords]);
+    }, [teamRecords, featureRecords, attributeRecords, stageRecords, handshakeRecords]);
 }
 
 // Attributes whose work currently sits with this team.
