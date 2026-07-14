@@ -90,18 +90,32 @@ export async function forkOutCreate(model, attr, names) {
     const stage1 = model.stagesByCode['1'] || null;
     const base = attr.attributeId || 'ATTR';
     const stamp = Date.now().toString(36).slice(-4).toUpperCase();
-    const payload = names.map((nm, i) => ({
-        fields: writeObject([
+
+    // Copy the parent's Feature link(s) verbatim so children inherit the feature.
+    let featureLinks = null;
+    if (af.feature) {
+        try {
+            const v = attr.record.getCellValue(af.feature.id);
+            if (Array.isArray(v) && v.length) featureLinks = v.map(x => ({id: x.id}));
+        } catch {
+            featureLinks = null;
+        }
+    }
+    if (!featureLinks && attr.featureId) featureLinks = [{id: attr.featureId}];
+
+    const payload = names.map((nm, i) => {
+        const fields = writeObject([
             [af.attributeId, {text: `${base}-F${stamp}${i + 1}`}],
             [af.businessName, {text: (nm && nm.trim()) || `${attr.businessName || base} — fork ${i + 1}`}],
-            [af.feature, {linkId: attr.featureId}],
             [af.sourcingType, {name: attr.sourcingType}],
             [af.currentStage, {linkId: stage1 ? stage1.id : null}],
             [af.status, {name: STATUS.notStarted}],
             [af.assignedTeam, {linkId: stage1 ? stage1.responsibleTeamId : null}],
             [af.approverTeam, {linkId: stage1 ? stage1.approverTeamId : null}],
-        ]),
-    }));
+        ]);
+        if (featureLinks && af.feature) fields[af.feature.id] = featureLinks;
+        return {fields};
+    });
     if (typeof table.hasPermissionToCreateRecords === 'function' && !table.hasPermissionToCreateRecords(payload)) {
         throw new Error('You do not have permission to create attribute records.');
     }

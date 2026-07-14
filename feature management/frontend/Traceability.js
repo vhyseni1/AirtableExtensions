@@ -190,10 +190,24 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                             {ln.visited.slice(0, ln.delivered ? ln.visited.length : -1).map(t => (
                                 <circle key={t} cx={colX(colIdx(t))} cy={yy} r={isHot(ln) ? 3.2 : 2.6} className="fp-flow-tick" style={{fill: c, opacity: isDim(ln) ? 0.12 : 1}} />
                             ))}
-                            {ln.attr.hasRelations && (
-                                <path d={`M ${labelW - 9} ${yy - 3.5} l 0 7 l 5 -3.5 Z`} className="fp-flow-relmark" style={{fill: c, opacity: isDim(ln) ? 0.2 : 1}} />
+                            {ln.attr.forksInto.length > 0 && (
+                                <path d={`M ${labelW - 12} ${yy - 4.5} l 0 9 l 7 -4.5 Z`} className="fp-flow-relmark" style={{fill: c, opacity: isDim(ln) ? 0.2 : 1}}>
+                                    <title>Forks into {ln.attr.forksInto.length}: {ln.attr.forksInto.map(x => x.businessName || x.attributeId).join(', ')}</title>
+                                </path>
+                            )}
+                            {ln.attr.addressedBy.length > 0 && (
+                                <path d={`M ${labelW} ${yy - 6} l 6 6 l -6 6 l -6 -6 Z`} className="fp-flow-knot" style={{fill: '#4a3aa7', opacity: isDim(ln) ? 0.22 : 1}}>
+                                    <title>Addressed by {ln.attr.addressedBy.length}: {ln.attr.addressedBy.map(x => x.businessName || x.attributeId).join(', ')}</title>
+                                </path>
                             )}
                             <circle cx={ex} cy={yy} r={isHot(ln) ? 5.5 : 4} className="fp-flow-end" style={{fill: ln.delivered ? '#16a34a' : c, opacity: isDim(ln) ? 0.15 : 1}} />
+                            {hoverId === ln.attr.id && ln.attr.hasRelations && (
+                                <text x={labelW + 14} y={yy - 10} className="fp-flow-rellabel">
+                                    {ln.attr.forksInto.length > 0 ? `⑂ forks into ${ln.attr.forksInto.length}` : ''}
+                                    {ln.attr.forksInto.length > 0 && ln.attr.addressedBy.length > 0 ? '   ·   ' : ''}
+                                    {ln.attr.addressedBy.length > 0 ? `↳ addressed by ${ln.attr.addressedBy.map(x => x.businessName || x.attributeId).join(', ')}` : ''}
+                                </text>
+                            )}
                             <g className="fp-flow-add" onClick={e => { e.stopPropagation(); onRelate(ln.attr, 'menu'); }}>
                                 <circle cx={ex + 16} cy={yy} r={8.5} />
                                 <text x={ex + 16} y={yy} textAnchor="middle" dominantBaseline="central">+</text>
@@ -210,7 +224,9 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                         {connectors.map((cn, i) => (
                             <g key={i}>
                                 <path d={connPath(cn.from, cn.to)} fill="none" stroke={cn.color} strokeWidth={2.6} strokeDasharray={cn.kind === 'addr' ? '5 4' : undefined} opacity={0.92} />
+                                <circle cx={cn.from.ex} cy={cn.from.yy} r={3.4} fill={cn.color} />
                                 <path d={`M ${labelW} ${cn.to.yy} l -9 -5 l 0 10 Z`} fill={cn.color} />
+                                <circle cx={labelW} cy={cn.to.yy} r={4} fill="#fff" stroke={cn.color} strokeWidth={2} />
                             </g>
                         ))}
                     </g>
