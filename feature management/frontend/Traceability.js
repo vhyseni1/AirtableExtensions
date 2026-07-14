@@ -103,8 +103,30 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
 
     const endX = ln => (ln.delivered ? colX(teams.length) : colX(colIdx(ln.visited[ln.visited.length - 1])));
     const stoppedAt = t => lines.filter(l => !l.delivered && l.visited[l.visited.length - 1] === t);
-    const isDim = ln => (hoverId && hoverId !== ln.attr.id) || (hoverFeature && hoverFeature !== ln.feature);
-    const isHot = ln => hoverId === ln.attr.id || hoverFeature === ln.feature;
+
+    // Geometry per line + relationship connectors for the hovered attribute.
+    const geo = lines.map(ln => ({ln, yy: padT + ln.yStart, ex: endX(ln), c: featureColorOf(ln.feature)}));
+    const geoById = {};
+    geo.forEach(g => (geoById[g.ln.attr.id] = g));
+    const hg = hoverId ? geoById[hoverId] : null;
+    const relatedIds = new Set();
+    const connectors = [];
+    if (hg) {
+        hg.ln.attr.forksInto.forEach(ch => {
+            relatedIds.add(ch.id);
+            const g = geoById[ch.id];
+            if (g) connectors.push({from: hg, to: g, kind: 'fork', color: hg.c});
+        });
+        hg.ln.attr.addressedBy.forEach(sr => {
+            relatedIds.add(sr.id);
+            const g = geoById[sr.id];
+            if (g) connectors.push({from: g, to: hg, kind: 'addr', color: '#4a3aa7'});
+        });
+    }
+    const connPath = (a, b) => { const mx = (a.ex + labelW) / 2; return `M ${a.ex} ${a.yy} C ${mx} ${a.yy}, ${mx} ${b.yy}, ${labelW} ${b.yy}`; };
+
+    const isDim = ln => (hoverId && ln.attr.id !== hoverId && !relatedIds.has(ln.attr.id)) || (hoverFeature && hoverFeature !== ln.feature);
+    const isHot = ln => ln.attr.id === hoverId || relatedIds.has(ln.attr.id) || hoverFeature === ln.feature;
 
     return (
         <div className="fp-flow" ref={ref}>
@@ -141,10 +163,7 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                 })()}
 
                 {/* one track per attribute — a feature-tinted shaded bar carries the line */}
-                {lines.map(ln => {
-                    const c = featureColorOf(ln.feature);
-                    const yy = padT + ln.yStart;
-                    const ex = endX(ln);
+                {geo.map(({ln, yy, ex, c}) => {
                     const relNote = ln.attr.hasRelations
                         ? `\n${ln.attr.addressedBy.length ? `Addressed by ${ln.attr.addressedBy.length}` : ''}${ln.attr.addressedBy.length && ln.attr.forksInto.length ? ' · ' : ''}${ln.attr.forksInto.length ? `Forks into ${ln.attr.forksInto.length}` : ''}`
                         : '';
@@ -184,6 +203,18 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                         </g>
                     );
                 })}
+
+                {/* relationship connectors for the hovered attribute */}
+                {connectors.length > 0 && (
+                    <g className="fp-flow-conn">
+                        {connectors.map((cn, i) => (
+                            <g key={i}>
+                                <path d={connPath(cn.from, cn.to)} fill="none" stroke={cn.color} strokeWidth={2.6} strokeDasharray={cn.kind === 'addr' ? '5 4' : undefined} opacity={0.92} />
+                                <path d={`M ${labelW} ${cn.to.yy} l -9 -5 l 0 10 Z`} fill={cn.color} />
+                            </g>
+                        ))}
+                    </g>
+                )}
 
                 {/* bottom axis: horizontal wrapped team names */}
                 {teams.map((t, i) => (
