@@ -408,6 +408,12 @@ export function useModel() {
             teamNames,
             usersByTeam,
             byEntity,
+            _debug: {
+                entityField: entityField ? entityField.name : '(NOT FOUND)',
+                initiativeField: initiativeField ? initiativeField.name : '(NOT FOUND)',
+                featureFields: features.table ? features.table.fields.map(f => f.name).join(' | ') : '(no table)',
+                sample: featureList.slice(0, 6).map(f => `${f.name}  →  entity="${f.entity}"  ·  initiative="${f.initiative}"`),
+            },
             features: featureList,
             featureOrder,
             initiatives,
