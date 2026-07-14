@@ -112,29 +112,51 @@ export async function forkOutCreate(model, attr, names) {
     const base = attr.attributeId || 'ATTR';
     const stamp = Date.now().toString(36).slice(-4).toUpperCase();
 
-    // Copy the parent's Feature cell verbatim (link, select, or text) so
-    // children inherit the feature regardless of how that field is configured.
-    const featureVal = copyCellValue(attr.record, af.feature);
+    // Resolve the parent's Feature LINK id (Feature is a link → children must
+    // link to the same Features record). Read it directly if the cached id is
+    // absent, and fail loudly rather than create orphaned/unassigned records.
+    let featureLinkId = attr.featureId || null;
+    if (!featureLinkId && af.feature) {
+        try {
+            const v = attr.record.getCellValue(af.feature.id);
+            if (Array.isArray(v) && v[0] && v[0].id) featureLinkId = v[0].id;
+        } catch {
+            featureLinkId = null;
+        }
+    }
+    if (af.feature && !featureLinkId) {
+        throw new Error(`Could not read a Feature to copy from "${attr.businessName || attr.attributeId}". Its Feature link looks empty — set the parent's Feature first, then fork.`);
+    }
     const fsdmVal = copyCellValue(attr.record, af.fsdm);
 
-    const payload = names.map((nm, i) => {
-        const fields = writeObject([
+    // 1) create the children (primary + name only — safe fields)
+    const payload = names.map((nm, i) => ({
+        fields: writeObject([
             [af.attributeId, {text: `${base}-F${stamp}${i + 1}`}],
             [af.businessName, {text: (nm && nm.trim()) || `${attr.businessName || base} — fork ${i + 1}`}],
+        ]),
+    }));
+    if (typeof table.hasPermissionToCreateRecords === 'function' && !table.hasPermissionToCreateRecords(payload)) {
+        throw new Error('You do not have permission to create attribute records.');
+    }
+    const newIds = await table.createRecordsAsync(payload);
+
+    // 2) set the links/fields on each child via update (link write errors surface)
+    const updates = newIds.map(id => {
+        const fields = writeObject([
+            [af.feature, {linkId: featureLinkId}],
             [af.sourcingType, {name: attr.sourcingType}],
             [af.currentStage, {linkId: stage1 ? stage1.id : null}],
             [af.status, {name: STATUS.notStarted}],
             [af.assignedTeam, {linkId: stage1 ? stage1.responsibleTeamId : null}],
             [af.approverTeam, {linkId: stage1 ? stage1.approverTeamId : null}],
         ]);
-        if (featureVal !== undefined && af.feature) fields[af.feature.id] = featureVal;
         if (fsdmVal !== undefined && af.fsdm) fields[af.fsdm.id] = fsdmVal;
-        return {fields};
+        return {id, fields};
     });
-    if (typeof table.hasPermissionToCreateRecords === 'function' && !table.hasPermissionToCreateRecords(payload)) {
-        throw new Error('You do not have permission to create attribute records.');
-    }
-    const newIds = await table.createRecordsAsync(payload);
+    await table.updateRecordsAsync(updates);
+
+    // 3) link the parent → children
     const merged = [...attr.forksInto.map(x => x.id), ...newIds];
     await updateAttribute(model, attr, {[af.forksInto.id]: merged.map(id => ({id}))});
     return newIds;
