@@ -70,9 +70,20 @@ function PhaseStrip({phase, mounted}) {
 // ── Delivery timeline — markers on a line, labels stacked in clean lanes ───────
 const TL_ROW = 66;   // lane vertical pitch — must exceed the card height
 const CARD_W = 178;  // fixed card width — used for exact horizontal packing
-function Timeline({features, colorOf, onPick}) {
+function Timeline({features, colorOf, onPick, onDrill}) {
     const ref = useRef(null);
+    const clickTimer = useRef(null);
     const [w, setW] = useState(0);
+    // Single click = onPick (after a short delay); double click = onDrill.
+    const handleClick = f => {
+        if (clickTimer.current) {
+            clearTimeout(clickTimer.current);
+            clickTimer.current = null;
+            if (onDrill) onDrill(f); else onPick(f);
+            return;
+        }
+        clickTimer.current = setTimeout(() => { clickTimer.current = null; onPick(f); }, 240);
+    };
     useEffect(() => {
         const el = ref.current;
         if (!el) return undefined;
@@ -129,8 +140,8 @@ function Timeline({features, colorOf, onPick}) {
                         key={f.id}
                         className="fp-tl-flag"
                         style={{left: `${pct(f.goLiveMs)}%`}}
-                        title={`${f.name} · ${f.initiative} · go-live ${fmtDate(f.goLiveMs)} · ${f.pct}%`}
-                        onClick={() => onPick(f)}
+                        title={`${f.name} · ${f.initiative} · go-live ${fmtDate(f.goLiveMs)} · ${f.pct}%${onDrill ? '\n(double-click to open the feature timeline)' : ''}`}
+                        onClick={() => handleClick(f)}
                     >
                         <span className="fp-tl-marker" style={{borderColor: colorOf(f.initiative)}} />
                         <span className="fp-tl-connector" style={{height: lane * TL_ROW + 10}} />
@@ -208,6 +219,7 @@ export default function Executive({model}) {
     const {byInitiative, byEntity, features, kpis, phaseCounts, attrs} = model;
     const [mounted, setMounted] = useState(false);
     const [tlLevel, setTlLevel] = useState('initiative'); // timeline: 'initiative' | 'feature'
+    const [tlDrill, setTlDrill] = useState(null); // drilled into one initiative's features, or null
     const drill = useDrill();
     useEffect(() => {
         const id = requestAnimationFrame(() => setMounted(true));
@@ -320,14 +332,23 @@ export default function Executive({model}) {
             {/* Timeline */}
             <div className="fp-section-title">
                 Delivery timeline — target go-lives
-                <span className="fp-seg">
-                    <button type="button" className={tlLevel === 'initiative' ? 'on' : ''} onClick={() => setTlLevel('initiative')}>By initiative</button>
-                    <button type="button" className={tlLevel === 'feature' ? 'on' : ''} onClick={() => setTlLevel('feature')}>By feature</button>
-                </span>
+                {tlDrill ? (
+                    <>
+                        <button type="button" className="fp-tl-back" onClick={() => setTlDrill(null)}>← Back to initiatives</button>
+                        <span className="fp-tl-crumb"><i style={{background: colorOf(tlDrill.name)}} />{tlDrill.name}</span>
+                    </>
+                ) : (
+                    <span className="fp-seg">
+                        <button type="button" className={tlLevel === 'initiative' ? 'on' : ''} onClick={() => { setTlLevel('initiative'); setTlDrill(null); }}>By initiative</button>
+                        <button type="button" className={tlLevel === 'feature' ? 'on' : ''} onClick={() => { setTlLevel('feature'); setTlDrill(null); }}>By feature</button>
+                    </span>
+                )}
             </div>
             <div className="fp-panel">
-                {tlLevel === 'initiative' ? (
-                    <Timeline features={initTimeline} colorOf={colorOf} onPick={it => openFeatures(`${it.name} · features`, it.features)} />
+                {tlDrill ? (
+                    <Timeline features={tlDrill.features} colorOf={colorOf} onPick={pushFeatureAttrs} />
+                ) : tlLevel === 'initiative' ? (
+                    <Timeline features={initTimeline} colorOf={colorOf} onPick={it => openFeatures(`${it.name} · features`, it.features)} onDrill={it => setTlDrill(it)} />
                 ) : (
                     <Timeline features={features} colorOf={colorOf} onPick={pushFeatureAttrs} />
                 )}

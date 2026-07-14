@@ -93,6 +93,10 @@
 .fp-seg { display: inline-flex; border: 1px solid var(--fp-border); border-radius: 8px; padding: 2px; background: #fff; }
 .fp-seg button { border: none; background: transparent; padding: 4px 12px; border-radius: 6px; font: inherit; font-size: 12px; font-weight: 600; color: var(--fp-muted); cursor: pointer; }
 .fp-seg button.on { background: color-mix(in srgb, var(--fp-accent) 12%, #fff); color: var(--fp-accent); }
+.fp-tl-back { border: 1px solid var(--fp-border); background: #fff; color: var(--fp-ink); border-radius: 8px; padding: 4px 12px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.fp-tl-back:hover { border-color: var(--fp-accent); color: var(--fp-accent); }
+.fp-tl-crumb { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; }
+.fp-tl-crumb i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 .fp-showmore { margin-top: 8px; width: 100%; border: 1px dashed var(--fp-border); background: #fff; color: var(--fp-accent); border-radius: 8px; padding: 6px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
 .fp-showmore:hover { background: #fff6f6; border-style: solid; }
 
