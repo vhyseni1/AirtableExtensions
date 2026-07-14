@@ -144,15 +144,20 @@ export function useModel() {
         // Tolerant Entity / Initiative fields: accept the exact name, else any
         // Features field whose name mentions entity / initiative (so a small
         // naming difference — "By Entity", "Initiatives" — still works).
-        const findField = (exact, re) => exact || (features.table && features.table.fields.find(f => re.test(f.name))) || null;
+        const ff = features.table ? features.table.fields : [];
+        const findField = (exact, re) => exact || ff.find(f => re.test(f.name)) || null;
         const entityField = findField(features.fields.entity, /entity/i);
         const initiativeField = findField(features.fields.initiative, /initiative/i);
+        const milestoneDueField = features.fields.milestoneDue || ff.find(f => /milestone/i.test(f.name) && /due/i.test(f.name)) || null;
+        const milestoneField = features.fields.milestone || ff.find(f => /milestone/i.test(f.name) && !/due/i.test(f.name)) || null;
         const featureList = (featureRecords || []).map(r => ({
             id: r.id,
             record: r,
             name: str(r, features.fields.name),
             entity: str(r, entityField) || 'Unassigned',
             initiative: str(r, initiativeField) || 'Ungrouped',
+            milestone: (names(r, milestoneField)[0] || str(r, milestoneField) || '').trim(),
+            milestoneDue: str(r, milestoneDueField),
             owningTeam: str(r, features.fields.owningTeam),
             status: str(r, features.fields.status),
             priority: str(r, features.fields.priority),
@@ -367,6 +372,31 @@ export function useModel() {
             };
         }).sort((a, b) => (a.name === 'Unassigned' ? 1 : b.name === 'Unassigned' ? -1 : a.name.localeCompare(b.name)));
 
+        // ── Per-milestone grouping (features grouped by their Milestone link;
+        // the milestone's date is the Milestone Due Date). ──
+        const parseD = s => { const t = s ? Date.parse(s) : NaN; return Number.isNaN(t) ? null : t; };
+        const msMap = {};
+        featureList.forEach(f => {
+            const m = f.milestone || 'No milestone';
+            if (!msMap[m]) msMap[m] = {name: m, features: [], dueMs: null};
+            msMap[m].features.push(f);
+            const d = parseD(f.milestoneDue);
+            if (d != null && msMap[m].dueMs == null) msMap[m].dueMs = d;
+        });
+        const byMilestone = Object.values(msMap).map(m => ({
+            name: m.name,
+            features: m.features,
+            featureCount: m.features.length,
+            attrCount: m.features.reduce((s, f) => s + f.total, 0),
+            pct: wMean(m.features, f => f.pct),
+            dueMs: m.dueMs,
+        })).sort((a, b) => {
+            if (a.name === 'No milestone') return 1;
+            if (b.name === 'No milestone') return -1;
+            if (a.dueMs != null && b.dueMs != null) return a.dueMs - b.dueMs;
+            return a.name.localeCompare(b.name);
+        });
+
         // ── Overall phase distribution (every attribute sits in one phase) ──
         const phaseCounts = {};
         PHASE_GROUPS.forEach(p => (phaseCounts[p] = 0));
@@ -416,6 +446,7 @@ export function useModel() {
             teamNames,
             usersByTeam,
             byEntity,
+            byMilestone,
             features: featureList,
             featureOrder,
             initiatives,

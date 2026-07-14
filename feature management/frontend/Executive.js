@@ -216,7 +216,7 @@ function EntityCard({e, colorOf, mounted, model, openInitiatives, openFeatures})
 }
 
 export default function Executive({model}) {
-    const {byInitiative, byEntity, features, kpis, phaseCounts, attrs} = model;
+    const {byInitiative, byEntity, byMilestone, features, kpis, phaseCounts, attrs} = model;
     const [mounted, setMounted] = useState(false);
     const [tlLevel, setTlLevel] = useState('initiative'); // timeline: 'initiative' | 'feature'
     const [tlDrill, setTlDrill] = useState(null); // drilled into one initiative's features, or null
@@ -229,6 +229,7 @@ export default function Executive({model}) {
     const colorIndex = {};
     byEntity.forEach((e, i) => (colorIndex[e.name] = INITIATIVE_COLORS[i % INITIATIVE_COLORS.length]));
     byInitiative.forEach((it, i) => { if (!(it.name in colorIndex)) colorIndex[it.name] = INITIATIVE_COLORS[i % INITIATIVE_COLORS.length]; });
+    byMilestone.forEach((m, i) => { if (!(m.name in colorIndex)) colorIndex[m.name] = INITIATIVE_COLORS[i % INITIATIVE_COLORS.length]; });
     const colorOf = name => colorIndex[name] || '#64748B';
 
     const attrsOf = useMemo(() => name => attrs.filter(a => a.featureName === name), [attrs]);
@@ -240,6 +241,19 @@ export default function Executive({model}) {
     const pushFeatureAttrs = f => drill.pushAttrs(`${f.name} · attributes`, attrsOf(f.name));
 
     // Initiative-level timeline items (target = latest feature go-live in the initiative).
+    const milestoneTimeline = byMilestone.filter(m => m.dueMs != null).map(m => {
+        const anyRisk = m.features.some(f => f.health === 'at-risk' || f.health === 'blocked');
+        const allDone = m.features.length > 0 && m.features.every(f => f.health === 'delivered');
+        return {
+            id: `m-${m.name}`,
+            name: m.name,
+            initiative: m.name,
+            features: m.features,
+            pct: m.pct,
+            goLiveMs: m.dueMs,
+            health: allDone ? 'delivered' : anyRisk ? 'at-risk' : 'on-track',
+        };
+    });
     const initTimeline = byInitiative.map(it => {
         const goLives = it.features.map(f => f.goLiveMs).filter(x => x != null);
         const anyRisk = it.features.some(f => f.health === 'at-risk' || f.health === 'blocked');
@@ -334,12 +348,13 @@ export default function Executive({model}) {
                 Delivery timeline — target go-lives
                 {tlDrill ? (
                     <>
-                        <button type="button" className="fp-tl-back" onClick={() => setTlDrill(null)}>← Back to initiatives</button>
+                        <button type="button" className="fp-tl-back" onClick={() => setTlDrill(null)}>← Back</button>
                         <span className="fp-tl-crumb"><i style={{background: colorOf(tlDrill.name)}} />{tlDrill.name}</span>
                     </>
                 ) : (
                     <span className="fp-seg">
                         <button type="button" className={tlLevel === 'initiative' ? 'on' : ''} onClick={() => { setTlLevel('initiative'); setTlDrill(null); }}>By initiative</button>
+                        <button type="button" className={tlLevel === 'milestone' ? 'on' : ''} onClick={() => { setTlLevel('milestone'); setTlDrill(null); }}>By milestone</button>
                         <button type="button" className={tlLevel === 'feature' ? 'on' : ''} onClick={() => { setTlLevel('feature'); setTlDrill(null); }}>By feature</button>
                     </span>
                 )}
@@ -349,12 +364,14 @@ export default function Executive({model}) {
                     <Timeline features={tlDrill.features} colorOf={colorOf} onPick={pushFeatureAttrs} />
                 ) : tlLevel === 'initiative' ? (
                     <Timeline features={initTimeline} colorOf={colorOf} onPick={it => openFeatures(`${it.name} · features`, it.features)} onDrill={it => setTlDrill(it)} />
+                ) : tlLevel === 'milestone' ? (
+                    <Timeline features={milestoneTimeline} colorOf={colorOf} onPick={it => openFeatures(`${it.name} · features`, it.features)} onDrill={it => setTlDrill(it)} />
                 ) : (
                     <Timeline features={features} colorOf={colorOf} onPick={pushFeatureAttrs} />
                 )}
                 <div className="fp-legend">
-                    {byInitiative.map(it => (
-                        <span key={it.name} className="clickable" onClick={() => openFeatures(it.name, it.features)}><i style={{background: colorOf(it.name)}} />{it.name}</span>
+                    {(tlDrill ? [] : tlLevel === 'milestone' ? milestoneTimeline : byInitiative).map(x => (
+                        <span key={x.name} className="clickable" onClick={() => openFeatures(x.name, x.features)}><i style={{background: colorOf(x.name)}} />{x.name}</span>
                     ))}
                 </div>
             </div>

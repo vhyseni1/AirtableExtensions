@@ -32,6 +32,8 @@ export const FIELDS = {
         name: 'Feature Name',
         entity: 'Entity',
         initiative: 'Initiative',
+        milestone: 'Milestones', // link → Milestone table (name resolved via the link)
+        milestoneDue: 'Milestone Due Date',
         owningTeam: 'Owning Team',
         status: 'Status',
         priority: 'Priority',
