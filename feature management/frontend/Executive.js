@@ -155,12 +155,14 @@ export default function Executive({model}) {
     }, []);
 
     const colorIndex = {};
-    byInitiative.forEach((it, i) => (colorIndex[it.name] = INITIATIVE_COLORS[i % INITIATIVE_COLORS.length]));
+    byEntity.forEach((e, i) => (colorIndex[e.name] = INITIATIVE_COLORS[i % INITIATIVE_COLORS.length]));
+    byInitiative.forEach((it, i) => { if (!(it.name in colorIndex)) colorIndex[it.name] = INITIATIVE_COLORS[i % INITIATIVE_COLORS.length]; });
     const colorOf = name => colorIndex[name] || '#64748B';
 
     const attrsOf = useMemo(() => name => attrs.filter(a => a.featureName === name), [attrs]);
 
     // Drill helpers (shared drawer)
+    const openInitiatives = (title, list) => drill.openInitiatives(title, list);
     const openFeatures = (title, list) => drill.openFeatures(title, list);
     const openAttrs = (title, list) => drill.openAttrs(title, list);
     const pushFeatureAttrs = f => drill.pushAttrs(`${f.name} · attributes`, attrsOf(f.name));
@@ -232,60 +234,57 @@ export default function Executive({model}) {
             </section>
 
             {/* Initiative cards */}
-            <div className="fp-section-title">By entity &amp; initiative</div>
-            {byEntity.map(e => (
-                <div className="fp-entity" key={e.name}>
-                    <div className="fp-entity-head clickable" onClick={() => openFeatures(e.name, e.initiatives.flatMap(i => i.features))}>
-                        <span className="fp-entity-badge">Entity</span>
-                        <span className="fp-entity-name">{e.name}</span>
-                        <span className="fp-entity-meta">{e.initiatives.length} initiative{e.initiatives.length === 1 ? '' : 's'} · {e.featureCount} features · {e.pct}% mature</span>
-                    </div>
-                    <div className="fp-initgrid">
-                        {e.initiatives.map(it => {
-                            const phase = {};
-                            PHASE_GROUPS.forEach(p => (phase[p] = 0));
-                            it.features.forEach(f => {
-                                const bf = model.byFeature[f.name];
-                                if (bf) PHASE_GROUPS.forEach(p => (phase[p] += bf.phase[p] || 0));
-                            });
-                            const c = colorOf(it.name);
-                            return (
-                                <div className="fp-initcard" key={it.name} style={{borderTopColor: c}}>
-                                    <div className="fp-initcard-head">
-                                        <div className="clickable" onClick={() => openFeatures(it.name, it.features)}>
-                                            <div className="fp-initcard-name">{it.name}</div>
-                                            <div className="fp-initcard-meta">{it.featureCount} features · {it.attrCount} attributes</div>
-                                        </div>
-                                        <Donut pct={it.pct} size={84} stroke={10} color={c} onClick={() => openFeatures(it.name, it.features)}>
-                                            <div className="fp-donut-pct sm"><CountUp value={it.pct} suffix="%" /></div>
-                                        </Donut>
-                                    </div>
-
-                                    <div className="fp-initcard-rag">
-                                        <span className="clickable" onClick={() => openFeatures(`${it.name} · on track`, it.features.filter(f => f.health === 'on-track'))}><HealthDot health="on-track" /> {it.onTrack} on track</span>
-                                        <span className="clickable" onClick={() => openFeatures(`${it.name} · at risk`, it.features.filter(f => f.health === 'at-risk' || f.health === 'blocked'))}><HealthDot health="at-risk" /> {it.atRisk} at risk</span>
-                                        <span className="clickable" onClick={() => openFeatures(`${it.name} · delivered`, it.features.filter(f => f.health === 'delivered'))}><HealthDot health="delivered" /> {it.delivered} done</span>
-                                    </div>
-
-                                    <PhaseStrip phase={phase} mounted={mounted} />
-                                    <div className="fp-initcard-next">Next go-live: <b>{fmtDate(it.nextGoLiveMs)}</b></div>
-
-                                    <ul className="fp-initcard-feats">
-                                        {it.features.map(f => (
-                                            <li key={f.id} className="clickable" onClick={() => pushFeatureAttrs(f)} title="See attributes">
-                                                <HealthDot health={f.health} />
-                                                <span className="fp-feat-name">{f.name}</span>
-                                                <span className="fp-feat-bar"><i style={{width: mounted ? `${f.pct}%` : 0, background: c}} /></span>
-                                                <span className="fp-feat-pct">{f.pct}%</span>
-                                            </li>
-                                        ))}
-                                    </ul>
+            <div className="fp-section-title">By entity</div>
+            <div className="fp-initgrid">
+                {byEntity.map(e => {
+                    const feats = e.initiatives.flatMap(i => i.features);
+                    const phase = {};
+                    PHASE_GROUPS.forEach(p => (phase[p] = 0));
+                    feats.forEach(f => {
+                        const bf = model.byFeature[f.name];
+                        if (bf) PHASE_GROUPS.forEach(p => (phase[p] += bf.phase[p] || 0));
+                    });
+                    const onTrack = feats.filter(f => f.health === 'on-track');
+                    const atRisk = feats.filter(f => f.health === 'at-risk' || f.health === 'blocked');
+                    const delivered = feats.filter(f => f.health === 'delivered');
+                    const goLives = feats.map(f => f.goLiveMs).filter(x => x != null);
+                    const c = colorOf(e.name);
+                    return (
+                        <div className="fp-initcard" key={e.name} style={{borderTopColor: c}}>
+                            <div className="fp-initcard-head">
+                                <div className="clickable" onClick={() => openInitiatives(e.name, e.initiatives)}>
+                                    <div className="fp-initcard-kicker">Entity</div>
+                                    <div className="fp-initcard-name">{e.name}</div>
+                                    <div className="fp-initcard-meta">{e.initiatives.length} initiative{e.initiatives.length === 1 ? '' : 's'} · {e.featureCount} features · {e.attrCount} attributes</div>
                                 </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            ))}
+                                <Donut pct={e.pct} size={84} stroke={10} color={c} onClick={() => openInitiatives(e.name, e.initiatives)}>
+                                    <div className="fp-donut-pct sm"><CountUp value={e.pct} suffix="%" /></div>
+                                </Donut>
+                            </div>
+
+                            <div className="fp-initcard-rag">
+                                <span className="clickable" onClick={() => openFeatures(`${e.name} · on track`, onTrack)}><HealthDot health="on-track" /> {onTrack.length} on track</span>
+                                <span className="clickable" onClick={() => openFeatures(`${e.name} · at risk`, atRisk)}><HealthDot health="at-risk" /> {atRisk.length} at risk</span>
+                                <span className="clickable" onClick={() => openFeatures(`${e.name} · delivered`, delivered)}><HealthDot health="delivered" /> {delivered.length} done</span>
+                            </div>
+
+                            <PhaseStrip phase={phase} mounted={mounted} />
+                            <div className="fp-initcard-next">Next go-live: <b>{fmtDate(goLives.length ? Math.min(...goLives) : null)}</b></div>
+
+                            <ul className="fp-initcard-feats">
+                                {e.initiatives.map(it => (
+                                    <li key={it.name} className="clickable" onClick={() => openFeatures(it.name, it.features)} title="See features">
+                                        <span className="fp-feat-dot" style={{background: c}} />
+                                        <span className="fp-feat-name">{it.name}</span>
+                                        <span className="fp-feat-bar"><i style={{width: mounted ? `${it.pct}%` : 0, background: c}} /></span>
+                                        <span className="fp-feat-pct">{it.pct}%</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    );
+                })}
+            </div>
 
             {/* Timeline */}
             <div className="fp-section-title">Delivery timeline — target go-lives</div>
