@@ -72,19 +72,10 @@ const TL_ROW = 66;   // lane vertical pitch — must exceed the card height
 const CARD_W = 178;  // fixed card width — used for exact horizontal packing
 function Timeline({features, colorOf, onPick, onDrill}) {
     const ref = useRef(null);
-    const clickTimer = useRef(null);
     const [w, setW] = useState(0);
-    // Single click = onPick (deferred so a double-click can cancel it);
-    // native double click = onDrill.
-    const onFlagClick = f => {
-        if (!onDrill) { onPick(f); return; }
-        if (clickTimer.current) clearTimeout(clickTimer.current);
-        clickTimer.current = setTimeout(() => { clickTimer.current = null; onPick(f); }, 300);
-    };
-    const onFlagDbl = f => {
-        if (clickTimer.current) { clearTimeout(clickTimer.current); clickTimer.current = null; }
-        if (onDrill) onDrill(f);
-    };
+    // A single click drills in when we can (onDrill), otherwise it opens the
+    // record/attribute drawer (onPick). No double-click — one click, one action.
+    const onFlag = f => { if (onDrill) onDrill(f); else onPick(f); };
     useEffect(() => {
         const el = ref.current;
         if (!el) return undefined;
@@ -141,9 +132,8 @@ function Timeline({features, colorOf, onPick, onDrill}) {
                         key={f.id}
                         className="fp-tl-flag"
                         style={{left: `${pct(f.goLiveMs)}%`}}
-                        title={`${f.name} · ${f.initiative} · go-live ${fmtDate(f.goLiveMs)} · ${f.pct}%${onDrill ? '\n(double-click to drill in)' : ''}`}
-                        onClick={() => onFlagClick(f)}
-                        onDoubleClick={() => onFlagDbl(f)}
+                        title={`${f.name} · ${f.initiative} · go-live ${fmtDate(f.goLiveMs)} · ${f.pct}%${onDrill ? '\n(click to drill in)' : ''}`}
+                        onClick={() => onFlag(f)}
                     >
                         <span className="fp-tl-marker" style={{borderColor: colorOf(f.initiative)}} />
                         <span className="fp-tl-connector" style={{height: lane * TL_ROW + 10}} />
@@ -255,7 +245,9 @@ export default function Executive({model}) {
         return allDone ? 'delivered' : anyRisk ? 'at-risk' : 'on-track';
     };
     // Clamp a set of features into milestone timeline items (grouped by the
-    // feature's Milestone, dated by its Milestone Due Date).
+    // feature's Milestone). Each box is dated by the milestone's Milestone Due
+    // Date; when that's not set we fall back to the latest feature go-live so
+    // the grouping still renders on the time axis.
     const milestonesOf = feats => {
         const groups = {};
         feats.forEach(f => {
@@ -265,22 +257,26 @@ export default function Executive({model}) {
         return Object.keys(groups).map(name => {
             const fs = groups[name];
             const dues = fs.map(f => (f.milestoneDue ? Date.parse(f.milestoneDue) : NaN)).filter(x => !Number.isNaN(x));
+            const goLives = fs.map(f => f.goLiveMs).filter(x => x != null);
+            const dateMs = dues.length ? Math.max(...dues) : (goLives.length ? Math.max(...goLives) : null);
             return {
                 id: `ms-${name}`,
                 name,
                 initiative: name,
                 features: fs,
                 pct: wmean(fs),
-                goLiveMs: dues.length ? Math.max(...dues) : null,
+                goLiveMs: dateMs,
                 health: healthOf(fs),
             };
         });
     };
-    // Double-click an initiative box → clamp its features by milestone (or, when
-    // no milestone dates exist, drop straight to its feature timeline).
+    // Click an initiative box → clamp its features by milestone. Only worth a
+    // milestone hop when there are ≥2 datable milestone groups; otherwise drop
+    // straight to the feature timeline.
     const drillInitiative = it => {
-        const ms = milestonesOf(it.features);
-        setTlPath([ms.some(m => m.goLiveMs != null)
+        const ms = milestonesOf(it.features).filter(m => m.goLiveMs != null);
+        const datable = ms.length >= 2;
+        setTlPath([datable
             ? {kind: 'milestones', name: it.name, items: ms}
             : {kind: 'features', name: it.name, items: it.features}]);
     };
@@ -408,6 +404,17 @@ export default function Executive({model}) {
                 )}
             </div>
             <div className="fp-panel">
+                <div className="fp-tl-hint">
+                    {tlFrame
+                        ? (tlFrame.kind === 'milestones'
+                            ? 'Click a milestone to see its features · ← Back to go up'
+                            : 'Click a feature to open its attributes · ← Back to go up')
+                        : tlLevel === 'initiative'
+                            ? 'Click an initiative to open its milestone timeline'
+                            : tlLevel === 'milestone'
+                                ? 'Click a milestone to open its feature timeline'
+                                : 'Click a feature to open its attributes'}
+                </div>
                 {tlFrame ? (
                     tlFrame.kind === 'milestones' ? (
                         <Timeline
