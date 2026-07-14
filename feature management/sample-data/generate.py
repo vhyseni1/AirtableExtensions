@@ -141,6 +141,19 @@ ATTRS = [
      [("Business outcome / KDO signed off", False), ("Scope boundaries agreed", False)], "N/A", "2026-06-29", "", ""),
 ]
 
+# ── Attribute → Attribute relationships (self-links) ──────────────────────────
+# ADDRESSED_BY: this attribute is resolved / satisfied by the listed attributes.
+# FORKS_INTO:   this attribute spawns / branches into the listed attributes.
+ADDRESSED_BY = {
+    "IRS-03": ["SH-01"],           # the blocked settlement id is addressed by the MOR contract id work
+    "CD-01": ["LD-03"],            # counterparty ref data addressed by the delivered product-type ref set
+}
+FORKS_INTO = {
+    "LD-01": ["LD-02", "LD-03"],   # the contract id forks into amount + product type
+    "IRS-01": ["IRS-02", "IRS-03"],
+    "CD-02": ["CD-03"],
+}
+
 # ── Handshakes (audit log) ────────────────────────────────────────────────────
 # attr id, feature, stage code, from team, to team, action, decision maker, ts, comment, cycle
 HANDSHAKES = [
@@ -198,6 +211,7 @@ def main():
             STAGE_RESP[code], STAGE_APPR[code], appr,
             ac(acc), checkbox(all(d for _, d in acc)),
             environment, "", "", due, blocked, comments, "",
+            ", ".join(ADDRESSED_BY.get(aid, [])), ", ".join(FORKS_INTO.get(aid, [])),
         ])
     write_csv("Attributes.csv",
               ["Attribute ID", "Business Name", "Technical Name", "FSDM Mapping", "Feature",
@@ -205,7 +219,7 @@ def main():
                "Current Stage", "Status", "Assignee", "Assigned Team", "Approver Team",
                "Approval Status", "Acceptance Criteria", "Acceptance Met?", "Environment",
                "Started Date", "Completed Date", "Due Date", "Blocked Reason",
-               "Comments / Handoff Notes", "Cycle Number"],
+               "Comments / Handoff Notes", "Cycle Number", "Addressed By", "Forks Into"],
               attr_rows)
 
     hs_rows = []

@@ -497,10 +497,12 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-flow-label.done { color: #16a34a; font-weight: 700; }
 .fp-flow-node:hover .fp-flow-label { color: var(--fp-accent); }
 .fp-flow-line { cursor: pointer; }
-.fp-flow-hit { fill: none; stroke: transparent; stroke-width: 12; }
+.fp-flow-bar { transition: opacity .18s ease; }
+.fp-flow-hit { fill: none; stroke: transparent; stroke-width: 14; }
 .fp-flow-path { fill: none; stroke-linecap: round; filter: drop-shadow(0 1.5px 1.5px rgba(20,39,78,.22)); transition: opacity .18s ease, stroke-width .18s ease; }
 .fp-flow-tick { stroke: #fff; stroke-width: 1.25; transition: opacity .18s ease; }
 .fp-flow-end { stroke: #fff; stroke-width: 1.75; transition: opacity .18s ease; }
+.fp-flow-relmark { transition: opacity .18s ease; }
 .fp-flow-feat { cursor: pointer; }
 .fp-flow-featname { font-size: 11px; font-weight: 700; fill: var(--fp-text); }
 .fp-flow-feat:hover .fp-flow-featname { fill: var(--fp-accent); }
@@ -543,6 +545,20 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-arow-pos { flex: 0 0 auto; width: 150px; text-align: right; font-size: 11px; color: var(--fp-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fp-arow-done { flex: 0 0 auto; font-size: 13px; font-weight: 800; color: #16a34a; }
 .fp-arow-body { padding: 6px 8px 12px; }
+
+/* Attribute relationships (self-links) */
+.fp-rel-badge { flex: 0 0 auto; display: inline-flex; gap: 5px; align-items: center; cursor: help; }
+.fp-rel-badge span { font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 999px; font-variant-numeric: tabular-nums; }
+.fp-rel-in { background: #eef2ff; color: #3730a3; }
+.fp-rel-out { background: #fff4ec; color: #b45309; }
+.fp-rel { margin: 4px 0 12px; padding: 12px 14px; background: #f6f8fb; border: 1px solid var(--fp-border); border-radius: 10px; display: flex; flex-direction: column; gap: 10px; }
+.fp-rel-row { display: flex; flex-direction: column; gap: 6px; }
+.fp-rel-label { font-size: 11px; color: var(--fp-muted); }
+.fp-rel-label b { color: var(--fp-ink); font-size: 12px; }
+.fp-rel-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.fp-relchip { display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 1px solid var(--fp-border); border-radius: 999px; padding: 4px 11px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; transition: border-color .12s, transform .12s; }
+.fp-relchip:hover { border-color: var(--fp-accent); transform: translateY(-1px); }
+.fp-relchip i { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
 
 /* The pointy strip — process arrows (expanded only) */
 .fp-chevs { display: flex; width: 100%; margin-bottom: 4px; }

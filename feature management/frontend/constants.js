@@ -63,6 +63,11 @@ export const FIELDS = {
         blockedReason: 'Blocked Reason',
         comments: 'Comments / Handoff Notes',
         cycleNumber: 'Cycle Number',
+        // Self-referential links (Attributes → Attributes). Optional — absent
+        // fields read as empty. "Addressed By" = other attributes that resolve
+        // this one; "Forks Into" = downstream attributes this one spawns.
+        addressedBy: 'Addressed By',
+        forksInto: 'Forks Into',
     },
     stages: {
         name: 'Stage Name',

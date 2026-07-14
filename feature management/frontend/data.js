@@ -192,6 +192,8 @@ export function useModel() {
                 environment: str(r, attributes.fields.environment),
                 dueDate: str(r, attributes.fields.dueDate),
                 blockedReason: str(r, attributes.fields.blockedReason),
+                addressedByIds: links(r, attributes.fields.addressedBy).map(x => x.id),
+                forksIntoIds: links(r, attributes.fields.forksInto).map(x => x.id),
             };
             a.nextCode = nextStageCode(pathAttr, currentCode);
             a.hasNext = !!a.nextCode;
@@ -204,6 +206,16 @@ export function useModel() {
                 (status === STATUS.approved || (status === STATUS.inProgress && a.acceptanceMet));
             a.isDelivered = !a.hasNext && status === STATUS.done;
             return a;
+        });
+
+        // ── Resolve self-referential attribute links to attribute objects ──
+        const attrById = {};
+        attrs.forEach(a => (attrById[a.id] = a));
+        const resolveRel = ids => (ids || []).map(id => attrById[id]).filter(Boolean);
+        attrs.forEach(a => {
+            a.addressedBy = resolveRel(a.addressedByIds);
+            a.forksInto = resolveRel(a.forksIntoIds);
+            a.hasRelations = a.addressedBy.length > 0 || a.forksInto.length > 0;
         });
 
         // ── Per-feature aggregates + maturity ──

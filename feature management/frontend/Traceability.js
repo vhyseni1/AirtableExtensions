@@ -139,11 +139,14 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                     );
                 })()}
 
-                {/* one track per attribute */}
+                {/* one track per attribute — a feature-tinted shaded bar carries the line */}
                 {lines.map(ln => {
                     const c = featureColorOf(ln.feature);
                     const yy = padT + ln.yStart;
                     const ex = endX(ln);
+                    const relNote = ln.attr.hasRelations
+                        ? `\n${ln.attr.addressedBy.length ? `Addressed by ${ln.attr.addressedBy.length}` : ''}${ln.attr.addressedBy.length && ln.attr.forksInto.length ? ' · ' : ''}${ln.attr.forksInto.length ? `Forks into ${ln.attr.forksInto.length}` : ''}`
+                        : '';
                     return (
                         <g
                             key={ln.attr.id}
@@ -152,18 +155,26 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                             onMouseLeave={() => setHoverId(null)}
                             onClick={() => expandRecord(ln.attr.record)}
                         >
+                            <rect
+                                x={labelW} y={yy - 4.5} width={Math.max(ex - labelW, 0)} height={9} rx={4.5}
+                                className="fp-flow-bar"
+                                style={{fill: c, opacity: isDim(ln) ? 0.04 : isHot(ln) ? 0.24 : 0.13}}
+                            />
                             <line x1={labelW} y1={yy} x2={ex} y2={yy} className="fp-flow-hit" />
                             <line
                                 x1={labelW} y1={yy} x2={ex} y2={yy}
                                 className="fp-flow-path"
-                                style={{stroke: c, opacity: isDim(ln) ? 0.08 : isHot(ln) ? 1 : 0.6, strokeWidth: isHot(ln) ? 3.5 : 2.25}}
+                                style={{stroke: c, opacity: isDim(ln) ? 0.12 : isHot(ln) ? 1 : 0.72, strokeWidth: isHot(ln) ? 3.5 : 2.25}}
                             />
                             {/* ticks: only the teams this attribute actually passed */}
                             {ln.visited.slice(0, ln.delivered ? ln.visited.length : -1).map(t => (
                                 <circle key={t} cx={colX(colIdx(t))} cy={yy} r={isHot(ln) ? 3.2 : 2.6} className="fp-flow-tick" style={{fill: c, opacity: isDim(ln) ? 0.12 : 1}} />
                             ))}
+                            {ln.attr.hasRelations && (
+                                <path d={`M ${labelW - 9} ${yy - 3.5} l 0 7 l 5 -3.5 Z`} className="fp-flow-relmark" style={{fill: c, opacity: isDim(ln) ? 0.2 : 1}} />
+                            )}
                             <circle cx={ex} cy={yy} r={isHot(ln) ? 5.5 : 4} className="fp-flow-end" style={{fill: ln.delivered ? '#16a34a' : c, opacity: isDim(ln) ? 0.15 : 1}} />
-                            <title>{`${ln.attr.businessName || ln.attr.attributeId} · ${ln.feature}\n${ln.delivered ? 'Delivered ✓' : `Now: ${stageLabel(ln.attr.currentStageName)} (${ln.visited[ln.visited.length - 1]})`} · ${ln.attr.status}`}</title>
+                            <title>{`${ln.attr.businessName || ln.attr.attributeId} · ${ln.feature}\n${ln.delivered ? 'Delivered ✓' : `Now: ${stageLabel(ln.attr.currentStageName)} (${ln.visited[ln.visited.length - 1]})`} · ${ln.attr.status}${relNote}`}</title>
                         </g>
                     );
                 })}
@@ -245,6 +256,23 @@ function JourneyLog({model, attr}) {
     );
 }
 
+// Clickable reference to a related attribute — opens its record.
+function RelChip({a}) {
+    return (
+        <button type="button" className="fp-relchip" onClick={() => expandRecord(a.record)} title={`${a.businessName || a.attributeId} · ${a.isDelivered ? 'Delivered' : stageLabel(a.currentStageName)} · open record`}>
+            <i style={{background: a.isDelivered ? '#16a34a' : (PHASE_COLORS[a.phase] || '#94a3b8')}} />
+            {a.businessName || a.attributeId}
+        </button>
+    );
+}
+
+function relTitle(a) {
+    return [
+        a.addressedBy.length ? `Addressed by: ${a.addressedBy.map(x => x.businessName || x.attributeId).join(', ')}` : '',
+        a.forksInto.length ? `Forks into: ${a.forksInto.map(x => x.businessName || x.attributeId).join(', ')}` : '',
+    ].filter(Boolean).join('\n');
+}
+
 // ─── One attribute: a lean line collapsed; pointy journey + log expanded ──────
 function AttributeRow({model, attr, expanded, onToggle}) {
     const stages = pathStages(model, attr);
@@ -258,6 +286,12 @@ function AttributeRow({model, attr, expanded, onToggle}) {
                 <span className="fp-arow-name" onClick={e => { e.stopPropagation(); expandRecord(attr.record); }} title="Open record">
                     {attr.businessName || attr.attributeId}
                 </span>
+                {attr.hasRelations && (
+                    <span className="fp-rel-badge" title={relTitle(attr)} aria-label="Related attributes">
+                        {attr.addressedBy.length > 0 && <span className="fp-rel-in">↳{attr.addressedBy.length}</span>}
+                        {attr.forksInto.length > 0 && <span className="fp-rel-out">⑂{attr.forksInto.length}</span>}
+                    </span>
+                )}
                 <span className="fp-mini" role="img" aria-label={`${done} of ${stages.length} steps done`}>
                     {stages.map((s, i) => {
                         const state = attr.isDelivered || i < curIdx ? 'done' : i === curIdx ? 'current' : 'todo';
@@ -292,6 +326,22 @@ function AttributeRow({model, attr, expanded, onToggle}) {
                             );
                         })}
                     </div>
+                    {attr.hasRelations && (
+                        <div className="fp-rel">
+                            {attr.addressedBy.length > 0 && (
+                                <div className="fp-rel-row">
+                                    <span className="fp-rel-label"><b>↳ Addressed by</b> — resolved / satisfied by</span>
+                                    <span className="fp-rel-chips">{attr.addressedBy.map(x => <RelChip key={x.id} a={x} />)}</span>
+                                </div>
+                            )}
+                            {attr.forksInto.length > 0 && (
+                                <div className="fp-rel-row">
+                                    <span className="fp-rel-label"><b>⑂ Forks into</b> — spawns downstream attributes</span>
+                                    <span className="fp-rel-chips">{attr.forksInto.map(x => <RelChip key={x.id} a={x} />)}</span>
+                                </div>
+                            )}
+                        </div>
+                    )}
                     <JourneyLog model={model} attr={attr} />
                 </div>
             )}
