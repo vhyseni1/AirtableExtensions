@@ -123,9 +123,11 @@ export async function forkOutCreate(model, attr, names) {
         throw new Error(`Couldn't read a Feature to copy from "${attr.businessName || attr.attributeId}" — set the parent's Feature, then fork.`);
     }
 
-    // Duplicate the parent's catalogue fields, each in its own cell shape.
+    // Duplicate the parent's catalogue AND position fields, each in its own
+    // cell shape — a fork continues from the parent's stage, not from scratch.
     const copied = {};
-    [af.sourcingType, af.isReferenceData, af.requiresGateway, af.fsdm, af.technicalName].forEach(f => {
+    [af.sourcingType, af.isReferenceData, af.requiresGateway, af.fsdm, af.technicalName,
+     af.currentStage, af.assignedTeam, af.approverTeam].forEach(f => {
         if (!f) return;
         const v = copyCellValue(attr.record, f);
         if (v !== undefined) copied[f.id] = v;
@@ -134,16 +136,18 @@ export async function forkOutCreate(model, attr, names) {
 
     // ONE atomic create with every field. If any cell shape is invalid the call
     // fails as a whole and the error surfaces — no half-made "Unassigned"
-    // orphans. Stage/team pass BOTH linkId and name so they write whether those
-    // fields are links or single-selects/text.
+    // orphans. Stage/team fallbacks pass BOTH linkId and name so they write
+    // whether those fields are links or single-selects; the parent's native
+    // cell values (copied above) win when readable.
+    const parentStage = attr.stage || stage1 || null;
     const payload = names.map((nm, i) => {
         const fields = writeObject([
             [af.attributeId, {text: `${base}-F${stamp}${i + 1}`}],
             [af.businessName, {text: (nm && nm.trim()) || `${attr.businessName || base} — fork ${i + 1}`}],
-            [af.currentStage, {linkId: stage1 ? stage1.id : null, name: stage1 ? stage1.name : null}],
+            [af.currentStage, {linkId: parentStage ? parentStage.id : null, name: parentStage ? parentStage.name : null}],
             [af.status, {name: STATUS.notStarted}],
-            [af.assignedTeam, {linkId: stage1 ? stage1.responsibleTeamId : null, name: stage1 ? stage1.responsibleTeamName : null}],
-            [af.approverTeam, {linkId: stage1 ? stage1.approverTeamId : null, name: stage1 ? stage1.approverTeamName : null}],
+            [af.assignedTeam, {linkId: parentStage ? parentStage.responsibleTeamId : null, name: parentStage ? parentStage.responsibleTeamName : null}],
+            [af.approverTeam, {linkId: parentStage ? parentStage.approverTeamId : null, name: parentStage ? parentStage.approverTeamName : null}],
         ]);
         Object.assign(fields, copied);
         return {fields};

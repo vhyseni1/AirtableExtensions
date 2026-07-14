@@ -115,14 +115,12 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
         hg.ln.attr.addressedBy.forEach(x => relatedIds.add(x.id));
     }
 
-    // Every relationship is drawn as a connector — faint always-on so forks read
-    // as branches at a glance, and highlighted when either end is hovered.
+    // Fork children render as BRANCHES off the parent's line (below); only
+    // addressed-by needs a drawn connector.
+    const parentOf = {};
+    geo.forEach(g => g.ln.attr.forksInto.forEach(ch => { if (!parentOf[ch.id]) parentOf[ch.id] = g.ln.attr.id; }));
     const allConn = [];
     geo.forEach(g => {
-        g.ln.attr.forksInto.forEach(ch => {
-            const t = geoById[ch.id];
-            if (t) allConn.push({from: g, toX: labelW, toY: t.yy, kind: 'fork', color: g.c, a: g.ln.attr.id, b: ch.id});
-        });
         g.ln.attr.addressedBy.forEach(sr => {
             const s = geoById[sr.id];
             if (s) allConn.push({from: s, toX: g.ex + 13, toY: g.yy, kind: 'addr', color: '#4a3aa7', a: g.ln.attr.id, b: sr.id});
@@ -174,6 +172,38 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                     const relNote = ln.attr.hasRelations
                         ? `\n${ln.attr.addressedBy.length ? `Addressed by ${ln.attr.addressedBy.length}` : ''}${ln.attr.addressedBy.length && ln.attr.forksInto.length ? ' · ' : ''}${ln.attr.forksInto.length ? `Forks into ${ln.attr.forksInto.length}` : ''}`
                         : '';
+                    // Forked child → branch off the parent's line from the column
+                    // BEFORE its current stage into its current stage.
+                    const pg = parentOf[ln.attr.id] ? geoById[parentOf[ln.attr.id]] : null;
+                    if (pg) {
+                        const dotCol = colIdx(ln.visited[ln.visited.length - 1]);
+                        const prevX = ln.delivered ? colX(dotCol) : dotCol > 0 ? colX(dotCol - 1) : labelW;
+                        const mx = (prevX + ex) / 2;
+                        const d = `M ${prevX} ${pg.yy} C ${mx} ${pg.yy}, ${mx} ${yy}, ${ex} ${yy}`;
+                        return (
+                            <g
+                                key={ln.attr.id}
+                                className="fp-flow-line"
+                                onMouseEnter={() => setHoverId(ln.attr.id)}
+                                onMouseLeave={() => setHoverId(null)}
+                                onClick={() => expandRecord(ln.attr.record)}
+                            >
+                                <path d={d} className="fp-flow-hit" fill="none" />
+                                <path d={d} className="fp-flow-path" fill="none" style={{stroke: c, opacity: isDim(ln) ? 0.12 : isHot(ln) ? 1 : 0.72, strokeWidth: isHot(ln) ? 3.5 : 2.25}} />
+                                <circle cx={prevX} cy={pg.yy} r={3.2} className="fp-flow-tick" style={{fill: c, opacity: isDim(ln) ? 0.12 : 1}} />
+                                {ln.attr.addressedBy.length > 0 && (
+                                    <path d={`M ${ex + 13} ${yy - 9} l 9 9 l -9 9 l -9 -9 Z`} className="fp-flow-knot" style={{fill: '#4a3aa7', opacity: isDim(ln) ? 0.22 : 1}} />
+                                )}
+                                <circle cx={ex} cy={yy} r={isHot(ln) ? 5.5 : 4} className="fp-flow-end" style={{fill: ln.delivered ? '#16a34a' : c, opacity: isDim(ln) ? 0.15 : 1}} />
+                                <g className="fp-flow-add" onClick={e => { e.stopPropagation(); onRelate(ln.attr, 'menu'); }}>
+                                    <circle cx={ex + (ln.attr.addressedBy.length ? 36 : 18)} cy={yy} r={8.5} />
+                                    <text x={ex + (ln.attr.addressedBy.length ? 36 : 18)} y={yy} textAnchor="middle" dominantBaseline="central">+</text>
+                                    <title>Relate — fork out or address by</title>
+                                </g>
+                                <title>{`${ln.attr.businessName || ln.attr.attributeId} · ${ln.feature}\nForked from ${pg.ln.attr.businessName || pg.ln.attr.attributeId}\n${ln.delivered ? 'Delivered ✓' : `Now: ${stageLabel(ln.attr.currentStageName)} (${ln.visited[ln.visited.length - 1]})`} · ${ln.attr.status}`}</title>
+                            </g>
+                        );
+                    }
                     return (
                         <g
                             key={ln.attr.id}
