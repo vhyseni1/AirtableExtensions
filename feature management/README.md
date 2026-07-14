@@ -23,19 +23,20 @@ The extension holds **no data** — it binds to the live base at runtime (`useBa
 and joins/aggregates client-side. The base is small (~hundreds of rows), so no native
 rollup/formula fields are required.
 
-## Data model (5 tables)
+## Data model (7 tables)
 
-Simplified from the original 6-table design: the heavy per-attribute-**per-stage**
-`Stage Tasks` cross-product is **gone**. Each **Attribute is the work item** and carries its own
-`Current Stage`.
+Hierarchy: **Entity → Initiative → Feature → Attribute**. Each **Attribute is the work item** and
+carries its own `Current Stage` (no per-attribute-per-stage cross-product).
 
 | Table | Role |
 |---|---|
+| **Entities** | Legal entities — top of the hierarchy. |
+| **Initiatives** | Programme initiatives; `Entity` (link→Entities) sets the entity. |
 | **Teams** | Teams **and** their users — `Users` is a multi-collaborator field. |
-| **Features** | One row per feature; an **`Initiative`** field groups them. |
-| **Attributes** | The work item: catalog fields **+** `Current Stage` (link→Stages), `Status`, `Assignee`, `Assigned/Approver Team`, `Acceptance Criteria`, dates. |
+| **Features** | One row per feature; `Initiative` (link→Initiatives) sets the initiative (and, through it, the entity). |
+| **Attributes** | The work item: catalog fields **+** `Current Stage` (link→Stages), `Status`, `Assignee`, `Assigned/Approver Team`, `Acceptance Criteria`, `Addressed By`/`Forks Into` self-links, dates. |
 | **Stages** | Thin reference ladder: `Stage Code`, `Order`, `Phase Group`, `Responsible Team`, `Approver Team`. Drives order, phase and handoff routing. |
-| **Handshakes** | Audit log of every promote / accept / return. Optional — the app degrades gracefully if absent. |
+| **Handshakes** | Audit log of every promote / accept / return. |
 
 `frontend/constants.js` is the single source of truth for every table/field/option name and
 must match the base **verbatim** (punctuation included — `Acceptance Met?`,

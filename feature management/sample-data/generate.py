@@ -61,7 +61,19 @@ STAGE_NAME = {s[1]: s[0] for s in STAGES}
 STAGE_RESP = {s[1]: s[4] for s in STAGES}
 STAGE_APPR = {s[1]: s[5] for s in STAGES}
 
-# ── Features (grouped by Initiative) ──────────────────────────────────────────
+# ── Entities → Initiatives (the hierarchy above Features) ─────────────────────
+# name, legal entity code, region
+ENTITIES = [
+    ("UBS Switzerland AG", "CH-SWB", "Switzerland"),
+    ("UBS AG", "CH-AG", "Group"),
+]
+# name, entity, sponsor, status
+INITIATIVES = [
+    ("Balance Sheet Go-Live", "UBS Switzerland AG", "Priya Anand", "In Progress"),
+    ("Treasury & Markets", "UBS AG", "Marco Reuter", "In Progress"),
+]
+
+# ── Features (each linked to one Initiative) ──────────────────────────────────
 FEATURES = [
     ("Loans Disbursement", "Balance Sheet Go-Live", COE, "In Progress", "Critical", "2026-07-25", "Daily loan disbursement postings feeding the sub-ledger and liquidity reports."),
     ("Customer Deposits", "Balance Sheet Go-Live", COE, "Blocked", "High", "2026-07-26", "Customer deposit balances and accrued interest for sub-ledger and balance-sheet reporting."),
@@ -194,6 +206,14 @@ def main():
     write_csv("Stages.csv",
               ["Stage Name", "Stage Code", "Order", "Phase Group", "Responsible Team", "Approver Team"],
               [[n, c, o, p, r, a] for (n, c, o, p, r, a) in STAGES])
+
+    write_csv("Entities.csv",
+              ["Entity Name", "Legal Entity Code", "Region"],
+              [list(e) for e in ENTITIES])
+
+    write_csv("Initiatives.csv",
+              ["Initiative Name", "Entity", "Sponsor", "Status"],
+              [list(i) for i in INITIATIVES])
 
     write_csv("Features.csv",
               ["Feature Name", "Initiative", "Owning Team", "Status", "Priority",

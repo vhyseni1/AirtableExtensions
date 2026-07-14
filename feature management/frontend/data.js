@@ -92,12 +92,16 @@ export function useModel() {
 
     const missing = [];
     const teams = bindTable(base, TABLES.teams, FIELDS.teams, missing);
+    const entities = bindTable(base, TABLES.entities, FIELDS.entities, missing);
+    const initiatives = bindTable(base, TABLES.initiatives, FIELDS.initiatives, missing);
     const features = bindTable(base, TABLES.features, FIELDS.features, missing);
     const attributes = bindTable(base, TABLES.attributes, FIELDS.attributes, missing);
     const stages = bindTable(base, TABLES.stages, FIELDS.stages, missing);
     const handshakes = bindTable(base, TABLES.handshakes, FIELDS.handshakes, missing);
 
     const teamRecords = useRecords(teams.table);
+    const entityRecords = useRecords(entities.table);
+    const initiativeRecords = useRecords(initiatives.table);
     const featureRecords = useRecords(features.table);
     const attributeRecords = useRecords(attributes.table);
     const stageRecords = useRecords(stages.table);
@@ -140,17 +144,44 @@ export function useModel() {
         const usersByTeam = {};
         teamList.forEach(t => (usersByTeam[t.name] = t.users));
 
-        // ── Features (+ Initiative grouping) ──
-        const featureList = (featureRecords || []).map(r => ({
+        // ── Entities → Initiatives (the hierarchy above Features) ──
+        const entityList = (entityRecords || []).map(r => ({
             id: r.id,
             record: r,
-            name: str(r, features.fields.name),
-            initiative: str(r, features.fields.initiative) || 'Ungrouped',
-            owningTeam: str(r, features.fields.owningTeam),
-            status: str(r, features.fields.status),
-            priority: str(r, features.fields.priority),
-            goLive: str(r, features.fields.goLive),
+            name: str(r, entities.fields.name),
+            code: str(r, entities.fields.code),
+            region: str(r, entities.fields.region),
         }));
+        const entityNames = entityList.map(e => e.name).filter(Boolean);
+
+        const initiativeList = (initiativeRecords || []).map(r => ({
+            id: r.id,
+            record: r,
+            name: str(r, initiatives.fields.name),
+            entity: str(r, initiatives.fields.entity) || 'Unassigned',
+            sponsor: str(r, initiatives.fields.sponsor),
+            status: str(r, initiatives.fields.status),
+        }));
+        const initiativeOrder = initiativeList.map(i => i.name).filter(Boolean);
+        // Initiative name → its Entity (source of truth for the hierarchy).
+        const initToEntity = {};
+        initiativeList.forEach(i => (initToEntity[i.name] = i.entity));
+
+        // ── Features (Initiative link → Initiative name → Entity) ──
+        const featureList = (featureRecords || []).map(r => {
+            const initiative = str(r, features.fields.initiative) || 'Ungrouped';
+            return {
+                id: r.id,
+                record: r,
+                name: str(r, features.fields.name),
+                initiative,
+                entity: initToEntity[initiative] || 'Unassigned',
+                owningTeam: str(r, features.fields.owningTeam),
+                status: str(r, features.fields.status),
+                priority: str(r, features.fields.priority),
+                goLive: str(r, features.fields.goLive),
+            };
+        });
         const featureOrder = featureList.map(f => f.name).filter(Boolean);
 
         // ── Attributes = work items ──
@@ -296,6 +327,7 @@ export function useModel() {
             const goLives = feats.map(f => f.goLiveMs).filter(x => x != null);
             return {
                 name,
+                entity: initToEntity[name] || 'Unassigned',
                 features: feats,
                 featureCount: feats.length,
                 attrCount: featAttrTotal,
@@ -309,6 +341,23 @@ export function useModel() {
                 nextGoLiveMs: goLives.length ? Math.min(...goLives) : null,
             };
         }).sort((a, b) => (a.name === 'Ungrouped' ? 1 : b.name === 'Ungrouped' ? -1 : a.name.localeCompare(b.name)));
+
+        // ── Per-entity grouping (top of the hierarchy) ──
+        const byEntity = [];
+        const entitySeen = {};
+        byInitiative.forEach(it => {
+            if (!entitySeen[it.entity]) {
+                entitySeen[it.entity] = {name: it.entity, initiatives: [], featureCount: 0, attrCount: 0, pctSum: 0};
+                byEntity.push(entitySeen[it.entity]);
+            }
+            const e = entitySeen[it.entity];
+            e.initiatives.push(it);
+            e.featureCount += it.featureCount;
+            e.attrCount += it.attrCount;
+            e.pctSum += it.pct * it.attrCount;
+        });
+        byEntity.forEach(e => (e.pct = e.attrCount ? Math.round(e.pctSum / e.attrCount) : 0));
+        byEntity.sort((a, b) => (a.name === 'Unassigned' ? 1 : b.name === 'Unassigned' ? -1 : a.name.localeCompare(b.name)));
 
         // ── Overall phase distribution (every attribute sits in one phase) ──
         const phaseCounts = {};
@@ -358,6 +407,12 @@ export function useModel() {
             stagesByCode,
             teamNames,
             usersByTeam,
+            entities: entityList,
+            entityNames,
+            initiativeList,
+            initiativeOrder,
+            initToEntity,
+            byEntity,
             features: featureList,
             featureOrder,
             initiatives,
@@ -370,7 +425,7 @@ export function useModel() {
             loading: ready && attributeRecords === null,
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [teamRecords, featureRecords, attributeRecords, stageRecords, handshakeRecords]);
+    }, [teamRecords, entityRecords, initiativeRecords, featureRecords, attributeRecords, stageRecords, handshakeRecords]);
 }
 
 // Attributes whose work currently sits with this team.

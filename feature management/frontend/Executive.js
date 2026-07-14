@@ -146,7 +146,7 @@ function Timeline({features, colorOf, onPick}) {
 }
 
 export default function Executive({model}) {
-    const {byInitiative, features, kpis, phaseCounts, attrs} = model;
+    const {byInitiative, byEntity, features, kpis, phaseCounts, attrs} = model;
     const [mounted, setMounted] = useState(false);
     const drill = useDrill();
     useEffect(() => {
@@ -232,51 +232,60 @@ export default function Executive({model}) {
             </section>
 
             {/* Initiative cards */}
-            <div className="fp-section-title">By entity / initiative</div>
-            <div className="fp-initgrid">
-                {byInitiative.map(it => {
-                    const phase = {};
-                    PHASE_GROUPS.forEach(p => (phase[p] = 0));
-                    it.features.forEach(f => {
-                        const bf = model.byFeature[f.name];
-                        if (bf) PHASE_GROUPS.forEach(p => (phase[p] += bf.phase[p] || 0));
-                    });
-                    const c = colorOf(it.name);
-                    return (
-                        <div className="fp-initcard" key={it.name} style={{borderTopColor: c}}>
-                            <div className="fp-initcard-head">
-                                <div className="clickable" onClick={() => openFeatures(it.name, it.features)}>
-                                    <div className="fp-initcard-name">{it.name}</div>
-                                    <div className="fp-initcard-meta">{it.featureCount} features · {it.attrCount} attributes</div>
+            <div className="fp-section-title">By entity &amp; initiative</div>
+            {byEntity.map(e => (
+                <div className="fp-entity" key={e.name}>
+                    <div className="fp-entity-head clickable" onClick={() => openFeatures(e.name, e.initiatives.flatMap(i => i.features))}>
+                        <span className="fp-entity-badge">Entity</span>
+                        <span className="fp-entity-name">{e.name}</span>
+                        <span className="fp-entity-meta">{e.initiatives.length} initiative{e.initiatives.length === 1 ? '' : 's'} · {e.featureCount} features · {e.pct}% mature</span>
+                    </div>
+                    <div className="fp-initgrid">
+                        {e.initiatives.map(it => {
+                            const phase = {};
+                            PHASE_GROUPS.forEach(p => (phase[p] = 0));
+                            it.features.forEach(f => {
+                                const bf = model.byFeature[f.name];
+                                if (bf) PHASE_GROUPS.forEach(p => (phase[p] += bf.phase[p] || 0));
+                            });
+                            const c = colorOf(it.name);
+                            return (
+                                <div className="fp-initcard" key={it.name} style={{borderTopColor: c}}>
+                                    <div className="fp-initcard-head">
+                                        <div className="clickable" onClick={() => openFeatures(it.name, it.features)}>
+                                            <div className="fp-initcard-name">{it.name}</div>
+                                            <div className="fp-initcard-meta">{it.featureCount} features · {it.attrCount} attributes</div>
+                                        </div>
+                                        <Donut pct={it.pct} size={84} stroke={10} color={c} onClick={() => openFeatures(it.name, it.features)}>
+                                            <div className="fp-donut-pct sm"><CountUp value={it.pct} suffix="%" /></div>
+                                        </Donut>
+                                    </div>
+
+                                    <div className="fp-initcard-rag">
+                                        <span className="clickable" onClick={() => openFeatures(`${it.name} · on track`, it.features.filter(f => f.health === 'on-track'))}><HealthDot health="on-track" /> {it.onTrack} on track</span>
+                                        <span className="clickable" onClick={() => openFeatures(`${it.name} · at risk`, it.features.filter(f => f.health === 'at-risk' || f.health === 'blocked'))}><HealthDot health="at-risk" /> {it.atRisk} at risk</span>
+                                        <span className="clickable" onClick={() => openFeatures(`${it.name} · delivered`, it.features.filter(f => f.health === 'delivered'))}><HealthDot health="delivered" /> {it.delivered} done</span>
+                                    </div>
+
+                                    <PhaseStrip phase={phase} mounted={mounted} />
+                                    <div className="fp-initcard-next">Next go-live: <b>{fmtDate(it.nextGoLiveMs)}</b></div>
+
+                                    <ul className="fp-initcard-feats">
+                                        {it.features.map(f => (
+                                            <li key={f.id} className="clickable" onClick={() => pushFeatureAttrs(f)} title="See attributes">
+                                                <HealthDot health={f.health} />
+                                                <span className="fp-feat-name">{f.name}</span>
+                                                <span className="fp-feat-bar"><i style={{width: mounted ? `${f.pct}%` : 0, background: c}} /></span>
+                                                <span className="fp-feat-pct">{f.pct}%</span>
+                                            </li>
+                                        ))}
+                                    </ul>
                                 </div>
-                                <Donut pct={it.pct} size={84} stroke={10} color={c} onClick={() => openFeatures(it.name, it.features)}>
-                                    <div className="fp-donut-pct sm"><CountUp value={it.pct} suffix="%" /></div>
-                                </Donut>
-                            </div>
-
-                            <div className="fp-initcard-rag">
-                                <span className="clickable" onClick={() => openFeatures(`${it.name} · on track`, it.features.filter(f => f.health === 'on-track'))}><HealthDot health="on-track" /> {it.onTrack} on track</span>
-                                <span className="clickable" onClick={() => openFeatures(`${it.name} · at risk`, it.features.filter(f => f.health === 'at-risk' || f.health === 'blocked'))}><HealthDot health="at-risk" /> {it.atRisk} at risk</span>
-                                <span className="clickable" onClick={() => openFeatures(`${it.name} · delivered`, it.features.filter(f => f.health === 'delivered'))}><HealthDot health="delivered" /> {it.delivered} done</span>
-                            </div>
-
-                            <PhaseStrip phase={phase} mounted={mounted} />
-                            <div className="fp-initcard-next">Next go-live: <b>{fmtDate(it.nextGoLiveMs)}</b></div>
-
-                            <ul className="fp-initcard-feats">
-                                {it.features.map(f => (
-                                    <li key={f.id} className="clickable" onClick={() => pushFeatureAttrs(f)} title="See attributes">
-                                        <HealthDot health={f.health} />
-                                        <span className="fp-feat-name">{f.name}</span>
-                                        <span className="fp-feat-bar"><i style={{width: mounted ? `${f.pct}%` : 0, background: c}} /></span>
-                                        <span className="fp-feat-pct">{f.pct}%</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    );
-                })}
-            </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            ))}
 
             {/* Timeline */}
             <div className="fp-section-title">Delivery timeline — target go-lives</div>

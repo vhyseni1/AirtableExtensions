@@ -8,7 +8,7 @@ blocked / awaiting-review / ready-to-push cases.
 Regenerate or expand anytime: `python3 generate.py`.
 
 ## Import order (so links resolve to existing rows)
-1. **Teams.csv** 2. **Stages.csv** 3. **Features.csv** 4. **Attributes.csv** 5. **Handshakes.csv**
+1. **Teams.csv** 2. **Stages.csv** 3. **Entities.csv** 4. **Initiatives.csv** 5. **Features.csv** 6. **Attributes.csv** 7. **Handshakes.csv**
 
 In Airtable: **Add a table → Import data → CSV file**. The **first column becomes the primary
 field** (already ordered correctly: Team Name / Stage Name / Feature Name / Attribute ID /
@@ -23,7 +23,8 @@ strings here resolve cleanly):
 |---|---|
 | **Teams** | `Users` → Multiple collaborators *(optional; see note)*. |
 | **Stages** | `Order` → Number. `Responsible Team`, `Approver Team` → Link to **Teams**. |
-| **Features** | `Initiative`, `Status`, `Priority` → Single select. `Owning Team` → Link to **Teams**. `Target Go-Live Date` → Date. |
+| **Initiatives** | `Entity` → Link to **Entities**. `Status` → Single select. |
+| **Features** | `Initiative` → Link to **Initiatives**. `Status`, `Priority` → Single select. `Owning Team` → Link to **Teams**. `Target Go-Live Date` → Date. |
 | **Attributes** | `Sourcing Type`, `Status`, `Approval Status`, `Environment` → Single select. `Is Reference Data`, `Requires Gateway Derivation`, `Acceptance Met?` → **Checkbox**. `Current Stage` → Link to **Stages**. `Assigned Team`, `Approver Team` → Link to **Teams**. `Assignee` → Collaborator *(or leave text)*. `Due Date`/`Started`/`Completed` → Date. `Cycle Number` → Number. **`Acceptance Criteria` → keep Long text** (it holds JSON). **`Addressed By`, `Forks Into` → Link to _this same_ Attributes table** (self-link, allow linking to multiple; matches on `Attribute ID`). |
 | **Handshakes** | `Attribute` → Link to **Attributes**. `Stage` → Link to **Stages**. `From Team`, `To Team` → Link to **Teams**. `Action` → Single select. `Timestamp` → Date. `Cycle Number` → Number. `Feature` → text or Link to **Features**. |
 

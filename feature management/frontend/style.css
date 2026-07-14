@@ -279,7 +279,15 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-donut-cap { font-size: 10px; color: #cfd9ec; margin-top: 3px; line-height: 1.2; }
 
 /* Initiative cards */
-.fp-initgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; margin-bottom: 26px; }
+/* Entity → initiative hierarchy */
+.fp-entity { margin-bottom: 22px; }
+.fp-entity-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; padding: 8px 12px; margin-bottom: 12px; background: #eef2f7; border-radius: 8px; }
+.fp-entity-head:hover { transform: none; }
+.fp-entity-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: #fff; background: var(--fp-ink); padding: 3px 8px; border-radius: 5px; }
+.fp-entity-name { font-size: 15px; font-weight: 800; letter-spacing: -.01em; }
+.fp-entity-head:hover .fp-entity-name { color: var(--fp-accent); }
+.fp-entity-meta { font-size: 12px; color: var(--fp-muted); }
+.fp-initgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; margin-bottom: 10px; }
 .fp-initcard { background: var(--fp-card); border: 1px solid var(--fp-border); border-top: 4px solid #ccc; border-radius: 12px; padding: 16px 16px 14px; box-shadow: var(--fp-shadow); }
 .fp-initcard-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .fp-initcard-name { font-size: 15px; font-weight: 700; }
