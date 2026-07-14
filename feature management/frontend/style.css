@@ -88,8 +88,13 @@
 .fp-filters label, .fp-teambar label { display: flex; flex-direction: column; font-size: 11px; color: var(--fp-muted); gap: 3px; }
 .fp-filters select, .fp-teambar select { font-size: 13px; padding: 5px 8px; border: 1px solid var(--fp-border); border-radius: 6px; background: #fff; min-width: 160px; }
 
-.fp-section-title { font-weight: 700; margin: 22px 0 12px; font-size: 15px; }
+.fp-section-title { font-weight: 700; margin: 22px 0 12px; font-size: 15px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .fp-section-title:first-child { margin-top: 0; }
+.fp-seg { display: inline-flex; border: 1px solid var(--fp-border); border-radius: 8px; padding: 2px; background: #fff; }
+.fp-seg button { border: none; background: transparent; padding: 4px 12px; border-radius: 6px; font: inherit; font-size: 12px; font-weight: 600; color: var(--fp-muted); cursor: pointer; }
+.fp-seg button.on { background: color-mix(in srgb, var(--fp-accent) 12%, #fff); color: var(--fp-accent); }
+.fp-showmore { margin-top: 8px; width: 100%; border: 1px dashed var(--fp-border); background: #fff; color: var(--fp-accent); border-radius: 8px; padding: 6px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.fp-showmore:hover { background: #fff6f6; border-style: solid; }
 
 /* ── Flow board ── */
 .fp-board { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; margin-bottom: 24px; }

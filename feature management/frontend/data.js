@@ -162,8 +162,16 @@ export function useModel() {
         // Initiative → its entity (from the features that belong to it).
         const initToEntity = {};
         featureList.forEach(f => { if (!initToEntity[f.initiative]) initToEntity[f.initiative] = f.entity; });
+        // Feature record id → its canonical name, so attributes match features by
+        // LINK (robust even if the Features primary field isn't "Feature Name").
+        const featById = {};
+        featureList.forEach(f => (featById[f.id] = f.name));
 
         // ── Attributes = work items ──
+        // Tolerant Feature field on Attributes (accept "Feature" or any *feature* field).
+        const attrFeatureField = attributes.fields.feature
+            || (attributes.table && attributes.table.fields.find(f => /feature/i.test(f.name)))
+            || null;
         const attrs = (attributeRecords || []).map(r => {
             const stageLinkId = firstLinkId(r, attributes.fields.currentStage);
             const stage =
@@ -182,8 +190,8 @@ export function useModel() {
                 record: r,
                 attributeId: str(r, attributes.fields.attributeId),
                 businessName: str(r, attributes.fields.businessName),
-                featureName: str(r, attributes.fields.feature),
-                featureId: firstLinkId(r, attributes.fields.feature),
+                featureName: featById[firstLinkId(r, attrFeatureField)] || str(r, attrFeatureField),
+                featureId: firstLinkId(r, attrFeatureField),
                 sourcingType,
                 requiresGateway,
                 isReferenceData: bool(r, attributes.fields.isReferenceData),
