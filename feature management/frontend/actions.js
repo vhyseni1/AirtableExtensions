@@ -125,9 +125,14 @@ export async function forkOutCreate(model, attr, names) {
         throw new Error(`Couldn't resolve the feature "${attr.featureName || '(none)'}" — is there a matching record in the Features table?`);
     }
 
-    // Duplicate the parent's catalogue fields so children are real siblings.
-    const fsdmVal = copyCellValue(attr.record, af.fsdm);
-    const techVal = copyCellValue(attr.record, af.technicalName);
+    // Duplicate the parent's catalogue fields — copy each cell in its OWN shape
+    // (single-select, checkbox or text all write correctly this way).
+    const copied = {};
+    [af.sourcingType, af.isReferenceData, af.requiresGateway, af.fsdm, af.technicalName].forEach(f => {
+        if (!f) return;
+        const v = copyCellValue(attr.record, f);
+        if (v !== undefined) copied[f.id] = v;
+    });
 
     // 1) create the children (primary + name only — safe fields)
     const payload = names.map((nm, i) => ({
@@ -141,20 +146,16 @@ export async function forkOutCreate(model, attr, names) {
     }
     const newIds = await table.createRecordsAsync(payload);
 
-    // 2) set the links/fields on each child via update (link write errors surface)
+    // 2) set the links/fields on each child via update (errors surface clearly)
     const updates = newIds.map(id => {
         const fields = writeObject([
             [af.feature, {linkId: featureLinkId}],
-            [af.sourcingType, {name: attr.sourcingType}],
             [af.currentStage, {linkId: stage1 ? stage1.id : null}],
             [af.status, {name: STATUS.notStarted}],
             [af.assignedTeam, {linkId: stage1 ? stage1.responsibleTeamId : null}],
             [af.approverTeam, {linkId: stage1 ? stage1.approverTeamId : null}],
         ]);
-        if (fsdmVal !== undefined && af.fsdm) fields[af.fsdm.id] = fsdmVal;
-        if (techVal !== undefined && af.technicalName) fields[af.technicalName.id] = techVal;
-        if (af.isReferenceData) fields[af.isReferenceData.id] = !!attr.isReferenceData;
-        if (af.requiresGateway) fields[af.requiresGateway.id] = !!attr.requiresGateway;
+        Object.assign(fields, copied);
         return {id, fields};
     });
     await table.updateRecordsAsync(updates);

@@ -108,7 +108,6 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
     const geo = lines.map(ln => ({ln, yy: padT + ln.yStart, ex: endX(ln), c: featureColorOf(ln.feature)}));
     const geoById = {};
     geo.forEach(g => (geoById[g.ln.attr.id] = g));
-    const KNOT_X = labelW;                       // knot at the line start — clear of the feature-name labels to its left
     const hg = hoverId ? geoById[hoverId] : null;
     const relatedIds = new Set();
     if (hg) {
@@ -126,7 +125,7 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
         });
         g.ln.attr.addressedBy.forEach(sr => {
             const s = geoById[sr.id];
-            if (s) allConn.push({from: s, toX: KNOT_X, toY: g.yy, kind: 'addr', color: '#4a3aa7', a: g.ln.attr.id, b: sr.id});
+            if (s) allConn.push({from: s, toX: g.ex + 13, toY: g.yy, kind: 'addr', color: '#4a3aa7', a: g.ln.attr.id, b: sr.id});
         });
     });
     const connPath = (a, toX, toY) => { const mx = (a.ex + toX) / 2; return `M ${a.ex} ${a.yy} C ${mx} ${a.yy}, ${mx} ${toY}, ${toX} ${toY}`; };
@@ -204,7 +203,7 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                                 </path>
                             )}
                             {ln.attr.addressedBy.length > 0 && (
-                                <path d={`M ${KNOT_X} ${yy - 9} l 9 9 l -9 9 l -9 -9 Z`} className="fp-flow-knot" style={{fill: '#4a3aa7', opacity: isDim(ln) ? 0.22 : 1}}>
+                                <path d={`M ${ex + 13} ${yy - 9} l 9 9 l -9 9 l -9 -9 Z`} className="fp-flow-knot" style={{fill: '#4a3aa7', opacity: isDim(ln) ? 0.22 : 1}}>
                                     <title>Addressed by {ln.attr.addressedBy.length}: {ln.attr.addressedBy.map(x => x.businessName || x.attributeId).join(', ')}</title>
                                 </path>
                             )}
@@ -217,8 +216,8 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                                 </text>
                             )}
                             <g className="fp-flow-add" onClick={e => { e.stopPropagation(); onRelate(ln.attr, 'menu'); }}>
-                                <circle cx={ex + 16} cy={yy} r={8.5} />
-                                <text x={ex + 16} y={yy} textAnchor="middle" dominantBaseline="central">+</text>
+                                <circle cx={ex + (ln.attr.addressedBy.length ? 36 : 18)} cy={yy} r={8.5} />
+                                <text x={ex + (ln.attr.addressedBy.length ? 36 : 18)} y={yy} textAnchor="middle" dominantBaseline="central">+</text>
                                 <title>Relate — fork out or address by</title>
                             </g>
                             <title>{`${ln.attr.businessName || ln.attr.attributeId} · ${ln.feature}\n${ln.delivered ? 'Delivered ✓' : `Now: ${stageLabel(ln.attr.currentStageName)} (${ln.visited[ln.visited.length - 1]})`} · ${ln.attr.status}${relNote}`}</title>
