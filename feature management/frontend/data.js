@@ -219,6 +219,21 @@ export function useModel() {
             a.hasRelations = a.addressedBy.length > 0 || a.forksInto.length > 0;
         });
 
+        // Forked children whose Feature cell is empty inherit the parent's
+        // feature for display/aggregation, so a fork never renders as
+        // "Unassigned" and children sit in the parent's lane. (A few passes
+        // cover fork-of-fork chains.)
+        for (let pass = 0; pass < 3; pass++) {
+            let changed = false;
+            attrs.forEach(p => {
+                if (!p.featureName) return;
+                p.forksInto.forEach(c => {
+                    if (!c.featureName) { c.featureName = p.featureName; changed = true; }
+                });
+            });
+            if (!changed) break;
+        }
+
         // ── Per-feature aggregates + maturity ──
         const byFeature = {};
         const ensureFeature = f => {

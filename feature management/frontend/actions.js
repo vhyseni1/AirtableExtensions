@@ -132,31 +132,26 @@ export async function forkOutCreate(model, attr, names) {
     });
     if (af.feature && featureVal !== undefined) copied[af.feature.id] = featureVal;
 
-    // 1) create the children (primary + name only — safe fields)
-    const payload = names.map((nm, i) => ({
-        fields: writeObject([
+    // ONE atomic create with every field. If any cell shape is invalid the call
+    // fails as a whole and the error surfaces — no half-made "Unassigned"
+    // orphans. Stage/team pass BOTH linkId and name so they write whether those
+    // fields are links or single-selects/text.
+    const payload = names.map((nm, i) => {
+        const fields = writeObject([
             [af.attributeId, {text: `${base}-F${stamp}${i + 1}`}],
             [af.businessName, {text: (nm && nm.trim()) || `${attr.businessName || base} — fork ${i + 1}`}],
-        ]),
-    }));
-    if (typeof table.hasPermissionToCreateRecords === 'function' && !table.hasPermissionToCreateRecords(payload)) {
-        throw new Error('You do not have permission to create attribute records.');
-    }
-    const newIds = await table.createRecordsAsync(payload);
-
-    // 2) set the fields on each child. Stage/team pass BOTH linkId and name so
-    // they write whether those fields are links or single-selects/text.
-    const updates = newIds.map(id => {
-        const fields = writeObject([
             [af.currentStage, {linkId: stage1 ? stage1.id : null, name: stage1 ? stage1.name : null}],
             [af.status, {name: STATUS.notStarted}],
             [af.assignedTeam, {linkId: stage1 ? stage1.responsibleTeamId : null, name: stage1 ? stage1.responsibleTeamName : null}],
             [af.approverTeam, {linkId: stage1 ? stage1.approverTeamId : null, name: stage1 ? stage1.approverTeamName : null}],
         ]);
         Object.assign(fields, copied);
-        return {id, fields};
+        return {fields};
     });
-    await table.updateRecordsAsync(updates);
+    if (typeof table.hasPermissionToCreateRecords === 'function' && !table.hasPermissionToCreateRecords(payload)) {
+        throw new Error('You do not have permission to create attribute records.');
+    }
+    const newIds = await table.createRecordsAsync(payload);
 
     // 3) link the parent → children
     const merged = [...attr.forksInto.map(x => x.id), ...newIds];
