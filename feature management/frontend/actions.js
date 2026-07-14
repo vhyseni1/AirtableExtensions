@@ -112,22 +112,22 @@ export async function forkOutCreate(model, attr, names) {
     const base = attr.attributeId || 'ATTR';
     const stamp = Date.now().toString(36).slice(-4).toUpperCase();
 
-    // Resolve the parent's Feature LINK id (Feature is a link → children must
-    // link to the same Features record). Read it directly if the cached id is
-    // absent, and fail loudly rather than create orphaned/unassigned records.
-    let featureLinkId = attr.featureId || null;
-    if (!featureLinkId && af.feature) {
-        try {
-            const v = attr.record.getCellValue(af.feature.id);
-            if (Array.isArray(v) && v[0] && v[0].id) featureLinkId = v[0].id;
-        } catch {
-            featureLinkId = null;
-        }
+    // Resolve the Features record to link children to by matching the parent's
+    // feature NAME against the Features table — robust, and independent of how
+    // the parent's Feature cell reads back (which can come back empty).
+    let featureLinkId = null;
+    if (attr.featureName && Array.isArray(model.features)) {
+        const fr = model.features.find(f => f.name === attr.featureName);
+        if (fr) featureLinkId = fr.id;
     }
+    if (!featureLinkId) featureLinkId = attr.featureId || null;
     if (af.feature && !featureLinkId) {
-        throw new Error(`Could not read a Feature to copy from "${attr.businessName || attr.attributeId}". Its Feature link looks empty — set the parent's Feature first, then fork.`);
+        throw new Error(`Couldn't resolve the feature "${attr.featureName || '(none)'}" — is there a matching record in the Features table?`);
     }
+
+    // Duplicate the parent's catalogue fields so children are real siblings.
     const fsdmVal = copyCellValue(attr.record, af.fsdm);
+    const techVal = copyCellValue(attr.record, af.technicalName);
 
     // 1) create the children (primary + name only — safe fields)
     const payload = names.map((nm, i) => ({
@@ -152,6 +152,9 @@ export async function forkOutCreate(model, attr, names) {
             [af.approverTeam, {linkId: stage1 ? stage1.approverTeamId : null}],
         ]);
         if (fsdmVal !== undefined && af.fsdm) fields[af.fsdm.id] = fsdmVal;
+        if (techVal !== undefined && af.technicalName) fields[af.technicalName.id] = techVal;
+        if (af.isReferenceData) fields[af.isReferenceData.id] = !!attr.isReferenceData;
+        if (af.requiresGateway) fields[af.requiresGateway.id] = !!attr.requiresGateway;
         return {id, fields};
     });
     await table.updateRecordsAsync(updates);

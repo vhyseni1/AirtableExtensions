@@ -108,7 +108,7 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
     const geo = lines.map(ln => ({ln, yy: padT + ln.yStart, ex: endX(ln), c: featureColorOf(ln.feature)}));
     const geoById = {};
     geo.forEach(g => (geoById[g.ln.attr.id] = g));
-    const KNOT_X = Math.max(28, labelW - 40);   // far-left "addressed-by" node lane
+    const KNOT_X = labelW;                       // knot at the line start — clear of the feature-name labels to its left
     const hg = hoverId ? geoById[hoverId] : null;
     const relatedIds = new Set();
     if (hg) {

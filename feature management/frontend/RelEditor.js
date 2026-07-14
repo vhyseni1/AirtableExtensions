@@ -120,7 +120,7 @@ export default function RelEditor({model, attr, initialMode = 'menu', onClose}) 
                                 />
                             ))}
                         </div>
-                        <p className="fp-muted fp-small">New attributes are created on <b>{attr.featureName || 'the same feature'}</b> at stage 1 (Business Requirements) and linked back to this one. Rename or refine them in the grid afterwards.</p>
+                        <p className="fp-muted fp-small">Each new attribute is <b>duplicated from this one</b> — same feature (<b>{attr.featureName || '—'}</b>), sourcing type and flags — starting at stage 1 and linked back as a fork. Give it a name here, or rename/refine in the grid afterwards.</p>
                         <div className="fp-actions">
                             <button type="button" className="accept" disabled={busy} onClick={() => run(() => forkOutCreate(model, attr, names))}>
                                 {busy ? 'Creating…' : `Create ${count} & link`}
