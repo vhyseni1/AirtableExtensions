@@ -320,22 +320,43 @@ export function useModel() {
             };
         }).sort((a, b) => (a.name === 'Ungrouped' ? 1 : b.name === 'Ungrouped' ? -1 : a.name.localeCompare(b.name)));
 
-        // ── Per-entity grouping (top of the hierarchy) ──
-        const byEntity = [];
-        const entitySeen = {};
-        byInitiative.forEach(it => {
-            if (!entitySeen[it.entity]) {
-                entitySeen[it.entity] = {name: it.entity, initiatives: [], featureCount: 0, attrCount: 0, pctSum: 0};
-                byEntity.push(entitySeen[it.entity]);
-            }
-            const e = entitySeen[it.entity];
-            e.initiatives.push(it);
-            e.featureCount += it.featureCount;
-            e.attrCount += it.attrCount;
-            e.pctSum += it.pct * it.attrCount;
+        // ── Per-entity grouping — built directly from FEATURES (by Entity),
+        // then each entity's own features grouped by Initiative. (Deriving this
+        // from byInitiative collapsed everything when features shared an
+        // initiative / had none.) ──
+        const wMean = (rows, val) => {
+            const w = rows.reduce((s, f) => s + f.total, 0);
+            if (w) return Math.round(rows.reduce((s, f) => s + val(f) * f.total, 0) / w);
+            return rows.length ? Math.round(rows.reduce((s, f) => s + val(f), 0) / rows.length) : 0;
+        };
+        const entityMap = {};
+        featureList.forEach(f => {
+            const e = f.entity || 'Unassigned';
+            if (!entityMap[e]) entityMap[e] = {name: e, features: [], initMap: {}};
+            entityMap[e].features.push(f);
+            const iname = f.initiative || 'Ungrouped';
+            (entityMap[e].initMap[iname] = entityMap[e].initMap[iname] || []).push(f);
         });
-        byEntity.forEach(e => (e.pct = e.attrCount ? Math.round(e.pctSum / e.attrCount) : 0));
-        byEntity.sort((a, b) => (a.name === 'Unassigned' ? 1 : b.name === 'Unassigned' ? -1 : a.name.localeCompare(b.name)));
+        const byEntity = Object.values(entityMap).map(e => {
+            const initiatives = Object.keys(e.initMap).map(iname => {
+                const ifeats = e.initMap[iname];
+                return {
+                    name: iname,
+                    features: ifeats,
+                    featureCount: ifeats.length,
+                    attrCount: ifeats.reduce((s, f) => s + f.total, 0),
+                    pct: wMean(ifeats, f => f.pct),
+                };
+            }).sort((a, b) => (a.name === 'Ungrouped' ? 1 : b.name === 'Ungrouped' ? -1 : a.name.localeCompare(b.name)));
+            return {
+                name: e.name,
+                features: e.features,
+                initiatives,
+                featureCount: e.features.length,
+                attrCount: e.features.reduce((s, f) => s + f.total, 0),
+                pct: wMean(e.features, f => f.pct),
+            };
+        }).sort((a, b) => (a.name === 'Unassigned' ? 1 : b.name === 'Unassigned' ? -1 : a.name.localeCompare(b.name)));
 
         // ── Overall phase distribution (every attribute sits in one phase) ──
         const phaseCounts = {};
