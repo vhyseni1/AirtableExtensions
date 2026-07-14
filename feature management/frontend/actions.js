@@ -15,6 +15,27 @@ function cellFor(field, {linkId, name, text, dateISO, number}) {
     return v != null && v !== '' ? String(v) : undefined;
 }
 
+// Read a cell from `record` and return a value shaped to WRITE the same field
+// on another record — works whether the field is a link, select, or text.
+function copyCellValue(record, field) {
+    if (!record || !field) return undefined;
+    let v;
+    try {
+        v = record.getCellValue(field.id);
+    } catch {
+        return undefined;
+    }
+    if (v == null || v === '') return undefined;
+    const t = field.type || '';
+    if (t === 'multipleRecordLinks' || t === 'singleRecordLink' || t === 'multipleSelects' || t === 'multipleCollaborators') {
+        return Array.isArray(v) ? v.map(x => ({id: x.id})) : undefined;
+    }
+    if (t === 'singleSelect' || t === 'singleCollaborator') {
+        return v.id ? {id: v.id} : (v.name ? {name: v.name} : undefined);
+    }
+    return v; // text / number / etc — write back verbatim
+}
+
 function writeObject(pairs) {
     const out = {};
     for (const [field, spec] of pairs) {
@@ -91,17 +112,10 @@ export async function forkOutCreate(model, attr, names) {
     const base = attr.attributeId || 'ATTR';
     const stamp = Date.now().toString(36).slice(-4).toUpperCase();
 
-    // Copy the parent's Feature link(s) verbatim so children inherit the feature.
-    let featureLinks = null;
-    if (af.feature) {
-        try {
-            const v = attr.record.getCellValue(af.feature.id);
-            if (Array.isArray(v) && v.length) featureLinks = v.map(x => ({id: x.id}));
-        } catch {
-            featureLinks = null;
-        }
-    }
-    if (!featureLinks && attr.featureId) featureLinks = [{id: attr.featureId}];
+    // Copy the parent's Feature cell verbatim (link, select, or text) so
+    // children inherit the feature regardless of how that field is configured.
+    const featureVal = copyCellValue(attr.record, af.feature);
+    const fsdmVal = copyCellValue(attr.record, af.fsdm);
 
     const payload = names.map((nm, i) => {
         const fields = writeObject([
@@ -113,7 +127,8 @@ export async function forkOutCreate(model, attr, names) {
             [af.assignedTeam, {linkId: stage1 ? stage1.responsibleTeamId : null}],
             [af.approverTeam, {linkId: stage1 ? stage1.approverTeamId : null}],
         ]);
-        if (featureLinks && af.feature) fields[af.feature.id] = featureLinks;
+        if (featureVal !== undefined && af.feature) fields[af.feature.id] = featureVal;
+        if (fsdmVal !== undefined && af.fsdm) fields[af.fsdm.id] = fsdmVal;
         return {fields};
     });
     if (typeof table.hasPermissionToCreateRecords === 'function' && !table.hasPermissionToCreateRecords(payload)) {

@@ -108,6 +108,7 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
     const geo = lines.map(ln => ({ln, yy: padT + ln.yStart, ex: endX(ln), c: featureColorOf(ln.feature)}));
     const geoById = {};
     geo.forEach(g => (geoById[g.ln.attr.id] = g));
+    const KNOT_X = labelW - 22;                 // far-left "addressed-by" node lane
     const hg = hoverId ? geoById[hoverId] : null;
     const relatedIds = new Set();
     const connectors = [];
@@ -115,15 +116,15 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
         hg.ln.attr.forksInto.forEach(ch => {
             relatedIds.add(ch.id);
             const g = geoById[ch.id];
-            if (g) connectors.push({from: hg, to: g, kind: 'fork', color: hg.c});
+            if (g) connectors.push({from: hg, toX: labelW, toY: g.yy, kind: 'fork', color: hg.c});
         });
         hg.ln.attr.addressedBy.forEach(sr => {
             relatedIds.add(sr.id);
             const g = geoById[sr.id];
-            if (g) connectors.push({from: g, to: hg, kind: 'addr', color: '#4a3aa7'});
+            if (g) connectors.push({from: g, toX: KNOT_X, toY: hg.yy, kind: 'addr', color: '#4a3aa7'});
         });
     }
-    const connPath = (a, b) => { const mx = (a.ex + labelW) / 2; return `M ${a.ex} ${a.yy} C ${mx} ${a.yy}, ${mx} ${b.yy}, ${labelW} ${b.yy}`; };
+    const connPath = (a, toX, toY) => { const mx = (a.ex + toX) / 2; return `M ${a.ex} ${a.yy} C ${mx} ${a.yy}, ${mx} ${toY}, ${toX} ${toY}`; };
 
     const isDim = ln => (hoverId && ln.attr.id !== hoverId && !relatedIds.has(ln.attr.id)) || (hoverFeature && hoverFeature !== ln.feature);
     const isHot = ln => ln.attr.id === hoverId || relatedIds.has(ln.attr.id) || hoverFeature === ln.feature;
@@ -196,7 +197,7 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                                 </path>
                             )}
                             {ln.attr.addressedBy.length > 0 && (
-                                <path d={`M ${labelW} ${yy - 6} l 6 6 l -6 6 l -6 -6 Z`} className="fp-flow-knot" style={{fill: '#4a3aa7', opacity: isDim(ln) ? 0.22 : 1}}>
+                                <path d={`M ${KNOT_X} ${yy - 9} l 9 9 l -9 9 l -9 -9 Z`} className="fp-flow-knot" style={{fill: '#4a3aa7', opacity: isDim(ln) ? 0.22 : 1}}>
                                     <title>Addressed by {ln.attr.addressedBy.length}: {ln.attr.addressedBy.map(x => x.businessName || x.attributeId).join(', ')}</title>
                                 </path>
                             )}
@@ -223,10 +224,10 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                     <g className="fp-flow-conn">
                         {connectors.map((cn, i) => (
                             <g key={i}>
-                                <path d={connPath(cn.from, cn.to)} fill="none" stroke={cn.color} strokeWidth={2.6} strokeDasharray={cn.kind === 'addr' ? '5 4' : undefined} opacity={0.92} />
+                                <path d={connPath(cn.from, cn.toX, cn.toY)} fill="none" stroke={cn.color} strokeWidth={2.6} strokeDasharray={cn.kind === 'addr' ? '5 4' : undefined} opacity={0.92} />
                                 <circle cx={cn.from.ex} cy={cn.from.yy} r={3.4} fill={cn.color} />
-                                <path d={`M ${labelW} ${cn.to.yy} l -9 -5 l 0 10 Z`} fill={cn.color} />
-                                <circle cx={labelW} cy={cn.to.yy} r={4} fill="#fff" stroke={cn.color} strokeWidth={2} />
+                                <path d={`M ${cn.toX} ${cn.toY} l -9 -5 l 0 10 Z`} fill={cn.color} />
+                                <circle cx={cn.toX} cy={cn.toY} r={4} fill="#fff" stroke={cn.color} strokeWidth={2} />
                             </g>
                         ))}
                     </g>
