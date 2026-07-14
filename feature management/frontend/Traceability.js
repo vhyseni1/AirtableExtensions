@@ -93,7 +93,7 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
     const W = Math.max(Math.floor(w) || 960, 680);
     const padT = 48;                            // top: team clamp nodes
     const labelArea = 92;                       // bottom: wrapped team names
-    const labelW = Math.min(172, W * 0.19);
+    const labelW = Math.min(200, W * 0.22);
     const H = padT + plotH + labelArea;
     const axisY = padT + plotH + 8;
     const nCols = teams.length + 1;             // + Delivered terminal
@@ -296,9 +296,9 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                         onClick={() => onPick(f.name, attrs.filter(a => (a.featureName || 'Unassigned') === f.name))}
                     >
                         <rect x={4} y={padT + f.top - 2} width={5} height={f.height + 4} rx={2.5} fill={featureColorOf(f.name)} />
-                        <text x={15} y={padT + f.top + f.height / 2} dominantBaseline="middle" className="fp-flow-featname">
-                            {f.name.length > 21 ? `${f.name.slice(0, 20)}…` : f.name}
-                        </text>
+                        <foreignObject x={16} y={padT + f.top + f.height / 2 - 15} width={labelW - 24} height={30}>
+                            <div xmlns="http://www.w3.org/1999/xhtml" className="fp-flow-featname" title={f.name}><span>{f.name}</span></div>
+                        </foreignObject>
                         <title>{f.name}</title>
                     </g>
                 ))}
