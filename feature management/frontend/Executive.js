@@ -74,15 +74,16 @@ function Timeline({features, colorOf, onPick, onDrill}) {
     const ref = useRef(null);
     const clickTimer = useRef(null);
     const [w, setW] = useState(0);
-    // Single click = onPick (after a short delay); double click = onDrill.
-    const handleClick = f => {
-        if (clickTimer.current) {
-            clearTimeout(clickTimer.current);
-            clickTimer.current = null;
-            if (onDrill) onDrill(f); else onPick(f);
-            return;
-        }
-        clickTimer.current = setTimeout(() => { clickTimer.current = null; onPick(f); }, 240);
+    // Single click = onPick (deferred so a double-click can cancel it);
+    // native double click = onDrill.
+    const onFlagClick = f => {
+        if (!onDrill) { onPick(f); return; }
+        if (clickTimer.current) clearTimeout(clickTimer.current);
+        clickTimer.current = setTimeout(() => { clickTimer.current = null; onPick(f); }, 300);
+    };
+    const onFlagDbl = f => {
+        if (clickTimer.current) { clearTimeout(clickTimer.current); clickTimer.current = null; }
+        if (onDrill) onDrill(f);
     };
     useEffect(() => {
         const el = ref.current;
@@ -140,8 +141,9 @@ function Timeline({features, colorOf, onPick, onDrill}) {
                         key={f.id}
                         className="fp-tl-flag"
                         style={{left: `${pct(f.goLiveMs)}%`}}
-                        title={`${f.name} · ${f.initiative} · go-live ${fmtDate(f.goLiveMs)} · ${f.pct}%${onDrill ? '\n(double-click to open the feature timeline)' : ''}`}
-                        onClick={() => handleClick(f)}
+                        title={`${f.name} · ${f.initiative} · go-live ${fmtDate(f.goLiveMs)} · ${f.pct}%${onDrill ? '\n(double-click to drill in)' : ''}`}
+                        onClick={() => onFlagClick(f)}
+                        onDoubleClick={() => onFlagDbl(f)}
                     >
                         <span className="fp-tl-marker" style={{borderColor: colorOf(f.initiative)}} />
                         <span className="fp-tl-connector" style={{height: lane * TL_ROW + 10}} />
@@ -218,8 +220,8 @@ function EntityCard({e, colorOf, mounted, model, openInitiatives, openFeatures})
 export default function Executive({model}) {
     const {byInitiative, byEntity, byMilestone, features, kpis, phaseCounts, attrs} = model;
     const [mounted, setMounted] = useState(false);
-    const [tlLevel, setTlLevel] = useState('initiative'); // timeline: 'initiative' | 'feature'
-    const [tlDrill, setTlDrill] = useState(null); // drilled into one initiative's features, or null
+    const [tlLevel, setTlLevel] = useState('initiative'); // timeline: 'initiative' | 'milestone' | 'feature'
+    const [tlPath, setTlPath] = useState([]); // drill stack: [{kind:'milestones'|'features', name, items}]
     const drill = useDrill();
     useEffect(() => {
         const id = requestAnimationFrame(() => setMounted(true));
@@ -239,6 +241,50 @@ export default function Executive({model}) {
     const openFeatures = (title, list) => drill.openFeatures(title, list);
     const openAttrs = (title, list) => drill.openAttrs(title, list);
     const pushFeatureAttrs = f => drill.pushAttrs(`${f.name} · attributes`, attrsOf(f.name));
+
+    // ── Timeline drill helpers ──
+    // Weighted-mean maturity (by attribute count) across a set of features.
+    const wmean = feats => {
+        const w = feats.reduce((s, f) => s + (f.total || 0), 0);
+        if (w) return Math.round(feats.reduce((s, f) => s + (f.pct || 0) * (f.total || 0), 0) / w);
+        return feats.length ? Math.round(feats.reduce((s, f) => s + (f.pct || 0), 0) / feats.length) : 0;
+    };
+    const healthOf = feats => {
+        const anyRisk = feats.some(f => f.health === 'at-risk' || f.health === 'blocked');
+        const allDone = feats.length > 0 && feats.every(f => f.health === 'delivered');
+        return allDone ? 'delivered' : anyRisk ? 'at-risk' : 'on-track';
+    };
+    // Clamp a set of features into milestone timeline items (grouped by the
+    // feature's Milestone, dated by its Milestone Due Date).
+    const milestonesOf = feats => {
+        const groups = {};
+        feats.forEach(f => {
+            const key = f.milestone || 'No milestone';
+            (groups[key] = groups[key] || []).push(f);
+        });
+        return Object.keys(groups).map(name => {
+            const fs = groups[name];
+            const dues = fs.map(f => (f.milestoneDue ? Date.parse(f.milestoneDue) : NaN)).filter(x => !Number.isNaN(x));
+            return {
+                id: `ms-${name}`,
+                name,
+                initiative: name,
+                features: fs,
+                pct: wmean(fs),
+                goLiveMs: dues.length ? Math.max(...dues) : null,
+                health: healthOf(fs),
+            };
+        });
+    };
+    // Double-click an initiative box → clamp its features by milestone (or, when
+    // no milestone dates exist, drop straight to its feature timeline).
+    const drillInitiative = it => {
+        const ms = milestonesOf(it.features);
+        setTlPath([ms.some(m => m.goLiveMs != null)
+            ? {kind: 'milestones', name: it.name, items: ms}
+            : {kind: 'features', name: it.name, items: it.features}]);
+    };
+    const tlFrame = tlPath.length ? tlPath[tlPath.length - 1] : null;
 
     // Initiative-level timeline items (target = latest feature go-live in the initiative).
     const milestoneTimeline = byMilestone.filter(m => m.dueMs != null).map(m => {
@@ -346,31 +392,42 @@ export default function Executive({model}) {
             {/* Timeline */}
             <div className="fp-section-title">
                 Delivery timeline — target go-lives
-                {tlDrill ? (
+                {tlPath.length ? (
                     <>
-                        <button type="button" className="fp-tl-back" onClick={() => setTlDrill(null)}>← Back</button>
-                        <span className="fp-tl-crumb"><i style={{background: colorOf(tlDrill.name)}} />{tlDrill.name}</span>
+                        <button type="button" className="fp-tl-back" onClick={() => setTlPath(p => p.slice(0, -1))}>← Back</button>
+                        {tlPath.map((fr, i) => (
+                            <span key={`${fr.name}-${i}`} className="fp-tl-crumb"><i style={{background: colorOf(fr.name)}} />{fr.name}{fr.kind === 'milestones' ? ' · milestones' : ''}</span>
+                        ))}
                     </>
                 ) : (
                     <span className="fp-seg">
-                        <button type="button" className={tlLevel === 'initiative' ? 'on' : ''} onClick={() => { setTlLevel('initiative'); setTlDrill(null); }}>By initiative</button>
-                        <button type="button" className={tlLevel === 'milestone' ? 'on' : ''} onClick={() => { setTlLevel('milestone'); setTlDrill(null); }}>By milestone</button>
-                        <button type="button" className={tlLevel === 'feature' ? 'on' : ''} onClick={() => { setTlLevel('feature'); setTlDrill(null); }}>By feature</button>
+                        <button type="button" className={tlLevel === 'initiative' ? 'on' : ''} onClick={() => { setTlLevel('initiative'); setTlPath([]); }}>By initiative</button>
+                        <button type="button" className={tlLevel === 'milestone' ? 'on' : ''} onClick={() => { setTlLevel('milestone'); setTlPath([]); }}>By milestone</button>
+                        <button type="button" className={tlLevel === 'feature' ? 'on' : ''} onClick={() => { setTlLevel('feature'); setTlPath([]); }}>By feature</button>
                     </span>
                 )}
             </div>
             <div className="fp-panel">
-                {tlDrill ? (
-                    <Timeline features={tlDrill.features} colorOf={colorOf} onPick={pushFeatureAttrs} />
+                {tlFrame ? (
+                    tlFrame.kind === 'milestones' ? (
+                        <Timeline
+                            features={tlFrame.items}
+                            colorOf={colorOf}
+                            onPick={it => openFeatures(`${it.name} · features`, it.features)}
+                            onDrill={it => setTlPath(p => [...p, {kind: 'features', name: it.name, items: it.features}])}
+                        />
+                    ) : (
+                        <Timeline features={tlFrame.items} colorOf={colorOf} onPick={pushFeatureAttrs} />
+                    )
                 ) : tlLevel === 'initiative' ? (
-                    <Timeline features={initTimeline} colorOf={colorOf} onPick={it => openFeatures(`${it.name} · features`, it.features)} onDrill={it => setTlDrill(it)} />
+                    <Timeline features={initTimeline} colorOf={colorOf} onPick={it => openFeatures(`${it.name} · features`, it.features)} onDrill={drillInitiative} />
                 ) : tlLevel === 'milestone' ? (
-                    <Timeline features={milestoneTimeline} colorOf={colorOf} onPick={it => openFeatures(`${it.name} · features`, it.features)} onDrill={it => setTlDrill(it)} />
+                    <Timeline features={milestoneTimeline} colorOf={colorOf} onPick={it => openFeatures(`${it.name} · features`, it.features)} onDrill={it => setTlPath([{kind: 'features', name: it.name, items: it.features}])} />
                 ) : (
                     <Timeline features={features} colorOf={colorOf} onPick={pushFeatureAttrs} />
                 )}
                 <div className="fp-legend">
-                    {(tlDrill ? [] : tlLevel === 'milestone' ? milestoneTimeline : byInitiative).map(x => (
+                    {(tlPath.length ? [] : tlLevel === 'milestone' ? milestoneTimeline : byInitiative).map(x => (
                         <span key={x.name} className="clickable" onClick={() => openFeatures(x.name, x.features)}><i style={{background: colorOf(x.name)}} />{x.name}</span>
                     ))}
                 </div>
