@@ -121,8 +121,8 @@ function CoverPage({model, d}) {
     return (
         <div className="fp-rp-cover">
             <div className="fp-rp-cover-main">
-                <div className="fp-rp-eyebrow">UBS Switzerland · ampliFI</div>
-                <h1 className="fp-rp-title">Product to ledger onboarding — data</h1>
+                <div className="fp-rp-eyebrow">UBS Switzerland</div>
+                <h1 className="fp-rp-title">ampliFI | Product to ledger onboarding — data</h1>
                 <div className="fp-rp-asof">as of {asOf}</div>
                 <p className="fp-rp-lede">
                     <b>{d.totalF.uat.pct}%</b> of data attributes deployed &amp; tested in UAT · <b>{d.totalF.done.pct}%</b> signed-off
@@ -155,11 +155,13 @@ const GATES = [
 function FunnelCols() {
     return (
         <colgroup>
-            <col style={{width: '16%'}} />
+            <col style={{width: '13%'}} />
             {GATES.map(g => (
                 <Fragment key={g.key}>
-                    <col style={{width: '5.2%'}} />
-                    <col style={{width: '11.6%'}} />
+                    <col style={{width: '3.4%'}} />
+                    <col style={{width: '7.8%'}} />
+                    <col style={{width: '3.7%'}} />
+                    <col style={{width: '3.5%'}} />
                 </Fragment>
             ))}
         </colgroup>
@@ -171,13 +173,15 @@ function FunnelHead() {
         <thead>
             <tr>
                 <th rowSpan={2} className="fp-rp-rowname">Products / Initiatives</th>
-                {GATES.map(g => <th key={g.key} colSpan={2} className="fp-rp-grouphead">{g.label}</th>)}
+                {GATES.map(g => <th key={g.key} colSpan={4} className="fp-rp-grouphead">{g.label}</th>)}
             </tr>
             <tr>
                 {GATES.map(g => (
                     <Fragment key={g.key}>
                         <th className="fp-rp-sub">#</th>
                         <th className="fp-rp-sub">% compl</th>
+                        <th className="fp-rp-sub">Δ w-o-w</th>
+                        <th className="fp-rp-sub">Δ m-o-m</th>
                     </Fragment>
                 ))}
             </tr>
@@ -193,6 +197,8 @@ function FunnelRow({name, f, strong}) {
                 <Fragment key={g.key}>
                     <td className="fp-rp-num">{f[g.key].c}</td>
                     <td className="fp-rp-pct"><HarveyBall pct={f[g.key].pct} /><span>{f[g.key].pct}%</span></td>
+                    <td className="fp-rp-delta">—</td>
+                    <td className="fp-rp-delta">—</td>
                 </Fragment>
             ))}
         </tr>
@@ -206,8 +212,8 @@ function OnboardingPage({d}) {
                 <div>
                     <div className="fp-rp-eyebrow">ampliFI · Product to ledger onboarding</div>
                     <h2 className="fp-rp-h2">Product attributes onboarded and tested</h2>
+                    <div className="fp-rp-subline">{d.totalF.uat.pct}% of attributes deployed &amp; tested in UAT · {d.totalF.done.pct}% signed-off</div>
                 </div>
-                <div className="fp-rp-headnum"><b>{d.totalF.uat.pct}%</b><span>attributes deployed &amp; tested in UAT</span></div>
             </div>
 
             <div className="fp-rp-cols">
@@ -237,7 +243,7 @@ function OnboardingPage({d}) {
                             <thead>
                                 <tr>
                                     <th className="fp-rp-rowname">Entity</th>
-                                    {GATES.map(g => <th key={g.key} colSpan={2} className="fp-rp-grouphead">{g.label}</th>)}
+                                    {GATES.map(g => <th key={g.key} colSpan={4} className="fp-rp-grouphead">{g.label}</th>)}
                                 </tr>
                             </thead>
                             <tbody>
@@ -285,8 +291,8 @@ function PodPage({d}) {
                 <div>
                     <div className="fp-rp-eyebrow">ampliFI · Sourcing &amp; VESTing</div>
                     <h2 className="fp-rp-h2">Sourcing &amp; VESTing status by pod</h2>
+                    <div className="fp-rp-subline">{d.podTotal.vestPct}% VESTed · {d.podTotal.uatPct}% deployed &amp; tested · {d.podTotal.signPct}% signed off by Finance</div>
                 </div>
-                <div className="fp-rp-headnum"><b>{d.podTotal.vestPct}%</b><span>VESTed across all pods</span></div>
             </div>
 
             <div className="fp-rp-tablewrap">
