@@ -40,8 +40,9 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
     const {attrs, featureOrder} = model;
     const [hoverId, setHoverId] = useState(null);
 
-    const LANE = 14;      // vertical spacing between attribute tracks
-    const FGAP = 18;      // extra gap between feature blocks
+    const LANE = 16;      // vertical spacing between attribute tracks
+    const FGAP = 20;      // extra gap between feature blocks
+    const FHEAD = 16;     // header band per feature (holds the feature name)
 
     const {teams, lines, features, plotH} = useMemo(() => {
         const teamOf = code => (model.stagesByCode[code] ? model.stagesByCode[code].responsibleTeamName : '');
@@ -81,8 +82,9 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
         featList.forEach(f => {
             const rows = raws.filter(r => r.feature === f).sort((a, b) => (a.attr.attributeId > b.attr.attributeId ? 1 : -1));
             const top = y;
+            y += FHEAD;  // reserve a header band above the tracks for the feature name
             rows.forEach(r => { lineList.push({...r, yStart: y + LANE / 2}); y += LANE; });
-            featBlocks.push({name: f, top, height: rows.length * LANE});
+            featBlocks.push({name: f, top, height: FHEAD + rows.length * LANE});
             y += FGAP;
         });
         return {teams: teamList, lines: lineList, features: featBlocks, plotH: Math.max(y - FGAP, 120)};
@@ -175,6 +177,19 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                     // Forked child → branch off the parent's line from the column
                     // BEFORE its current stage into its current stage.
                     const pg = parentOf[ln.attr.id] ? geoById[parentOf[ln.attr.id]] : null;
+                    // Persistent name label in the left gutter, aligned to this line.
+                    const nameLabel = (
+                        <foreignObject x={16} y={yy - LANE / 2} width={labelW - 24} height={LANE}>
+                            <div
+                                xmlns="http://www.w3.org/1999/xhtml"
+                                className="fp-flow-attrname"
+                                title={ln.attr.businessName || ln.attr.attributeId}
+                                style={{opacity: isDim(ln) ? 0.25 : 1, fontWeight: isHot(ln) ? 700 : 500, color: c}}
+                            >
+                                <span>{ln.attr.businessName || ln.attr.attributeId}</span>
+                            </div>
+                        </foreignObject>
+                    );
                     if (pg) {
                         const dotCol = colIdx(ln.visited[ln.visited.length - 1]);
                         const prevX = ln.delivered ? colX(dotCol) : dotCol > 0 ? colX(dotCol - 1) : labelW;
@@ -188,6 +203,7 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                                 onMouseLeave={() => setHoverId(null)}
                                 onClick={() => expandRecord(ln.attr.record)}
                             >
+                                {nameLabel}
                                 <path d={`${d} L ${ex + 52} ${yy}`} className="fp-flow-hit" fill="none" />
                                 <path d={d} className="fp-flow-path" fill="none" style={{stroke: c, opacity: isDim(ln) ? 0.12 : isHot(ln) ? 1 : 0.72, strokeWidth: isHot(ln) ? 3.5 : 2.25}} />
                                 <circle cx={prevX} cy={pg.yy} r={3.2} className="fp-flow-tick" style={{fill: c, opacity: isDim(ln) ? 0.12 : 1}} />
@@ -212,6 +228,7 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                             onMouseLeave={() => setHoverId(null)}
                             onClick={() => expandRecord(ln.attr.record)}
                         >
+                            {nameLabel}
                             <rect
                                 x={labelW} y={yy - 4.5} width={Math.max(ex - labelW, 0)} height={9} rx={4.5}
                                 className="fp-flow-bar"
@@ -295,9 +312,9 @@ function AttributeFlow({model, featureColorOf, hoverFeature, setHoverFeature, on
                         onMouseLeave={() => setHoverFeature(null)}
                         onClick={() => onPick(f.name, attrs.filter(a => (a.featureName || 'Unassigned') === f.name))}
                     >
-                        <rect x={4} y={padT + f.top - 2} width={5} height={f.height + 4} rx={2.5} fill={featureColorOf(f.name)} />
-                        <foreignObject x={16} y={padT + f.top + f.height / 2 - 15} width={labelW - 24} height={30}>
-                            <div xmlns="http://www.w3.org/1999/xhtml" className="fp-flow-featname" title={f.name}><span>{f.name}</span></div>
+                        <rect x={4} y={padT + f.top} width={5} height={f.height} rx={2.5} fill={featureColorOf(f.name)} />
+                        <foreignObject x={16} y={padT + f.top - 1} width={labelW - 22} height={18}>
+                            <div xmlns="http://www.w3.org/1999/xhtml" className="fp-flow-featname" title={f.name}><span style={{color: featureColorOf(f.name)}}>{f.name}</span></div>
                         </foreignObject>
                         <title>{f.name}</title>
                     </g>

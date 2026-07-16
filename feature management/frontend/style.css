@@ -567,10 +567,16 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-flow-feat { cursor: pointer; }
 .fp-flow-featname { display: flex; align-items: center; height: 100%; overflow: hidden; cursor: pointer; }
 .fp-flow-featname span {
-    font-size: 11px; font-weight: 700; color: var(--fp-text); line-height: 1.2; word-break: break-word;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    font-size: 11px; font-weight: 800; line-height: 1.1; letter-spacing: .01em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase;
 }
-.fp-flow-feat:hover .fp-flow-featname span { color: var(--fp-accent); }
+.fp-flow-feat:hover .fp-flow-featname span { text-decoration: underline; }
+/* Per-attribute name in the left gutter, aligned to each line's start. */
+.fp-flow-attrname { display: flex; align-items: center; justify-content: flex-end; height: 100%; cursor: pointer; }
+.fp-flow-attrname span {
+    min-width: 0; max-width: 100%; font-size: 9.5px; line-height: 1;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .fp-legend-top { margin: 0 0 12px; }
 .fp-legend .fp-dim { opacity: .35; }
 
