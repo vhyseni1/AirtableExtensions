@@ -1,8 +1,9 @@
 import {initializeBlock, useBase} from '@airtable/blocks/interface/ui';
-import {useState} from 'react';
+import {useMemo, useState} from 'react';
 import {TABLES} from './constants';
-import {useModel} from './data';
+import {useModel, filterModel} from './data';
 import {SetupBanner} from './components';
+import FilterBar, {EMPTY_FILTER} from './FilterBar';
 import Executive from './Executive';
 import Roadmap from './Roadmap';
 import TeamView from './TeamView';
@@ -11,6 +12,9 @@ import Traceability from './Traceability';
 import Narrative from './Narrative';
 import Logo from './Logo';
 import './style.css';
+
+// Modes that honour the top-bar Entity / Initiative / Feature / Milestone filter.
+const FILTERED_MODES = new Set(['roadmap', 'team', 'workflow', 'trace']);
 
 const MODES = [
     {key: 'exec', label: 'Executive overview'},
@@ -27,6 +31,11 @@ function Dashboard() {
     const model = useModel();
     const [mode, setMode] = useState('exec');
     const [narrativeOpen, setNarrativeOpen] = useState(false);
+    const [filter, setFilter] = useState(EMPTY_FILTER);
+
+    const showFilter = FILTERED_MODES.has(mode);
+    const filtered = useMemo(() => (showFilter ? filterModel(model, filter) : model), [model, filter, showFilter]);
+    const viewModel = showFilter ? filtered : model;
 
     return (
         <>
@@ -56,18 +65,22 @@ function Dashboard() {
                 </div>
             </header>
 
+            {!model.loading && showFilter && (
+                <FilterBar model={model} sel={filter} onChange={setFilter} matchCount={filtered.features.length} />
+            )}
+
             {model.loading ? (
                 <div className="fp-loading">Loading live data…</div>
             ) : mode === 'exec' ? (
                 <Executive model={model} />
             ) : mode === 'roadmap' ? (
-                <Roadmap model={model} />
+                <Roadmap model={viewModel} />
             ) : mode === 'team' ? (
-                <TeamView model={model} />
+                <TeamView model={viewModel} />
             ) : mode === 'workflow' ? (
-                <Workflow model={model} />
+                <Workflow model={viewModel} />
             ) : (
-                <Traceability model={model} />
+                <Traceability model={viewModel} />
             )}
 
             {model.missing.length > 0 && (

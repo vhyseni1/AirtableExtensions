@@ -99,6 +99,28 @@
 .fp-tl-crumb i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 .fp-tl-hint { font-size: 12px; color: var(--fp-muted, #64748B); margin: 0 0 10px; }
 
+/* ── Top-bar filter (Entity / Initiative / Feature / Milestone) ── */
+.fp-filterbar {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px;
+    padding: 10px 16px; margin: 0 0 4px;
+    background: color-mix(in srgb, var(--fp-border) 22%, #fff);
+    border-bottom: 1px solid var(--fp-border);
+}
+.fp-filterbar-icon { font-size: 14px; color: var(--fp-muted, #64748B); }
+.fp-filter-sel { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.fp-filter-sel > span { font-weight: 700; color: var(--fp-muted, #64748B); text-transform: uppercase; letter-spacing: .03em; font-size: 10.5px; }
+.fp-filter-sel select {
+    font: inherit; font-size: 12px; padding: 5px 8px; border: 1px solid var(--fp-border);
+    border-radius: 8px; background: #fff; color: var(--fp-ink, #1e293b); max-width: 220px; cursor: pointer;
+}
+.fp-filter-sel select:hover { border-color: var(--fp-accent, #E60000); }
+.fp-filterbar-count { font-size: 12px; font-weight: 700; color: var(--fp-ink, #1e293b); }
+.fp-filterbar-clear {
+    border: 1px solid var(--fp-border); background: #fff; color: var(--fp-accent, #E60000);
+    border-radius: 8px; padding: 5px 12px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.fp-filterbar-clear:hover { background: #fff6f6; border-color: var(--fp-accent, #E60000); }
+
 /* ── Swimlane timeline (features grouped by milestone) ── */
 .fp-swim { position: relative; width: 100%; }
 .fp-swim-axis { position: relative; height: 20px; margin-bottom: 4px; }

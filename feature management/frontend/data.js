@@ -163,10 +163,6 @@ export function useModel() {
             priority: str(r, features.fields.priority),
             goLive: str(r, features.fields.goLive),
         }));
-        const featureOrder = featureList.map(f => f.name).filter(Boolean);
-        // Initiative → its entity (from the features that belong to it).
-        const initToEntity = {};
-        featureList.forEach(f => { if (!initToEntity[f.initiative]) initToEntity[f.initiative] = f.entity; });
         // Feature record id → its canonical name, so attributes match features by
         // LINK (robust even if the Features primary field isn't "Feature Name").
         const featById = {};
@@ -257,168 +253,7 @@ export function useModel() {
             if (!changed) break;
         }
 
-        // ── Per-feature aggregates + maturity ──
-        const byFeature = {};
-        const ensureFeature = f => {
-            if (!byFeature[f]) {
-                byFeature[f] = {total: 0, delivered: 0, blocked: 0, awaiting: 0, ready: 0, maturitySum: 0, phase: {}, furthest: -1};
-                PHASE_GROUPS.forEach(p => (byFeature[f].phase[p] = 0));
-            }
-            return byFeature[f];
-        };
-        featureOrder.forEach(ensureFeature);
-        attrs.forEach(a => {
-            const v = ensureFeature(a.featureName || 'Unassigned');
-            v.total += 1;
-            v.maturitySum += a.maturity;
-            if (a.isDelivered) v.delivered += 1;
-            if (a.isBlocked) v.blocked += 1;
-            if (a.isAwaitingReview) v.awaiting += 1;
-            if (a.isReadyToPush) v.ready += 1;
-            if (a.phase && v.phase[a.phase] != null) {
-                v.phase[a.phase] += 1;
-                v.furthest = Math.max(v.furthest, PHASE_GROUPS.indexOf(a.phase));
-            }
-        });
-        Object.values(byFeature).forEach(v => {
-            v.pct = v.total ? Math.round((v.maturitySum / v.total) * 100) : 0;
-            v.furthestPhase = v.furthest >= 0 ? PHASE_GROUPS[v.furthest] : null;
-        });
-
-        // ── Per-feature health (drives the executive RAG status) ──
-        const todayMs = Date.now();
-        const parseDate = s => {
-            const t = s ? Date.parse(s) : NaN;
-            return Number.isNaN(t) ? null : t;
-        };
-        featureList.forEach(f => {
-            const v = byFeature[f.name] || {total: 0, pct: 0, blocked: 0, awaiting: 0, ready: 0};
-            f.pct = v.pct || 0;
-            f.total = v.total || 0;
-            f.blocked = v.blocked || 0;
-            f.awaiting = v.awaiting || 0;
-            f.ready = v.ready || 0;
-            f.goLiveMs = parseDate(f.goLive);
-            const overdue = f.goLiveMs != null && f.goLiveMs < todayMs && f.pct < 100;
-            f.health = f.pct >= 100 ? 'delivered' : f.blocked > 0 ? 'blocked' : overdue ? 'at-risk' : 'on-track';
-        });
-
-        // ── Initiative → features ──
-        const initiatives = {};
-        featureList.forEach(f => {
-            (initiatives[f.initiative] = initiatives[f.initiative] || []).push(f);
-        });
-
-        // ── Per-initiative aggregates (executive view) ──
-        const byInitiative = Object.keys(initiatives).map(name => {
-            const feats = initiatives[name];
-            const featAttrTotal = feats.reduce((s, f) => s + f.total, 0);
-            const pctWeighted = featAttrTotal
-                ? Math.round(feats.reduce((s, f) => s + f.pct * f.total, 0) / featAttrTotal)
-                : Math.round(feats.reduce((s, f) => s + f.pct, 0) / (feats.length || 1));
-            const goLives = feats.map(f => f.goLiveMs).filter(x => x != null);
-            return {
-                name,
-                entity: initToEntity[name] || 'Unassigned',
-                features: feats,
-                featureCount: feats.length,
-                attrCount: featAttrTotal,
-                pct: pctWeighted,
-                blocked: feats.reduce((s, f) => s + f.blocked, 0),
-                awaiting: feats.reduce((s, f) => s + f.awaiting, 0),
-                ready: feats.reduce((s, f) => s + f.ready, 0),
-                delivered: feats.filter(f => f.health === 'delivered').length,
-                atRisk: feats.filter(f => f.health === 'at-risk' || f.health === 'blocked').length,
-                onTrack: feats.filter(f => f.health === 'on-track').length,
-                nextGoLiveMs: goLives.length ? Math.min(...goLives) : null,
-            };
-        }).sort((a, b) => (a.name === 'Ungrouped' ? 1 : b.name === 'Ungrouped' ? -1 : a.name.localeCompare(b.name)));
-
-        // ── Per-entity grouping — built directly from FEATURES (by Entity),
-        // then each entity's own features grouped by Initiative. (Deriving this
-        // from byInitiative collapsed everything when features shared an
-        // initiative / had none.) ──
-        const wMean = (rows, val) => {
-            const w = rows.reduce((s, f) => s + f.total, 0);
-            if (w) return Math.round(rows.reduce((s, f) => s + val(f) * f.total, 0) / w);
-            return rows.length ? Math.round(rows.reduce((s, f) => s + val(f), 0) / rows.length) : 0;
-        };
-        const entityMap = {};
-        featureList.forEach(f => {
-            const e = f.entity || 'Unassigned';
-            if (!entityMap[e]) entityMap[e] = {name: e, features: [], initMap: {}};
-            entityMap[e].features.push(f);
-            const iname = f.initiative || 'Ungrouped';
-            (entityMap[e].initMap[iname] = entityMap[e].initMap[iname] || []).push(f);
-        });
-        const byEntity = Object.values(entityMap).map(e => {
-            const initiatives = Object.keys(e.initMap).map(iname => {
-                const ifeats = e.initMap[iname];
-                return {
-                    name: iname,
-                    features: ifeats,
-                    featureCount: ifeats.length,
-                    attrCount: ifeats.reduce((s, f) => s + f.total, 0),
-                    pct: wMean(ifeats, f => f.pct),
-                };
-            }).sort((a, b) => (a.name === 'Ungrouped' ? 1 : b.name === 'Ungrouped' ? -1 : a.name.localeCompare(b.name)));
-            return {
-                name: e.name,
-                features: e.features,
-                initiatives,
-                featureCount: e.features.length,
-                attrCount: e.features.reduce((s, f) => s + f.total, 0),
-                pct: wMean(e.features, f => f.pct),
-            };
-        }).sort((a, b) => (a.name === 'Unassigned' ? 1 : b.name === 'Unassigned' ? -1 : a.name.localeCompare(b.name)));
-
-        // ── Per-milestone grouping (features grouped by their Milestone link;
-        // the milestone's date is the Milestone Due Date). ──
-        const parseD = s => { const t = s ? Date.parse(s) : NaN; return Number.isNaN(t) ? null : t; };
-        const msMap = {};
-        featureList.forEach(f => {
-            const m = f.milestone || 'No milestone';
-            if (!msMap[m]) msMap[m] = {name: m, features: [], dueMs: null};
-            msMap[m].features.push(f);
-            const d = parseD(f.milestoneDue);
-            if (d != null && msMap[m].dueMs == null) msMap[m].dueMs = d;
-        });
-        const byMilestone = Object.values(msMap).map(m => ({
-            name: m.name,
-            features: m.features,
-            featureCount: m.features.length,
-            attrCount: m.features.reduce((s, f) => s + f.total, 0),
-            pct: wMean(m.features, f => f.pct),
-            dueMs: m.dueMs,
-        })).sort((a, b) => {
-            if (a.name === 'No milestone') return 1;
-            if (b.name === 'No milestone') return -1;
-            if (a.dueMs != null && b.dueMs != null) return a.dueMs - b.dueMs;
-            return a.name.localeCompare(b.name);
-        });
-
-        // ── Overall phase distribution (every attribute sits in one phase) ──
-        const phaseCounts = {};
-        PHASE_GROUPS.forEach(p => (phaseCounts[p] = 0));
-        attrs.forEach(a => {
-            if (a.phase && phaseCounts[a.phase] != null) phaseCounts[a.phase] += 1;
-        });
-
-        // ── KPIs ──
-        const maturityAvg = attrs.length
-            ? attrs.reduce((s, a) => s + a.maturity, 0) / attrs.length
-            : 0;
-        const deliveredFeatures = Object.values(byFeature).filter(v => v.total && v.pct >= 100).length;
-        const kpis = {
-            active: attrs.filter(a => a.isActive).length,
-            awaitingReview: attrs.filter(a => a.isAwaitingReview).length,
-            blocked: attrs.filter(a => a.isBlocked).length,
-            readyToPush: attrs.filter(a => a.isReadyToPush).length,
-            deliveredFeatures,
-            overallPct: Math.round(maturityAvg * 100),
-        };
-
-        // ── Handshakes, newest first ──
+        // ── Handshakes, newest first (built here — needs the raw field bindings) ──
         const handshakeList = (handshakeRecords || [])
             .map(r => ({
                 id: r.id,
@@ -436,30 +271,238 @@ export function useModel() {
             }))
             .sort((a, b) => (a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0));
 
-        return {
+        return deriveModel({
+            featureList,
+            attrs,
+            handshakeList,
+            stagesByCode,
+            teamNames,
+            usersByTeam,
             ready,
             missing,
             coreMissingTables,
             tablesRaw: {attributes: attributes.table, handshakes: handshakes.table},
             fieldsRaw: {attributes: attributes.fields, handshakes: handshakes.fields},
-            stagesByCode,
-            teamNames,
-            usersByTeam,
-            byEntity,
-            byMilestone,
-            features: featureList,
-            featureOrder,
-            initiatives,
-            byInitiative,
-            attrs,
-            byFeature,
-            phaseCounts,
-            kpis,
-            handshakes: handshakeList,
             loading: ready && attributeRecords === null,
-        };
+        });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [teamRecords, featureRecords, attributeRecords, stageRecords, handshakeRecords]);
+}
+
+// ─── Aggregate derivation (pure) ──────────────────────────────────────────────
+// Builds every per-feature / initiative / entity / milestone aggregate from the
+// leaf feature + attribute lists. Kept separate from record-reading so a FILTERED
+// subset can be re-derived identically (see filterModel).
+export function deriveModel(ctx) {
+    const {
+        featureList, attrs, handshakeList, stagesByCode,
+        teamNames, usersByTeam, ready, missing, coreMissingTables,
+        tablesRaw, fieldsRaw, loading,
+    } = ctx;
+
+    const featureOrder = featureList.map(f => f.name).filter(Boolean);
+    const initToEntity = {};
+    featureList.forEach(f => { if (!initToEntity[f.initiative]) initToEntity[f.initiative] = f.entity; });
+
+    // ── Per-feature aggregates + maturity ──
+    const byFeature = {};
+    const ensureFeature = f => {
+        if (!byFeature[f]) {
+            byFeature[f] = {total: 0, delivered: 0, blocked: 0, awaiting: 0, ready: 0, maturitySum: 0, phase: {}, furthest: -1};
+            PHASE_GROUPS.forEach(p => (byFeature[f].phase[p] = 0));
+        }
+        return byFeature[f];
+    };
+    featureOrder.forEach(ensureFeature);
+    attrs.forEach(a => {
+        const v = ensureFeature(a.featureName || 'Unassigned');
+        v.total += 1;
+        v.maturitySum += a.maturity;
+        if (a.isDelivered) v.delivered += 1;
+        if (a.isBlocked) v.blocked += 1;
+        if (a.isAwaitingReview) v.awaiting += 1;
+        if (a.isReadyToPush) v.ready += 1;
+        if (a.phase && v.phase[a.phase] != null) {
+            v.phase[a.phase] += 1;
+            v.furthest = Math.max(v.furthest, PHASE_GROUPS.indexOf(a.phase));
+        }
+    });
+    Object.values(byFeature).forEach(v => {
+        v.pct = v.total ? Math.round((v.maturitySum / v.total) * 100) : 0;
+        v.furthestPhase = v.furthest >= 0 ? PHASE_GROUPS[v.furthest] : null;
+    });
+
+    // ── Per-feature health (drives the executive RAG status) ──
+    const todayMs = Date.now();
+    const parseDate = s => {
+        const t = s ? Date.parse(s) : NaN;
+        return Number.isNaN(t) ? null : t;
+    };
+    featureList.forEach(f => {
+        const v = byFeature[f.name] || {total: 0, pct: 0, blocked: 0, awaiting: 0, ready: 0};
+        f.pct = v.pct || 0;
+        f.total = v.total || 0;
+        f.blocked = v.blocked || 0;
+        f.awaiting = v.awaiting || 0;
+        f.ready = v.ready || 0;
+        f.goLiveMs = parseDate(f.goLive);
+        const overdue = f.goLiveMs != null && f.goLiveMs < todayMs && f.pct < 100;
+        f.health = f.pct >= 100 ? 'delivered' : f.blocked > 0 ? 'blocked' : overdue ? 'at-risk' : 'on-track';
+    });
+
+    // ── Initiative → features ──
+    const initiatives = {};
+    featureList.forEach(f => {
+        (initiatives[f.initiative] = initiatives[f.initiative] || []).push(f);
+    });
+
+    // ── Per-initiative aggregates (executive view) ──
+    const byInitiative = Object.keys(initiatives).map(name => {
+        const feats = initiatives[name];
+        const featAttrTotal = feats.reduce((s, f) => s + f.total, 0);
+        const pctWeighted = featAttrTotal
+            ? Math.round(feats.reduce((s, f) => s + f.pct * f.total, 0) / featAttrTotal)
+            : Math.round(feats.reduce((s, f) => s + f.pct, 0) / (feats.length || 1));
+        const goLives = feats.map(f => f.goLiveMs).filter(x => x != null);
+        return {
+            name,
+            entity: initToEntity[name] || 'Unassigned',
+            features: feats,
+            featureCount: feats.length,
+            attrCount: featAttrTotal,
+            pct: pctWeighted,
+            blocked: feats.reduce((s, f) => s + f.blocked, 0),
+            awaiting: feats.reduce((s, f) => s + f.awaiting, 0),
+            ready: feats.reduce((s, f) => s + f.ready, 0),
+            delivered: feats.filter(f => f.health === 'delivered').length,
+            atRisk: feats.filter(f => f.health === 'at-risk' || f.health === 'blocked').length,
+            onTrack: feats.filter(f => f.health === 'on-track').length,
+            nextGoLiveMs: goLives.length ? Math.min(...goLives) : null,
+        };
+    }).sort((a, b) => (a.name === 'Ungrouped' ? 1 : b.name === 'Ungrouped' ? -1 : a.name.localeCompare(b.name)));
+
+    // ── Per-entity grouping — built directly from FEATURES (by Entity),
+    // then each entity's own features grouped by Initiative. ──
+    const wMean = (rows, val) => {
+        const w = rows.reduce((s, f) => s + f.total, 0);
+        if (w) return Math.round(rows.reduce((s, f) => s + val(f) * f.total, 0) / w);
+        return rows.length ? Math.round(rows.reduce((s, f) => s + val(f), 0) / rows.length) : 0;
+    };
+    const entityMap = {};
+    featureList.forEach(f => {
+        const e = f.entity || 'Unassigned';
+        if (!entityMap[e]) entityMap[e] = {name: e, features: [], initMap: {}};
+        entityMap[e].features.push(f);
+        const iname = f.initiative || 'Ungrouped';
+        (entityMap[e].initMap[iname] = entityMap[e].initMap[iname] || []).push(f);
+    });
+    const byEntity = Object.values(entityMap).map(e => {
+        const inits = Object.keys(e.initMap).map(iname => {
+            const ifeats = e.initMap[iname];
+            return {
+                name: iname,
+                features: ifeats,
+                featureCount: ifeats.length,
+                attrCount: ifeats.reduce((s, f) => s + f.total, 0),
+                pct: wMean(ifeats, f => f.pct),
+            };
+        }).sort((a, b) => (a.name === 'Ungrouped' ? 1 : b.name === 'Ungrouped' ? -1 : a.name.localeCompare(b.name)));
+        return {
+            name: e.name,
+            features: e.features,
+            initiatives: inits,
+            featureCount: e.features.length,
+            attrCount: e.features.reduce((s, f) => s + f.total, 0),
+            pct: wMean(e.features, f => f.pct),
+        };
+    }).sort((a, b) => (a.name === 'Unassigned' ? 1 : b.name === 'Unassigned' ? -1 : a.name.localeCompare(b.name)));
+
+    // ── Per-milestone grouping ──
+    const parseD = s => { const t = s ? Date.parse(s) : NaN; return Number.isNaN(t) ? null : t; };
+    const msMap = {};
+    featureList.forEach(f => {
+        const m = f.milestone || 'No milestone';
+        if (!msMap[m]) msMap[m] = {name: m, features: [], dueMs: null};
+        msMap[m].features.push(f);
+        const d = parseD(f.milestoneDue);
+        if (d != null && msMap[m].dueMs == null) msMap[m].dueMs = d;
+    });
+    const byMilestone = Object.values(msMap).map(m => ({
+        name: m.name,
+        features: m.features,
+        featureCount: m.features.length,
+        attrCount: m.features.reduce((s, f) => s + f.total, 0),
+        pct: wMean(m.features, f => f.pct),
+        dueMs: m.dueMs,
+    })).sort((a, b) => {
+        if (a.name === 'No milestone') return 1;
+        if (b.name === 'No milestone') return -1;
+        if (a.dueMs != null && b.dueMs != null) return a.dueMs - b.dueMs;
+        return a.name.localeCompare(b.name);
+    });
+
+    // ── Overall phase distribution ──
+    const phaseCounts = {};
+    PHASE_GROUPS.forEach(p => (phaseCounts[p] = 0));
+    attrs.forEach(a => {
+        if (a.phase && phaseCounts[a.phase] != null) phaseCounts[a.phase] += 1;
+    });
+
+    // ── KPIs ──
+    const maturityAvg = attrs.length ? attrs.reduce((s, a) => s + a.maturity, 0) / attrs.length : 0;
+    const deliveredFeatures = Object.values(byFeature).filter(v => v.total && v.pct >= 100).length;
+    const kpis = {
+        active: attrs.filter(a => a.isActive).length,
+        awaitingReview: attrs.filter(a => a.isAwaitingReview).length,
+        blocked: attrs.filter(a => a.isBlocked).length,
+        readyToPush: attrs.filter(a => a.isReadyToPush).length,
+        deliveredFeatures,
+        overallPct: Math.round(maturityAvg * 100),
+    };
+
+    return {
+        ready, missing, coreMissingTables, tablesRaw, fieldsRaw,
+        stagesByCode, teamNames, usersByTeam,
+        byEntity, byMilestone,
+        features: featureList, featureOrder, initiatives, byInitiative,
+        attrs, byFeature, phaseCounts, kpis,
+        handshakes: handshakeList,
+        loading,
+    };
+}
+
+// ─── Global filter (Entity / Initiative / Feature / Milestone) ────────────────
+// Filtering is FEATURE-granular (all four fields live on the feature), so a
+// feature is included or excluded whole — every one of its attributes travels
+// with it — and re-deriving yields aggregates identical to the unfiltered ones
+// for the surviving features. Returns the same model when nothing is selected.
+export function filterModel(model, sel) {
+    if (!model || !sel) return model;
+    const active = sel.entity || sel.initiative || sel.feature || sel.milestone;
+    if (!active) return model;
+    const match = f =>
+        (!sel.entity || f.entity === sel.entity) &&
+        (!sel.initiative || f.initiative === sel.initiative) &&
+        (!sel.feature || f.name === sel.feature) &&
+        (!sel.milestone || (f.milestone || 'No milestone') === sel.milestone);
+    const feats = model.features.filter(match);
+    const allowed = new Set(feats.map(f => f.name));
+    const attrs = model.attrs.filter(a => allowed.has(a.featureName));
+    const handshakeList = model.handshakes.filter(h => allowed.has(h.feature));
+    return deriveModel({
+        featureList: feats,
+        attrs,
+        handshakeList,
+        stagesByCode: model.stagesByCode,
+        teamNames: model.teamNames,
+        usersByTeam: model.usersByTeam,
+        ready: model.ready,
+        missing: model.missing,
+        coreMissingTables: model.coreMissingTables,
+        tablesRaw: model.tablesRaw,
+        fieldsRaw: model.fieldsRaw,
+        loading: model.loading,
+    });
 }
 
 // Attributes whose work currently sits with this team.
