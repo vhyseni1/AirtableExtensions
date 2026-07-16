@@ -150,6 +150,41 @@ const GATES = [
     {key: 'done', label: 'UAT complete'},
 ];
 
+// Shared column widths so the Initiatives and Entity tables line up exactly
+// (Req under Req, Model under Model, …).
+function FunnelCols() {
+    return (
+        <colgroup>
+            <col style={{width: '16%'}} />
+            {GATES.map(g => (
+                <Fragment key={g.key}>
+                    <col style={{width: '5.2%'}} />
+                    <col style={{width: '11.6%'}} />
+                </Fragment>
+            ))}
+        </colgroup>
+    );
+}
+
+function FunnelHead() {
+    return (
+        <thead>
+            <tr>
+                <th rowSpan={2} className="fp-rp-rowname">Products / Initiatives</th>
+                {GATES.map(g => <th key={g.key} colSpan={2} className="fp-rp-grouphead">{g.label}</th>)}
+            </tr>
+            <tr>
+                {GATES.map(g => (
+                    <Fragment key={g.key}>
+                        <th className="fp-rp-sub">#</th>
+                        <th className="fp-rp-sub">% compl</th>
+                    </Fragment>
+                ))}
+            </tr>
+        </thead>
+    );
+}
+
 function FunnelRow({name, f, strong}) {
     return (
         <tr className={strong ? 'fp-rp-total' : ''}>
@@ -158,8 +193,6 @@ function FunnelRow({name, f, strong}) {
                 <Fragment key={g.key}>
                     <td className="fp-rp-num">{f[g.key].c}</td>
                     <td className="fp-rp-pct"><HarveyBall pct={f[g.key].pct} /><span>{f[g.key].pct}%</span></td>
-                    <td className="fp-rp-delta">—</td>
-                    <td className="fp-rp-delta">—</td>
                 </Fragment>
             ))}
         </tr>
@@ -190,22 +223,8 @@ function OnboardingPage({d}) {
 
                 <div className="fp-rp-tablewrap">
                     <table className="fp-rp-table">
-                        <thead>
-                            <tr>
-                                <th rowSpan={2} className="fp-rp-rowname">Products / Initiatives</th>
-                                {GATES.map(g => <th key={g.key} colSpan={4} className="fp-rp-grouphead">{g.label}</th>)}
-                            </tr>
-                            <tr>
-                                {GATES.map(g => (
-                                    <Fragment key={g.key}>
-                                        <th className="fp-rp-sub">#</th>
-                                        <th className="fp-rp-sub">% compl</th>
-                                        <th className="fp-rp-sub">Δ w-o-w</th>
-                                        <th className="fp-rp-sub">Δ m-o-m</th>
-                                    </Fragment>
-                                ))}
-                            </tr>
-                        </thead>
+                        <FunnelCols />
+                        <FunnelHead />
                         <tbody>
                             {d.initRows.map(r => <FunnelRow key={r.name} name={r.name} f={r.f} />)}
                             <FunnelRow name="Total" f={d.totalF} strong />
@@ -214,20 +233,11 @@ function OnboardingPage({d}) {
 
                     {d.entityRows.length > 0 && (
                         <table className="fp-rp-table fp-rp-table-entity">
+                            <FunnelCols />
                             <thead>
                                 <tr>
-                                    <th rowSpan={2} className="fp-rp-rowname">Entity</th>
-                                    {GATES.map(g => <th key={g.key} colSpan={4} className="fp-rp-grouphead">{g.label}</th>)}
-                                </tr>
-                                <tr>
-                                    {GATES.map(g => (
-                                        <Fragment key={g.key}>
-                                            <th className="fp-rp-sub">#</th>
-                                            <th className="fp-rp-sub">% compl</th>
-                                            <th className="fp-rp-sub">Δ w-o-w</th>
-                                            <th className="fp-rp-sub">Δ m-o-m</th>
-                                        </Fragment>
-                                    ))}
+                                    <th className="fp-rp-rowname">Entity</th>
+                                    {GATES.map(g => <th key={g.key} colSpan={2} className="fp-rp-grouphead">{g.label}</th>)}
                                 </tr>
                             </thead>
                             <tbody>
@@ -280,7 +290,21 @@ function PodPage({d}) {
             </div>
 
             <div className="fp-rp-tablewrap">
-                <table className="fp-rp-table">
+                <table className="fp-rp-table fp-rp-table-pod">
+                    <colgroup>
+                        <col style={{width: '16%'}} />
+                        <col style={{width: '6%'}} />
+                        <col style={{width: '7.5%'}} />
+                        <col style={{width: '7.5%'}} />
+                        <col style={{width: '9%'}} />
+                        <col style={{width: '7.5%'}} />
+                        <col style={{width: '8%'}} />
+                        <col style={{width: '5.5%'}} />
+                        <col style={{width: '7.5%'}} />
+                        <col style={{width: '6%'}} />
+                        <col style={{width: '6%'}} />
+                        <col style={{width: '6%'}} />
+                    </colgroup>
                     <thead>
                         <tr>
                             <th className="fp-rp-rowname">Crew / Pod</th>
