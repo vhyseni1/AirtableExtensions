@@ -1,197 +1,334 @@
-import {useEffect, useState} from 'react';
-import {PHASE_GROUPS, PHASE_COLORS} from './constants';
+import {Fragment, useEffect, useMemo, useState} from 'react';
+import {PHASE_GROUPS, STATUS} from './constants';
 import Logo from './Logo';
 
-const fmtDate = ms => (ms == null ? '—' : new Date(ms).toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: 'numeric'}));
-const RAG_COLOR = {Green: '#16A34A', Amber: '#F59E0B', Red: '#E11D48'};
-const INITIATIVE_COLORS = ['#E60000', '#14274E', '#0F766E', '#6D28D9', '#B45309', '#0E7490'];
+const asOf = new Date().toLocaleDateString('en-GB', {day: 'numeric', month: 'long', year: 'numeric'});
 
-function SlideDonut({pct, color = '#fff'}) {
-    const size = 200, stroke = 18, r = (size - stroke) / 2, c = 2 * Math.PI * r;
-    const [p, setP] = useState(0);
-    useEffect(() => { const id = requestAnimationFrame(() => setP(pct)); return () => cancelAnimationFrame(id); }, [pct]);
+// ── Harvey ball — the report's 5-state completion glyph (per the deck Key:
+// ○ <10% · ◔ 11–39% · ◑ 40–69% · ◕ 70–99% · ● 100%). Rendered as a proportional
+// pie so it reads at any value, not just the five stops. ──
+function HarveyBall({pct, size = 15}) {
+    const p = Math.max(0, Math.min(100, pct || 0)) / 100;
+    const r = size / 2;
+    const rr = r - 0.75;
+    let fill = null;
+    if (p >= 0.999) {
+        fill = <circle cx={r} cy={r} r={rr} fill="#111" />;
+    } else if (p > 0.001) {
+        const ang = p * 2 * Math.PI - Math.PI / 2;
+        const x = r + rr * Math.cos(ang);
+        const y = r + rr * Math.sin(ang);
+        const large = p > 0.5 ? 1 : 0;
+        fill = <path d={`M ${r} ${r} L ${r} ${r - rr} A ${rr} ${rr} 0 ${large} 1 ${x} ${y} Z`} fill="#111" />;
+    }
     return (
-        <div className="fp-ss-donut" style={{width: size, height: size}}>
-            <svg width={size} height={size} aria-hidden>
-                <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,.16)" strokeWidth={stroke} />
-                <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round"
-                    strokeDasharray={c} strokeDashoffset={c * (1 - Math.max(0, Math.min(100, p)) / 100)}
-                    transform={`rotate(-90 ${size / 2} ${size / 2})`} style={{transition: 'stroke-dashoffset 1s cubic-bezier(.22,.61,.36,1)'}} />
-            </svg>
-            <div className="fp-ss-donut-center">{pct}%</div>
+        <svg className="fp-hb" width={size} height={size} aria-hidden>
+            <circle cx={r} cy={r} r={rr} fill="#fff" stroke="#111" strokeWidth="1" />
+            {fill}
+        </svg>
+    );
+}
+
+// Cumulative onboarding curve (attributes reaching each lifecycle gate) — the
+// deck's "Feeds DEV/UAT/PROD %" mini chart, drawn from the funnel totals.
+function FunnelCurve({points}) {
+    const w = 220, h = 96, pad = 6;
+    const xs = points.map((_, i) => pad + (i / (points.length - 1)) * (w - pad * 2));
+    const yOf = v => h - pad - (v / 100) * (h - pad * 2);
+    const line = points.map((v, i) => `${i ? 'L' : 'M'} ${xs[i].toFixed(1)} ${yOf(v).toFixed(1)}`).join(' ');
+    return (
+        <svg className="fp-rp-curve" width={w} height={h} aria-hidden>
+            <line x1={pad} y1={yOf(0)} x2={w - pad} y2={yOf(0)} stroke="#d7dce3" />
+            <line x1={pad} y1={yOf(100)} x2={w - pad} y2={yOf(100)} stroke="#eef1f5" strokeDasharray="3 3" />
+            <path d={`${line} L ${xs[xs.length - 1]} ${yOf(0)} L ${xs[0]} ${yOf(0)} Z`} fill="rgba(230,0,0,.08)" />
+            <path d={line} fill="none" stroke="#E60000" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" />
+            {points.map((v, i) => <circle key={i} cx={xs[i]} cy={yOf(v)} r={2.6} fill="#E60000" />)}
+        </svg>
+    );
+}
+
+// ── Live model → the exact numbers each report page needs ──
+function buildData(model) {
+    const attrs = model.attrs;
+    const inProg = [STATUS.inProgress, STATUS.blocked, STATUS.returned];
+    const isNS = a => a.status === STATUS.notStarted;
+    const isIP = a => inProg.includes(a.status);
+    const isDev = a => a.status === STATUS.submitted;
+    const isUat = a => a.status === STATUS.approved;
+    const isSigned = a => a.status === STATUS.done || a.isDelivered;
+    const isNA = a => a.status === STATUS.cancelled;
+
+    // Funnel gates (cumulative "reached at least this stage").
+    const gReq = a => !isNS(a) && !isNA(a);
+    const gModel = a => PHASE_GROUPS.indexOf(a.phase) >= 1;
+    const gVest = a => isDev(a) || isUat(a) || isSigned(a);
+    const gUat = a => isUat(a) || isSigned(a);
+    const gDone = a => isSigned(a);
+
+    const funnel = list => {
+        const t = list.length;
+        const g = pred => { const c = list.filter(pred).length; return {c, pct: t ? Math.round((c / t) * 100) : 0}; };
+        return {t, req: g(gReq), model: g(gModel), vest: g(gVest), uat: g(gUat), done: g(gDone)};
+    };
+    const attrsOf = feats => { const s = new Set(feats.map(f => f.name)); return attrs.filter(a => s.has(a.featureName)); };
+
+    const initRows = model.byInitiative
+        .filter(it => it.attrCount > 0)
+        .map(it => ({name: it.name, f: funnel(attrsOf(it.features))}))
+        .sort((a, b) => b.f.t - a.f.t);
+    const entityRows = model.byEntity
+        .filter(e => e.features.length > 0)
+        .map(e => ({name: e.name, f: funnel(attrsOf(e.features))}));
+    const totalF = funnel(attrs);
+
+    // Pods = the team currently holding each attribute.
+    const podMap = {};
+    attrs.forEach(a => { const t = a.assignedTeamName || 'Unassigned'; (podMap[t] = podMap[t] || []).push(a); });
+    const podRow = list => {
+        const t = list.length;
+        const c = pred => list.filter(pred).length;
+        const na = c(isNA);
+        const base = t - na;
+        const dev = c(isDev), uat = c(isUat), signed = c(isSigned);
+        return {
+            t, ns: c(isNS), ip: c(isIP), dev, uat, signed, na, base,
+            vestPct: base ? Math.round(((dev + uat + signed) / base) * 100) : 0,
+            uatPct: base ? Math.round(((uat + signed) / base) * 100) : 0,
+            signPct: base ? Math.round((signed / base) * 100) : 0,
+        };
+    };
+    const pods = Object.keys(podMap)
+        .map(name => ({name, r: podRow(podMap[name])}))
+        .sort((a, b) => b.r.t - a.r.t);
+    const podTotal = podRow(attrs);
+
+    // Auto-comments — one crisp line per initiative, the way the deck reads.
+    const comments = initRows.slice(0, 8).map(r => ({
+        name: r.name,
+        text: `${r.f.model.c} of ${r.f.t} modelled · ${r.f.vest.c} DEV-complete · ${r.f.uat.c} in UAT · ${r.f.done.c} signed-off.`,
+    }));
+
+    const teamsEngaged = pods.filter(p => p.name !== 'Unassigned').length;
+    const totalTeams = model.teamNames.length || teamsEngaged;
+    const deliveredFeat = model.features.filter(f => f.health === 'delivered').length;
+    const featTotal = model.features.length;
+
+    return {initRows, entityRows, totalF, pods, podTotal, comments, teamsEngaged, totalTeams, deliveredFeat, featTotal};
+}
+
+// ── Report pages ──────────────────────────────────────────────────────────────
+function CoverPage({model, d}) {
+    return (
+        <div className="fp-rp-cover">
+            <div className="fp-rp-cover-main">
+                <div className="fp-rp-eyebrow">UBS Switzerland · ampliFI</div>
+                <h1 className="fp-rp-title">Product to ledger onboarding — data</h1>
+                <div className="fp-rp-asof">as of {asOf}</div>
+                <p className="fp-rp-lede">
+                    <b>{d.totalF.uat.pct}%</b> of data attributes deployed &amp; tested in UAT · <b>{d.totalF.done.pct}%</b> signed-off
+                </p>
+                <div className="fp-rp-coverstats">
+                    <div><b>{model.byInitiative.length}</b><span>Initiatives</span></div>
+                    <div><b>{model.features.length}</b><span>Features</span></div>
+                    <div><b>{model.attrs.length}</b><span>Attributes</span></div>
+                    <div><b>{model.kpis.overallPct}%</b><span>Overall maturity</span></div>
+                </div>
+            </div>
+            <div className="fp-rp-cover-side">
+                <FunnelCurve points={[d.totalF.req.pct, d.totalF.model.pct, d.totalF.vest.pct, d.totalF.uat.pct, d.totalF.done.pct]} />
+                <div className="fp-rp-curve-key">Req → Model → VEST → UAT → Complete</div>
+            </div>
         </div>
     );
 }
 
-function buildSlides(model, colorOf) {
-    const {byInitiative, features, kpis, phaseCounts, attrs} = model;
-    const now = Date.now();
-    const onTrack = features.filter(f => f.health === 'on-track');
-    const needAttn = features.filter(f => f.health === 'at-risk' || f.health === 'blocked');
-    const delivered = features.filter(f => f.health === 'delivered');
-    const blockedAttrs = attrs.filter(a => a.isBlocked);
-    const awaiting = attrs.filter(a => a.isAwaitingReview);
-    const ready = attrs.filter(a => a.isReadyToPush);
-    const returned = model.handshakes.filter(h => /return/i.test(h.action));
-    const upcoming = features.filter(f => f.goLiveMs != null).sort((a, b) => a.goLiveMs - b.goLiveMs);
-    const nextGo = upcoming.find(f => f.goLiveMs >= now) || upcoming[0] || null;
-    const ranked = [...byInitiative].filter(it => it.attrCount > 0).sort((a, b) => b.pct - a.pct);
-    const bottleneck = PHASE_GROUPS.reduce((b, p) => ((phaseCounts[p] || 0) > (phaseCounts[b] || 0) ? p : b), PHASE_GROUPS[0]);
-    const overdueFeat = features.filter(f => f.goLiveMs != null && f.goLiveMs < now && f.pct < 100).length;
-    const status = overdueFeat > 0 ? 'Red' : (kpis.blocked > 0 || needAttn.length > 0) ? 'Amber' : 'Green';
+const GATES = [
+    {key: 'req', label: 'Req.'},
+    {key: 'model', label: 'Model'},
+    {key: 'vest', label: 'VEST (DEV completed)'},
+    {key: 'uat', label: 'UAT deployed & tested'},
+    {key: 'done', label: 'UAT complete'},
+];
 
-    const slides = [];
-
-    // 1 — Cover
-    slides.push({
-        topic: 'UBS Switzerland · ampliFI',
-        node: (
-            <div className="fp-ss-cover">
-                <div>
-                    <Logo className="on-dark fp-ss-logo" />
-                    <h1 className="fp-ss-title">Programme Portfolio</h1>
-                    <p className="fp-ss-sub">{byInitiative.length} initiatives · {features.length} features · {attrs.length} data attributes</p>
-                    <span className="fp-ss-rag" style={{background: RAG_COLOR[status]}}>{status === 'Green' ? 'On track' : status === 'Amber' ? 'Watch' : 'At risk'}</span>
-                </div>
-                <SlideDonut pct={kpis.overallPct} />
-            </div>
-        ),
-    });
-
-    // 2 — Delivery health
-    slides.push({
-        topic: 'Delivery health',
-        node: (
-            <>
-                <h2 className="fp-ss-headline">{onTrack.length} of {features.length} features on track</h2>
-                <div className="fp-ss-stats">
-                    <div><b style={{color: '#7CF2A8'}}>{onTrack.length}</b><span>On track</span></div>
-                    <div><b style={{color: '#FFC078'}}>{needAttn.length}</b><span>Need attention</span></div>
-                    <div><b style={{color: '#7CD4FF'}}>{delivered.length}</b><span>Delivered</span></div>
-                    <div><b>{kpis.overallPct}%</b><span>Overall maturity</span></div>
-                </div>
-            </>
-        ),
-    });
-
-    // 3 — Next milestone
-    if (nextGo) {
-        const risk = nextGo.health === 'blocked' || nextGo.health === 'at-risk';
-        slides.push({
-            topic: 'Next milestone',
-            node: (
-                <>
-                    <div className="fp-ss-kicker">Next go-live · {fmtDate(nextGo.goLiveMs)}</div>
-                    <h2 className="fp-ss-headline">{nextGo.name}</h2>
-                    <p className="fp-ss-sub">{nextGo.initiative} · {nextGo.pct}% mature · <span style={{color: risk ? '#FFB1B1' : '#7CF2A8'}}>{risk ? 'At risk' : 'On track'}</span></p>
-                    <div className="fp-ss-bar"><i style={{width: `${nextGo.pct}%`, background: colorOf(nextGo.initiative)}} /></div>
-                </>
-            ),
-        });
-    }
-
-    // 4 — Momentum (leader vs laggard)
-    if (ranked.length >= 2 && ranked[0].name !== ranked[ranked.length - 1].name) {
-        const top = ranked[0];
-        const lag = ranked[ranked.length - 1];
-        slides.push({
-            topic: 'Momentum by initiative',
-            node: (
-                <>
-                    <h2 className="fp-ss-headline">{top.name} leads at {top.pct}%</h2>
-                    <p className="fp-ss-sub">{lag.name} trails at {lag.pct}% — the likeliest place to focus.</p>
-                    <div className="fp-ss-rows">
-                        {ranked.map(it => (
-                            <div className="fp-ss-row" key={it.name}>
-                                <span className="fp-ss-row-name">{it.name}</span>
-                                <span className="fp-ss-bar"><i style={{width: `${it.pct}%`, background: colorOf(it.name)}} /></span>
-                                <span className="fp-ss-row-pct">{it.pct}%</span>
-                            </div>
-                        ))}
-                    </div>
-                </>
-            ),
-        });
-    }
-
-    // 5 — Risks & blockers
-    if (blockedAttrs.length || returned.length || awaiting.length) {
-        const top = [...blockedAttrs.map(a => `${a.businessName || a.attributeId} — ${a.blockedReason || 'blocked'} (${a.featureName})`),
-            ...returned.map(h => `${h.feature} returned at ${h.stage}`)].slice(0, 3);
-        slides.push({
-            topic: 'Risks & blockers',
-            node: (
-                <>
-                    <h2 className="fp-ss-headline">{blockedAttrs.length} blocked · {returned.length} returned · {awaiting.length} awaiting</h2>
-                    <ul className="fp-ss-list">
-                        {top.map((t, i) => <li key={i}>{t}</li>)}
-                        {top.length === 0 && <li>No active blockers — flow is clean.</li>}
-                    </ul>
-                </>
-            ),
-        });
-    }
-
-    // 6 — Activity: what, who & when
-    if (model.handshakes.length) {
-        slides.push({
-            topic: 'Activity — what, who & when',
-            node: (
-                <>
-                    <h2 className="fp-ss-headline">Latest handoffs</h2>
-                    <div className="fp-ss-table">
-                        <div className="fp-ss-trow fp-ss-thead"><span>What</span><span>Who</span><span>When</span></div>
-                        {model.handshakes.slice(0, 6).map(h => (
-                            <div className="fp-ss-trow" key={h.id}>
-                                <span className="fp-ss-what"><b>{h.feature}</b><em>{h.action} · {h.stage}</em></span>
-                                <span className="fp-ss-who"><b>{h.decisionMaker || 'Team'}</b><em>{h.fromTeam} → {h.toTeam}</em></span>
-                                <span className="fp-ss-when">{h.timestamp}</span>
-                            </div>
-                        ))}
-                    </div>
-                </>
-            ),
-        });
-    }
-
-    // 7 — Where the work sits
-    const maxPhase = Math.max(1, ...PHASE_GROUPS.map(p => phaseCounts[p] || 0));
-    slides.push({
-        topic: 'Where the work sits',
-        node: (
-            <>
-                <h2 className="fp-ss-headline">{phaseCounts[bottleneck] || 0} attributes in {bottleneck}</h2>
-                <p className="fp-ss-sub">{ready.length} ready to advance now.</p>
-                <div className="fp-ss-rows">
-                    {PHASE_GROUPS.map(p => (
-                        <div className="fp-ss-row" key={p}>
-                            <span className="fp-ss-row-name">{p}</span>
-                            <span className="fp-ss-bar"><i style={{width: `${((phaseCounts[p] || 0) / maxPhase) * 100}%`, background: PHASE_COLORS[p]}} /></span>
-                            <span className="fp-ss-row-pct">{phaseCounts[p] || 0}</span>
-                        </div>
-                    ))}
-                </div>
-            </>
-        ),
-    });
-
-    return slides;
+function FunnelRow({name, f, strong}) {
+    return (
+        <tr className={strong ? 'fp-rp-total' : ''}>
+            <td className="fp-rp-rowname">{name}</td>
+            {GATES.map(g => (
+                <Fragment key={g.key}>
+                    <td className="fp-rp-num">{f[g.key].c}</td>
+                    <td className="fp-rp-pct"><HarveyBall pct={f[g.key].pct} /><span>{f[g.key].pct}%</span></td>
+                    <td className="fp-rp-delta">—</td>
+                    <td className="fp-rp-delta">—</td>
+                </Fragment>
+            ))}
+        </tr>
+    );
 }
 
-const SLIDE_MS = 5000;
+function OnboardingPage({d}) {
+    return (
+        <div className="fp-rp-page">
+            <div className="fp-rp-head">
+                <div>
+                    <div className="fp-rp-eyebrow">ampliFI · Product to ledger onboarding</div>
+                    <h2 className="fp-rp-h2">Product attributes onboarded and tested</h2>
+                </div>
+                <div className="fp-rp-headnum"><b>{d.totalF.uat.pct}%</b><span>attributes deployed &amp; tested in UAT</span></div>
+            </div>
+
+            <div className="fp-rp-cols">
+                <aside className="fp-rp-rail">
+                    <div className="fp-rp-rail-title">Onboarding at a glance</div>
+                    <div className="fp-rp-railstat"><b>{d.totalF.done.c}</b> of {d.totalF.t}<span>attributes signed-off ({d.totalF.done.pct}%)</span></div>
+                    <div className="fp-rp-railstat"><b>{d.totalF.uat.c}</b> of {d.totalF.t}<span>deployed &amp; tested in UAT ({d.totalF.uat.pct}%)</span></div>
+                    <div className="fp-rp-railstat"><b>{d.teamsEngaged}</b> of {d.totalTeams}<span>pods engaged</span></div>
+                    <div className="fp-rp-railstat"><b>{d.deliveredFeat}</b> of {d.featTotal}<span>features delivered</span></div>
+                    <FunnelCurve points={[d.totalF.req.pct, d.totalF.model.pct, d.totalF.vest.pct, d.totalF.uat.pct, d.totalF.done.pct]} />
+                    <div className="fp-rp-curve-key">Req → Model → VEST → UAT → Complete</div>
+                </aside>
+
+                <div className="fp-rp-tablewrap">
+                    <table className="fp-rp-table">
+                        <thead>
+                            <tr>
+                                <th rowSpan={2} className="fp-rp-rowname">Products / Initiatives</th>
+                                {GATES.map(g => <th key={g.key} colSpan={4} className="fp-rp-grouphead">{g.label}</th>)}
+                            </tr>
+                            <tr>
+                                {GATES.map(g => (
+                                    <Fragment key={g.key}>
+                                        <th className="fp-rp-sub">#</th>
+                                        <th className="fp-rp-sub">% compl</th>
+                                        <th className="fp-rp-sub">Δ w-o-w</th>
+                                        <th className="fp-rp-sub">Δ m-o-m</th>
+                                    </Fragment>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {d.initRows.map(r => <FunnelRow key={r.name} name={r.name} f={r.f} />)}
+                            <FunnelRow name="Total" f={d.totalF} strong />
+                        </tbody>
+                    </table>
+
+                    {d.entityRows.length > 0 && (
+                        <table className="fp-rp-table fp-rp-table-entity">
+                            <thead>
+                                <tr>
+                                    <th rowSpan={2} className="fp-rp-rowname">Entity</th>
+                                    {GATES.map(g => <th key={g.key} colSpan={4} className="fp-rp-grouphead">{g.label}</th>)}
+                                </tr>
+                                <tr>
+                                    {GATES.map(g => (
+                                        <Fragment key={g.key}>
+                                            <th className="fp-rp-sub">#</th>
+                                            <th className="fp-rp-sub">% compl</th>
+                                            <th className="fp-rp-sub">Δ w-o-w</th>
+                                            <th className="fp-rp-sub">Δ m-o-m</th>
+                                        </Fragment>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {d.entityRows.map(r => <FunnelRow key={r.name} name={r.name} f={r.f} />)}
+                            </tbody>
+                        </table>
+                    )}
+
+                    <div className="fp-rp-comments">
+                        <div className="fp-rp-comments-title">Comments</div>
+                        <ul>
+                            {d.comments.map(c => <li key={c.name}><b>{c.name}:</b> {c.text}</li>)}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div className="fp-rp-key">
+                <b>Key:</b> Req. = requirement work begun · Model = modelled (past Requirements phase) · VEST = validated/enriched/transformed in DEV · UAT deployed &amp; tested = approved in UAT · UAT complete = signed-off / delivered. Harvey ball: ○ &lt;10% · ◔ 11–39% · ◑ 40–69% · ◕ 70–99% · ● 100%. Δ w-o-w / m-o-m not yet tracked (—).
+            </div>
+        </div>
+    );
+}
+
+function PodPage({d}) {
+    const Row = ({name, r, strong}) => (
+        <tr className={strong ? 'fp-rp-total' : ''}>
+            <td className="fp-rp-rowname">{name}</td>
+            <td className="fp-rp-num">{r.t}</td>
+            <td className="fp-rp-num">{r.ns}</td>
+            <td className="fp-rp-num">{r.ip}</td>
+            <td className="fp-rp-num">{r.dev}</td>
+            <td className="fp-rp-num">{r.uat}</td>
+            <td className="fp-rp-num">{r.signed}</td>
+            <td className="fp-rp-num fp-rp-muted">{r.na}</td>
+            <td className="fp-rp-num fp-rp-strongcol">{r.base}</td>
+            <td className="fp-rp-pct"><HarveyBall pct={r.vestPct} /><span>{r.vestPct}%</span></td>
+            <td className="fp-rp-pct"><HarveyBall pct={r.uatPct} /><span>{r.uatPct}%</span></td>
+            <td className="fp-rp-pct"><HarveyBall pct={r.signPct} /><span>{r.signPct}%</span></td>
+        </tr>
+    );
+    return (
+        <div className="fp-rp-page">
+            <div className="fp-rp-head">
+                <div>
+                    <div className="fp-rp-eyebrow">ampliFI · Sourcing &amp; VESTing</div>
+                    <h2 className="fp-rp-h2">Sourcing &amp; VESTing status by pod</h2>
+                </div>
+                <div className="fp-rp-headnum"><b>{d.podTotal.vestPct}%</b><span>VESTed across all pods</span></div>
+            </div>
+
+            <div className="fp-rp-tablewrap">
+                <table className="fp-rp-table">
+                    <thead>
+                        <tr>
+                            <th className="fp-rp-rowname">Crew / Pod</th>
+                            <th className="fp-rp-sub">Total</th>
+                            <th className="fp-rp-sub">Not started</th>
+                            <th className="fp-rp-sub">In progress</th>
+                            <th className="fp-rp-sub">DEV complete — awaiting UAT</th>
+                            <th className="fp-rp-sub">UAT — tested</th>
+                            <th className="fp-rp-sub">UAT — business sign-off</th>
+                            <th className="fp-rp-sub">n/a</th>
+                            <th className="fp-rp-sub">Total (excl. n/a)</th>
+                            <th className="fp-rp-sub">VESTed</th>
+                            <th className="fp-rp-sub">UAT deployed &amp; tested</th>
+                            <th className="fp-rp-sub">Signed off by Finance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {d.pods.map(p => <Row key={p.name} name={p.name} r={p.r} />)}
+                        <Row name="Total" r={d.podTotal} strong />
+                    </tbody>
+                </table>
+            </div>
+
+            <div className="fp-rp-key">
+                <b>Key:</b> a pod is the team currently holding an attribute. Status columns map to the attribute workflow: DEV complete — awaiting UAT = submitted for review · UAT — tested = approved · UAT — business sign-off = done. VESTed / UAT deployed &amp; tested / Signed off by Finance are % of each pod&rsquo;s in-scope attributes (excl. n/a). Harvey ball: ○ &lt;10% · ◔ 11–39% · ◑ 40–69% · ◕ 70–99% · ● 100%.
+            </div>
+        </div>
+    );
+}
+
+function buildDeck(model, d) {
+    return [
+        {topic: 'Cover', node: <CoverPage model={model} d={d} />},
+        {topic: 'Product attributes onboarded and tested', node: <OnboardingPage d={d} />},
+        {topic: 'Sourcing & VESTing status by pod', node: <PodPage d={d} />},
+    ];
+}
+
+const SLIDE_MS = 16000;
 
 export default function Narrative({model, onClose}) {
-    const colorIndex = {};
-    model.byInitiative.forEach((it, idx) => (colorIndex[it.name] = INITIATIVE_COLORS[idx % INITIATIVE_COLORS.length]));
-    const colorOf = name => colorIndex[name] || '#E60000';
-    const slides = buildSlides(model, colorOf);
+    const d = useMemo(() => buildData(model), [model]);
+    const slides = useMemo(() => buildDeck(model, d), [model, d]);
     const [i, setI] = useState(0);
-    const [playing, setPlaying] = useState(true);
+    const [playing, setPlaying] = useState(false);
     const n = slides.length;
-    const go = d => { setPlaying(false); setI(x => Math.max(0, Math.min(n - 1, x + d))); };
+    const go = delta => { setPlaying(false); setI(x => Math.max(0, Math.min(n - 1, x + delta))); };
 
-    // Auto-advance (loops). Timer resets on each slide change, so manual nav
-    // gives a full dwell too. Pauses when `playing` is off.
     useEffect(() => {
         if (!playing) return undefined;
         const t = setTimeout(() => setI(x => (x + 1) % n), SLIDE_MS);
@@ -212,20 +349,9 @@ export default function Narrative({model, onClose}) {
 
     const slide = slides[i];
     return (
-        <div className="fp-ss">
-            <div className="fp-ss-bars" aria-hidden>
-                {slides.map((s, idx) => (
-                    <div className="fp-ss-seg" key={idx}>
-                        <i
-                            key={idx === i ? `live-${i}` : `seg-${idx}`}
-                            className={idx < i ? 'done' : idx === i ? 'live' : ''}
-                            style={idx === i ? {animationDuration: `${SLIDE_MS}ms`, animationPlayState: playing ? 'running' : 'paused'} : undefined}
-                        />
-                    </div>
-                ))}
-            </div>
+        <div className="fp-ss fp-rp">
             <div className="fp-ss-top">
-                <div className="fp-ss-brand"><Logo className="on-dark" /> ampliFI · Narrative</div>
+                <div className="fp-ss-brand"><Logo /> ampliFI · Narrative</div>
                 <div className="fp-ss-topright">
                     <button type="button" className="fp-ss-play" onClick={() => setPlaying(p => !p)} aria-label={playing ? 'Pause' : 'Play'} title={playing ? 'Pause' : 'Play'}>
                         {playing ? '❚❚' : '▶'}
@@ -238,8 +364,8 @@ export default function Narrative({model, onClose}) {
             <div className="fp-ss-stage">
                 <button type="button" className="fp-ss-arrow left" onClick={() => go(-1)} disabled={i === 0} aria-label="Previous">‹</button>
                 <div className="fp-ss-slide" key={i}>
-                    <div className="fp-ss-topic">{slide.topic}</div>
                     {slide.node}
+                    <div className="fp-rp-foot"><Logo /></div>
                 </div>
                 <button type="button" className="fp-ss-arrow right" onClick={() => go(1)} disabled={i === n - 1} aria-label="Next">›</button>
             </div>
