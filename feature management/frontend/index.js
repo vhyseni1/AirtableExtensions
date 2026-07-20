@@ -14,13 +14,12 @@ import Logo from './Logo';
 import './style.css';
 
 // Modes that honour the top-bar Entity / Initiative / Feature / Milestone filter.
-const FILTERED_MODES = new Set(['roadmap', 'team', 'workflow', 'trace']);
+const FILTERED_MODES = new Set(['roadmap', 'workflow', 'trace']);
 
 const MODES = [
-    {key: 'exec', label: 'Executive overview'},
-    {key: 'roadmap', label: 'Pipeline Tracker Overview'},
-    {key: 'team', label: 'By team'},
-    {key: 'workflow', label: 'Workflow'},
+    {key: 'exec', label: 'Executive Overview'},
+    {key: 'roadmap', label: 'Workflow Overview'},
+    {key: 'workflow', label: 'Team Overview'},
     {key: 'trace', label: 'Traceability'},
 ];
 

@@ -383,6 +383,7 @@ export default function Narrative({model, onClose}) {
             <div className="fp-ss-top">
                 <div className="fp-ss-brand"><Logo /> ampliFI · Narrative</div>
                 <div className="fp-ss-topright">
+                    <button type="button" className="fp-ss-pdf" onClick={() => window.print()} title="Export to PDF (A4 landscape)">⤓ PDF</button>
                     <button type="button" className="fp-ss-play" onClick={() => setPlaying(p => !p)} aria-label={playing ? 'Pause' : 'Play'} title={playing ? 'Pause' : 'Play'}>
                         {playing ? '❚❚' : '▶'}
                     </button>
@@ -403,6 +404,16 @@ export default function Narrative({model, onClose}) {
             <div className="fp-ss-dots">
                 {slides.map((s, idx) => (
                     <button type="button" key={idx} className={`fp-ss-dot${idx === i ? ' active' : ''}`} onClick={() => { setPlaying(false); setI(idx); }} aria-label={`Slide ${idx + 1}`} title={s.topic} />
+                ))}
+            </div>
+
+            {/* Print-only: the full deck, one A4-landscape page per slide. */}
+            <div className="fp-ss-print" aria-hidden>
+                {slides.map((s, idx) => (
+                    <div className="fp-ss-printpage" key={idx}>
+                        {s.node}
+                        <div className="fp-rp-foot"><Logo /></div>
+                    </div>
                 ))}
             </div>
         </div>

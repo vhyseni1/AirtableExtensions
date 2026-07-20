@@ -745,13 +745,16 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-ss-play { background: #f1f2f4; border: 1px solid #e2e5ea; color: #333; width: 32px; height: 32px; border-radius: 50%; font-size: 11px; cursor: pointer; line-height: 1; }
 .fp-ss-close { background: #f1f2f4; border: 1px solid #e2e5ea; color: #333; width: 34px; height: 34px; border-radius: 50%; font-size: 20px; cursor: pointer; line-height: 1; }
 .fp-ss-play:hover, .fp-ss-close:hover { background: #e7e9ed; }
+.fp-ss-pdf { background: #fff; border: 1px solid #d7dbe0; color: #E60000; border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.fp-ss-pdf:hover { background: #fff6f6; border-color: #E60000; }
 .fp-ss-count { font-size: 13px; color: #6b7280; font-variant-numeric: tabular-nums; }
+.fp-ss-print { display: none; }
 
 .fp-ss-stage { flex: 1; display: flex; align-items: center; justify-content: center; gap: 14px; padding: 16px 18px; min-height: 0; }
 .fp-ss-slide {
-    flex: 1; max-width: 1240px; height: 100%; box-sizing: border-box; background: #fff;
+    flex: 1; max-width: 1340px; height: 100%; box-sizing: border-box; background: #fff;
     border: 1px solid #e2e5ea; border-radius: 6px; box-shadow: 0 10px 34px rgba(15,23,42,.14);
-    padding: 20px 28px 12px; overflow: hidden; display: flex; flex-direction: column;
+    padding: 24px 34px 16px; overflow: hidden; display: flex; flex-direction: column;
     animation: fp-ss-in .4s cubic-bezier(.22,.61,.36,1);
 }
 .fp-ss-arrow { background: #fff; border: 1px solid #e2e5ea; color: #333; width: 46px; height: 46px; border-radius: 50%; font-size: 26px; line-height: 1; cursor: pointer; flex: 0 0 auto; transition: background .15s; }
@@ -764,10 +767,10 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 
 /* report headers */
 .fp-rp-eyebrow { text-transform: uppercase; letter-spacing: .1em; font-size: 11px; font-weight: 600; color: #8a9098; margin-bottom: 6px; }
-.fp-rp-title { font-size: 32px; font-weight: 300; letter-spacing: -.01em; margin: 0; color: #1a1a1a; }
-.fp-rp-asof { font-size: 14px; color: #6b7280; margin-top: 4px; }
-.fp-rp-h2 { font-size: 19px; font-weight: 700; margin: 0; color: #1a1a1a; }
-.fp-rp-subline { font-size: 12px; color: #6b7280; margin-top: 3px; }
+.fp-rp-title { font-size: 37px; font-weight: 300; letter-spacing: -.01em; margin: 0; color: #1a1a1a; }
+.fp-rp-asof { font-size: 15px; color: #6b7280; margin-top: 4px; }
+.fp-rp-h2 { font-size: 23px; font-weight: 700; margin: 0; color: #1a1a1a; }
+.fp-rp-subline { font-size: 13.5px; color: #6b7280; margin-top: 3px; }
 .fp-rp-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; border-bottom: 1px solid #d7dbe0; padding-bottom: 6px; margin-bottom: 12px; }
 .fp-rp-page { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 
@@ -785,25 +788,25 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 /* two-column body */
 .fp-rp-cols { display: grid; grid-template-columns: 212px 1fr; gap: 22px; flex: 1; min-height: 0; }
 .fp-rp-rail { border-right: 1px solid #e8ebef; padding-right: 18px; }
-.fp-rp-rail-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #111; margin-bottom: 12px; }
-.fp-rp-railstat { margin-bottom: 11px; font-size: 12px; color: #6b7280; }
-.fp-rp-railstat b { font-size: 23px; font-weight: 800; color: #111; }
+.fp-rp-rail-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #111; margin-bottom: 13px; }
+.fp-rp-railstat { margin-bottom: 13px; font-size: 13px; color: #6b7280; }
+.fp-rp-railstat b { font-size: 27px; font-weight: 800; color: #111; }
 .fp-rp-railstat span { display: block; margin-top: 2px; }
 
 /* tables */
 .fp-rp-tablewrap { overflow: hidden; min-width: 0; }
 /* Minimal deck style: horizontal rules only, no vertical gridlines, no fills. */
-.fp-rp-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 10.5px; margin-bottom: 14px; color: #1a1a1a; }
-.fp-rp-table th, .fp-rp-table td { padding: 3px 5px; text-align: center; overflow: hidden; text-overflow: ellipsis; }
+.fp-rp-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 12px; margin-bottom: 16px; color: #1a1a1a; }
+.fp-rp-table th, .fp-rp-table td { padding: 4px 6px; text-align: center; overflow: hidden; text-overflow: ellipsis; }
 .fp-rp-table td { white-space: nowrap; border-bottom: 1px solid #edeff2; }
 .fp-rp-table th { white-space: normal; line-height: 1.12; vertical-align: bottom; }
-.fp-rp-grouphead { font-weight: 700; font-size: 10.5px; color: #1a1a1a; border-bottom: 1.5px solid #333; padding-bottom: 3px; }
-.fp-rp-sub { font-weight: 600; font-size: 9px; color: #7a7f87; border-bottom: 1px solid #c9cdd3; padding-top: 2px; }
+.fp-rp-grouphead { font-weight: 700; font-size: 12px; color: #1a1a1a; border-bottom: 1.5px solid #333; padding-bottom: 3px; }
+.fp-rp-sub { font-weight: 600; font-size: 10px; color: #7a7f87; border-bottom: 1px solid #c9cdd3; padding-top: 2px; }
 .fp-rp-rowname { text-align: left; font-weight: 600; color: #1a1a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid #edeff2; }
 .fp-rp-num { font-variant-numeric: tabular-nums; color: #1a1a1a; }
 .fp-rp-pct { font-variant-numeric: tabular-nums; white-space: nowrap; color: #1a1a1a; }
 .fp-rp-pct .fp-hb { vertical-align: -2px; margin-right: 3px; }
-.fp-rp-pct span { font-size: 9.5px; }
+.fp-rp-pct span { font-size: 11px; }
 .fp-rp-delta { color: #8a9098; }
 .fp-rp-muted { color: #9aa1ac; }
 .fp-rp-strongcol { font-weight: 700; }
@@ -812,13 +815,13 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 
 /* comments */
 .fp-rp-comments { margin-top: 2px; }
-.fp-rp-comments-title { font-size: 12px; font-weight: 700; color: #111; margin-bottom: 4px; }
-.fp-rp-comments ul { margin: 0; padding-left: 15px; columns: 3; column-gap: 22px; }
-.fp-rp-comments li { font-size: 10.5px; color: #333; line-height: 1.4; margin-bottom: 2px; break-inside: avoid; }
+.fp-rp-comments-title { font-size: 13px; font-weight: 700; color: #111; margin-bottom: 5px; }
+.fp-rp-comments ul { margin: 0; padding-left: 16px; columns: 3; column-gap: 24px; }
+.fp-rp-comments li { font-size: 12px; color: #333; line-height: 1.4; margin-bottom: 2px; break-inside: avoid; }
 .fp-rp-comments li b { color: #111; }
 
 /* key + footer */
-.fp-rp-key { font-size: 9.5px; color: #8a919c; line-height: 1.45; border-top: 1px solid #eceef1; padding-top: 6px; margin-top: 8px; }
+.fp-rp-key { font-size: 10.5px; color: #8a919c; line-height: 1.45; border-top: 1px solid #eceef1; padding-top: 6px; margin-top: 8px; }
 .fp-rp-key b { color: #6b7280; }
 .fp-rp-foot { margin-top: auto; padding-top: 8px; }
 .fp-rp-foot .fp-logo-img { height: 20px; }
@@ -829,4 +832,25 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
     .fp-rp-rail { border-right: none; border-bottom: 1px solid #e8ebef; padding-right: 0; padding-bottom: 12px; }
     .fp-rp-comments ul { columns: 1; }
     .fp-rp-title { font-size: 26px; }
+}
+
+/* ── PDF export — one A4-landscape page per slide ── */
+@media print {
+    @page { size: A4 landscape; margin: 8mm; }
+    html, body { background: #fff !important; }
+    /* Hide everything behind the deck modal, then the modal's own chrome. */
+    .fp-app > *:not(.fp-ss) { display: none !important; }
+    .fp-ss-top, .fp-ss-stage, .fp-ss-dots { display: none !important; }
+    .fp-ss { position: static !important; inset: auto !important; background: #fff !important; display: block !important; }
+    .fp-ss-print { display: block !important; }
+    .fp-ss-printpage {
+        box-sizing: border-box; width: 100%; height: 190mm; padding: 2mm 3mm;
+        display: flex; flex-direction: column; overflow: hidden;
+        page-break-after: always; break-after: page;
+    }
+    .fp-ss-printpage:last-child { page-break-after: auto; break-after: auto; }
+    .fp-ss-printpage > .fp-rp-page,
+    .fp-ss-printpage > .fp-rp-cover { flex: 1; min-height: 0; }
+    /* Print at full ink, no shadows/borders from the on-screen card. */
+    .fp-rp-table td, .fp-rp-table th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
