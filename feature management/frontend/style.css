@@ -834,23 +834,31 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
     .fp-rp-title { font-size: 26px; }
 }
 
-/* ── PDF export — one A4-landscape page per slide ── */
+/* ── PDF export — exactly one A4-landscape page per on-screen slide ── */
 @media print {
     @page { size: A4 landscape; margin: 8mm; }
-    html, body { background: #fff !important; }
+    html, body { background: #fff !important; height: auto !important; }
     /* Hide everything behind the deck modal, then the modal's own chrome. */
     .fp-app > *:not(.fp-ss) { display: none !important; }
     .fp-ss-top, .fp-ss-stage, .fp-ss-dots { display: none !important; }
-    .fp-ss { position: static !important; inset: auto !important; background: #fff !important; display: block !important; }
+    .fp-ss { position: static !important; inset: auto !important; background: #fff !important; display: block !important; height: auto !important; }
     .fp-ss-print { display: block !important; }
+
+    /* One printable A4-landscape area per slide. No fixed height / overflow so
+       nothing is clipped; the block is kept whole and forced onto its own page. */
     .fp-ss-printpage {
-        box-sizing: border-box; width: 100%; height: 190mm; padding: 2mm 3mm;
-        display: flex; flex-direction: column; overflow: hidden;
-        page-break-after: always; break-after: page;
+        box-sizing: border-box; width: 100%; min-height: 190mm; padding: 3mm 4mm;
+        display: flex; flex-direction: column; background: #fff; overflow: visible;
+        page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid;
     }
     .fp-ss-printpage:last-child { page-break-after: auto; break-after: auto; }
     .fp-ss-printpage > .fp-rp-page,
     .fp-ss-printpage > .fp-rp-cover { flex: 1; min-height: 0; }
-    /* Print at full ink, no shadows/borders from the on-screen card. */
-    .fp-rp-table td, .fp-rp-table th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+    /* Keep report blocks intact across the page. */
+    .fp-rp-table, .fp-rp-comments, .fp-rp-cover, .fp-rp-head, .fp-rp-rail { page-break-inside: avoid; break-inside: avoid; }
+    .fp-rp-table tr { page-break-inside: avoid; break-inside: avoid; }
+
+    /* Render harvey balls, rules and chart at full ink. */
+    .fp-ss-print, .fp-ss-print * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
