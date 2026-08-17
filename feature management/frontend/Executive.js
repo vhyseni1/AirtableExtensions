@@ -148,113 +148,6 @@ function Timeline({features, colorOf, onPick, onDrill}) {
     );
 }
 
-// ── Milestone swimlane — one horizontal lane per milestone; items placed on a
-// shared time axis by their date (features by go-live, attributes by due date).
-// Used at the feature level so "features are grouped by milestone".
-const SL_GUTTER = 150; // milestone label column width
-const SL_CHIP_W = 150; // chip width (for horizontal packing)
-const SL_SUBROW = 28;  // vertical pitch of packed chips inside a lane
-const SL_PAD = 14;     // lane padding
-function SwimlaneTimeline({items, groupKey, onPick}) {
-    const ref = useRef(null);
-    const [w, setW] = useState(0);
-    useEffect(() => {
-        const el = ref.current;
-        if (!el) return undefined;
-        const ro = new ResizeObserver(entries => setW(entries[0].contentRect.width));
-        ro.observe(el);
-        setW(el.clientWidth);
-        return () => ro.disconnect();
-    }, []);
-
-    if (items.length === 0) return <div className="fp-muted">Nothing to place here.</div>;
-    const dated = items.filter(f => f.goLiveMs != null);
-    if (dated.length === 0) return <div className="fp-muted">No dates set on these items yet.</div>;
-
-    // Group into milestone lanes; order lanes by earliest date.
-    const groups = {};
-    items.forEach(f => { const k = groupKey(f); (groups[k] = groups[k] || []).push(f); });
-    const laneNames = Object.keys(groups).sort((a, b) => {
-        if (a === 'No milestone') return 1;
-        if (b === 'No milestone') return -1;
-        const da = Math.min(...groups[a].map(f => (f.goLiveMs == null ? Infinity : f.goLiveMs)));
-        const db = Math.min(...groups[b].map(f => (f.goLiveMs == null ? Infinity : f.goLiveMs)));
-        return da - db;
-    });
-    const laneColor = i => INITIATIVE_COLORS[i % INITIATIVE_COLORS.length];
-
-    const now = Date.now();
-    const allMs = dated.map(f => f.goLiveMs);
-    const min = Math.min(now, ...allMs);
-    const max = Math.max(now, ...allMs);
-    const pad = (max - min) * 0.07 || 86400000 * 20;
-    const start = min - pad, end = max + pad, span = end - start || 1;
-    const W = w || 900;
-    const trackW = Math.max(220, W - SL_GUTTER);
-    const xOf = ms => SL_GUTTER + ((ms - start) / span) * trackW;
-
-    const ticks = [];
-    const d = new Date(start);
-    d.setDate(1); d.setHours(0, 0, 0, 0);
-    while (d.getTime() <= end) { ticks.push(d.getTime()); d.setMonth(d.getMonth() + 1); }
-
-    // Per-lane greedy sub-row packing so chips never overlap within a lane.
-    const lanes = laneNames.map((name, li) => {
-        const feats = groups[name].filter(f => f.goLiveMs != null).sort((a, b) => a.goLiveMs - b.goLiveMs);
-        const subRight = [];
-        const placed = feats.map(f => {
-            let x = xOf(f.goLiveMs);
-            if (x + SL_CHIP_W > SL_GUTTER + trackW) x = SL_GUTTER + trackW - SL_CHIP_W;
-            if (x < SL_GUTTER) x = SL_GUTTER;
-            let row = 0;
-            while (row < subRight.length && x < subRight[row] + 8) row++;
-            subRight[row] = x + SL_CHIP_W;
-            return {f, x, row};
-        });
-        const rows = Math.max(1, subRight.length);
-        return {name, color: laneColor(li), placed, rows, height: rows * SL_SUBROW + SL_PAD, count: groups[name].length, undated: groups[name].length - feats.length};
-    });
-    let yy = 0;
-    const tops = lanes.map(l => { const t = yy; yy += l.height; return t; });
-    const totalH = yy;
-
-    return (
-        <div className="fp-swim" ref={ref}>
-            <div className="fp-swim-axis" style={{marginLeft: SL_GUTTER}}>
-                {ticks.map(t => (
-                    <span key={t} className="fp-swim-tick" style={{left: `${((t - start) / span) * 100}%`}}>
-                        {new Date(t).toLocaleDateString('en-GB', {month: 'short', year: '2-digit'})}
-                    </span>
-                ))}
-            </div>
-            <div className="fp-swim-body" style={{height: totalH}}>
-                <div className="fp-swim-today" style={{left: xOf(now)}} title="Today"><span>Today</span></div>
-                {lanes.map((l, i) => (
-                    <div key={l.name} className={`fp-swim-lane${i % 2 ? ' alt' : ''}`} style={{top: tops[i], height: l.height}}>
-                        <div className="fp-swim-label" style={{width: SL_GUTTER, borderLeftColor: l.color}}>
-                            <span className="fp-swim-mname" title={l.name}>{l.name}</span>
-                            <span className="fp-swim-mcount">{l.count} item{l.count === 1 ? '' : 's'}{l.undated ? ` · ${l.undated} undated` : ''}</span>
-                        </div>
-                        {l.placed.map(({f, x, row}) => (
-                            <div
-                                key={f.id}
-                                className="fp-swim-chip clickable"
-                                style={{left: x, top: row * SL_SUBROW + 5, width: SL_CHIP_W - 10, borderLeftColor: l.color}}
-                                title={`${f.name} · ${fmtDate(f.goLiveMs)} · ${f.pct}%`}
-                                onClick={() => onPick(f)}
-                            >
-                                <span className="fp-swim-dot" style={{background: l.color}} />
-                                <span className="fp-swim-fname">{f.name}</span>
-                                <span className="fp-swim-fpct">{f.pct}%</span>
-                            </div>
-                        ))}
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-}
-
 // Entity card — aggregates across the entity; lists its initiatives (capped).
 const CARD_CAP = 10;
 function EntityCard({e, colorOf, mounted, model, openInitiatives, openFeatures}) {
@@ -372,9 +265,11 @@ export default function Executive({model}) {
     }));
     const initTimeline = byInitiative.map(toInitBox);
 
-    // Drill actions (push onto the stack).
+    // Drill actions (push onto the stack). Every level is the SAME timeline
+    // widget, so a click always drills one level down: entity → initiatives →
+    // features → attributes; the attribute level opens the record.
     const drillEntity = e => setTlPath(p => [...p, {kind: 'initiatives', name: e.name, items: e.initiatives.map(toInitBox)}]);
-    const drillInitiative = it => setTlPath(p => [...p, {kind: 'swimlane', name: it.name, items: it.features}]);
+    const drillInitiative = it => setTlPath(p => [...p, {kind: 'features', name: it.name, items: it.features}]);
     const drillFeature = f => setTlPath(p => [...p, {kind: 'attrs', name: f.name, items: attrItemsOf(f.name)}]);
     const tlFrame = tlPath.length ? tlPath[tlPath.length - 1] : null;
 
@@ -474,21 +369,21 @@ export default function Executive({model}) {
                 <div className="fp-tl-hint">
                     {tlFrame
                         ? (tlFrame.kind === 'initiatives'
-                            ? 'Click an initiative to see its features, grouped by milestone · ← Back'
-                            : tlFrame.kind === 'swimlane'
-                                ? 'Features grouped by milestone (x = go-live) · click a feature to see its attributes by due date · ← Back'
-                                : 'Attributes placed by due date · click one to open its record · ← Back')
+                            ? 'Click an initiative to drill into its features · ← Back'
+                            : tlFrame.kind === 'features'
+                                ? 'Click a feature to drill into its attributes (by due date) · ← Back'
+                                : 'Click an attribute to open its record · ← Back')
                         : tlLevel === 'entity'
                             ? 'Click an entity to drill into its initiatives'
                             : tlLevel === 'initiative'
-                                ? 'Click an initiative to see its features, grouped by milestone'
-                                : 'Features grouped by milestone (x = go-live) · click a feature to see its attributes'}
+                                ? 'Click an initiative to drill into its features'
+                                : 'Click a feature to drill into its attributes'}
                 </div>
                 {tlFrame ? (
                     tlFrame.kind === 'initiatives' ? (
                         <Timeline features={tlFrame.items} colorOf={colorOf} onDrill={drillInitiative} onPick={it => openFeatures(`${it.name} · features`, it.features)} />
-                    ) : tlFrame.kind === 'swimlane' ? (
-                        <SwimlaneTimeline items={tlFrame.items} groupKey={f => f.milestone || 'No milestone'} onPick={drillFeature} />
+                    ) : tlFrame.kind === 'features' ? (
+                        <Timeline features={tlFrame.items} colorOf={colorOf} onDrill={drillFeature} onPick={pushFeatureAttrs} />
                     ) : (
                         <Timeline features={tlFrame.items} colorOf={colorOf} onPick={it => expandRecord(it.record)} />
                     )
@@ -497,7 +392,7 @@ export default function Executive({model}) {
                 ) : tlLevel === 'initiative' ? (
                     <Timeline features={initTimeline} colorOf={colorOf} onDrill={drillInitiative} onPick={it => openFeatures(`${it.name} · features`, it.features)} />
                 ) : (
-                    <SwimlaneTimeline items={features} groupKey={f => f.milestone || 'No milestone'} onPick={drillFeature} />
+                    <Timeline features={features} colorOf={colorOf} onDrill={drillFeature} onPick={pushFeatureAttrs} />
                 )}
                 <div className="fp-legend">
                     {(tlPath.length ? [] : tlLevel === 'entity' ? entityTimeline : tlLevel === 'initiative' ? byInitiative : []).map(x => (
