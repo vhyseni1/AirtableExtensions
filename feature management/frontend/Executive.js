@@ -221,6 +221,7 @@ export default function Executive({model}) {
     const colorIndex = {};
     byEntity.forEach((e, i) => (colorIndex[e.name] = INITIATIVE_COLORS[i % INITIATIVE_COLORS.length]));
     byInitiative.forEach((it, i) => { if (!(it.name in colorIndex)) colorIndex[it.name] = INITIATIVE_COLORS[i % INITIATIVE_COLORS.length]; });
+    Array.from(new Set(features.map(f => f.milestone || 'No milestone'))).forEach((m, i) => { if (!(m in colorIndex)) colorIndex[m] = INITIATIVE_COLORS[i % INITIATIVE_COLORS.length]; });
     const colorOf = name => colorIndex[name] || '#64748B';
 
     const attrsOf = useMemo(() => name => attrs.filter(a => a.featureName === name), [attrs]);
@@ -231,11 +232,11 @@ export default function Executive({model}) {
     const openAttrs = (title, list) => drill.openAttrs(title, list);
     const pushFeatureAttrs = f => drill.pushAttrs(`${f.name} · attributes`, attrsOf(f.name));
 
-    // ── Hierarchical timeline: Entity → Initiative → Features(by milestone) →
-    // Attributes(by due date). Entity/initiative boxes sit on the axis by the
-    // latest feature go-live beneath them; the feature level is a milestone
-    // swimlane (features placed by go-live); the attribute level places each
-    // attribute by its Due Date. The record opens on click at the lowest level.
+    // ── Hierarchical timeline: Entity → Initiative → Milestone → Feature →
+    // Attribute. Every level is the SAME timeline widget, so one click always
+    // drills one level down. Entity/initiative/milestone boxes sit on the axis
+    // by a representative date; the attribute level places each attribute by its
+    // Due Date and opens the record on click.
     const boxDate = feats => {
         const g = feats.map(f => f.goLiveMs).filter(x => x != null);
         return g.length ? Math.max(...g) : null;
@@ -245,6 +246,11 @@ export default function Executive({model}) {
         const allDone = feats.length > 0 && feats.every(f => f.health === 'delivered');
         return allDone ? 'delivered' : anyRisk ? 'at-risk' : 'on-track';
     };
+    const wmean = feats => {
+        const w = feats.reduce((s, f) => s + (f.total || 0), 0);
+        if (w) return Math.round(feats.reduce((s, f) => s + (f.pct || 0) * (f.total || 0), 0) / w);
+        return feats.length ? Math.round(feats.reduce((s, f) => s + (f.pct || 0), 0) / feats.length) : 0;
+    };
     const parseMs = s => { const t = s ? Date.parse(s) : NaN; return Number.isNaN(t) ? null : t; };
     // Attributes of a feature → timeline items placed by DUE DATE.
     const attrItemsOf = featureName => attrsOf(featureName).map(a => ({
@@ -252,6 +258,22 @@ export default function Executive({model}) {
         milestone: '', goLiveMs: parseMs(a.dueDate), pct: Math.round((a.maturity || 0) * 100),
         health: a.isDelivered ? 'delivered' : a.isBlocked ? 'blocked' : 'on-track', record: a.record,
     }));
+    // Group a set of features into Milestone boxes (from the feature's Milestone;
+    // dated by the Milestone Due Date, falling back to latest feature go-live).
+    const milestonesOf = feats => {
+        const groups = {};
+        feats.forEach(f => { const k = f.milestone || 'No milestone'; (groups[k] = groups[k] || []).push(f); });
+        return Object.keys(groups).map(name => {
+            const fs = groups[name];
+            const dues = fs.map(f => parseMs(f.milestoneDue)).filter(x => x != null);
+            return {
+                id: `m-${name}`, name, initiative: name,
+                features: fs, pct: wmean(fs),
+                goLiveMs: dues.length ? Math.max(...dues) : boxDate(fs),
+                health: healthOf(fs),
+            };
+        });
+    };
     // Turn an initiative ({name, features, pct}) into a timeline box.
     const toInitBox = it => ({
         id: `i-${it.name}`, name: it.name, initiative: it.name,
@@ -264,12 +286,13 @@ export default function Executive({model}) {
         initiatives: e.initiatives,
     }));
     const initTimeline = byInitiative.map(toInitBox);
+    const milestoneTimeline = milestonesOf(features);
 
-    // Drill actions (push onto the stack). Every level is the SAME timeline
-    // widget, so a click always drills one level down: entity → initiatives →
-    // features → attributes; the attribute level opens the record.
+    // Drill actions (push onto the stack): entity → initiatives → milestones →
+    // features → attributes.
     const drillEntity = e => setTlPath(p => [...p, {kind: 'initiatives', name: e.name, items: e.initiatives.map(toInitBox)}]);
-    const drillInitiative = it => setTlPath(p => [...p, {kind: 'features', name: it.name, items: it.features}]);
+    const drillInitiative = it => setTlPath(p => [...p, {kind: 'milestones', name: it.name, items: milestonesOf(it.features)}]);
+    const drillMilestone = m => setTlPath(p => [...p, {kind: 'features', name: m.name, items: m.features}]);
     const drillFeature = f => setTlPath(p => [...p, {kind: 'attrs', name: f.name, items: attrItemsOf(f.name)}]);
     const tlFrame = tlPath.length ? tlPath[tlPath.length - 1] : null;
 
@@ -361,6 +384,7 @@ export default function Executive({model}) {
                     <span className="fp-seg">
                         <button type="button" className={tlLevel === 'entity' ? 'on' : ''} onClick={() => { setTlLevel('entity'); setTlPath([]); }}>By entity</button>
                         <button type="button" className={tlLevel === 'initiative' ? 'on' : ''} onClick={() => { setTlLevel('initiative'); setTlPath([]); }}>By initiative</button>
+                        <button type="button" className={tlLevel === 'milestone' ? 'on' : ''} onClick={() => { setTlLevel('milestone'); setTlPath([]); }}>By milestone</button>
                         <button type="button" className={tlLevel === 'feature' ? 'on' : ''} onClick={() => { setTlLevel('feature'); setTlPath([]); }}>By feature</button>
                     </span>
                 )}
@@ -369,19 +393,25 @@ export default function Executive({model}) {
                 <div className="fp-tl-hint">
                     {tlFrame
                         ? (tlFrame.kind === 'initiatives'
-                            ? 'Click an initiative to drill into its features · ← Back'
-                            : tlFrame.kind === 'features'
-                                ? 'Click a feature to drill into its attributes (by due date) · ← Back'
-                                : 'Click an attribute to open its record · ← Back')
+                            ? 'Click an initiative to drill into its milestones · ← Back'
+                            : tlFrame.kind === 'milestones'
+                                ? 'Click a milestone to drill into its features · ← Back'
+                                : tlFrame.kind === 'features'
+                                    ? 'Click a feature to drill into its attributes (by due date) · ← Back'
+                                    : 'Click an attribute to open its record · ← Back')
                         : tlLevel === 'entity'
                             ? 'Click an entity to drill into its initiatives'
                             : tlLevel === 'initiative'
-                                ? 'Click an initiative to drill into its features'
-                                : 'Click a feature to drill into its attributes'}
+                                ? 'Click an initiative to drill into its milestones'
+                                : tlLevel === 'milestone'
+                                    ? 'Click a milestone to drill into its features'
+                                    : 'Click a feature to drill into its attributes'}
                 </div>
                 {tlFrame ? (
                     tlFrame.kind === 'initiatives' ? (
                         <Timeline features={tlFrame.items} colorOf={colorOf} onDrill={drillInitiative} onPick={it => openFeatures(`${it.name} · features`, it.features)} />
+                    ) : tlFrame.kind === 'milestones' ? (
+                        <Timeline features={tlFrame.items} colorOf={colorOf} onDrill={drillMilestone} onPick={m => openFeatures(`${m.name} · features`, m.features)} />
                     ) : tlFrame.kind === 'features' ? (
                         <Timeline features={tlFrame.items} colorOf={colorOf} onDrill={drillFeature} onPick={pushFeatureAttrs} />
                     ) : (
@@ -391,11 +421,13 @@ export default function Executive({model}) {
                     <Timeline features={entityTimeline} colorOf={colorOf} onDrill={drillEntity} onPick={e => openInitiatives(e.name, e.initiatives)} />
                 ) : tlLevel === 'initiative' ? (
                     <Timeline features={initTimeline} colorOf={colorOf} onDrill={drillInitiative} onPick={it => openFeatures(`${it.name} · features`, it.features)} />
+                ) : tlLevel === 'milestone' ? (
+                    <Timeline features={milestoneTimeline} colorOf={colorOf} onDrill={drillMilestone} onPick={m => openFeatures(`${m.name} · features`, m.features)} />
                 ) : (
                     <Timeline features={features} colorOf={colorOf} onDrill={drillFeature} onPick={pushFeatureAttrs} />
                 )}
                 <div className="fp-legend">
-                    {(tlPath.length ? [] : tlLevel === 'entity' ? entityTimeline : tlLevel === 'initiative' ? byInitiative : []).map(x => (
+                    {(tlPath.length ? [] : tlLevel === 'entity' ? entityTimeline : tlLevel === 'initiative' ? byInitiative : tlLevel === 'milestone' ? milestoneTimeline : []).map(x => (
                         <span key={x.name} className="clickable" onClick={() => openFeatures(x.name, x.features)}><i style={{background: colorOf(x.name)}} />{x.name}</span>
                     ))}
                 </div>
