@@ -3,6 +3,8 @@ import {useEffect, useMemo, useRef, useState} from 'react';
 import {PHASE_GROUPS, PHASE_COLORS} from './constants';
 import {HealthDot} from './components';
 import {useDrill, DrillDrawer} from './drill';
+import {filterModel} from './data';
+import FilterBar, {EMPTY_FILTER} from './FilterBar';
 
 // UBS-leaning palette: red lead accent, then deep neutrals/jewels for initiatives.
 const INITIATIVE_COLORS = ['#E60000', '#14274E', '#0F766E', '#6D28D9', '#B45309', '#0E7490'];
@@ -210,9 +212,14 @@ function EntityCard({e, colorOf, mounted, model, openInitiatives, openFeatures})
 export default function Executive({model}) {
     const {byInitiative, byEntity, features, kpis, phaseCounts, attrs} = model;
     const [mounted, setMounted] = useState(false);
-    const [tlLevel, setTlLevel] = useState('entity'); // starting level: 'entity' | 'initiative' | 'feature'
-    const [tlPath, setTlPath] = useState([]); // drill stack: [{kind:'initiatives'|'features', name, items}]
+    const [tlLevel, setTlLevel] = useState('entity'); // starting level: 'entity' | 'initiative' | 'milestone' | 'feature'
+    const [tlPath, setTlPath] = useState([]); // drill stack: [{kind, name, items}]
+    const [tlFilter, setTlFilter] = useState(EMPTY_FILTER); // timeline-only Entity/Initiative/Milestone/Feature filter
     const drill = useDrill();
+    // A model filtered to the timeline selection — drives ONLY the timeline
+    // (the rest of the page keeps the full model). Clearing the filter is a
+    // no-op that returns the same model.
+    const tlModel = useMemo(() => filterModel(model, tlFilter), [model, tlFilter]);
     useEffect(() => {
         const id = requestAnimationFrame(() => setMounted(true));
         return () => cancelAnimationFrame(id);
@@ -280,13 +287,15 @@ export default function Executive({model}) {
         features: it.features, pct: it.pct, goLiveMs: boxDate(it.features), health: healthOf(it.features),
     });
     // Entity boxes (top level) — carrying raw initiatives for the next drill.
-    const entityTimeline = byEntity.map(e => ({
+    // Built from the FILTERED timeline model so the Entity/Initiative/Milestone/
+    // Feature filter narrows every level.
+    const entityTimeline = tlModel.byEntity.map(e => ({
         id: `e-${e.name}`, name: e.name, initiative: e.name,
         features: e.features, pct: e.pct, goLiveMs: boxDate(e.features), health: healthOf(e.features),
         initiatives: e.initiatives,
     }));
-    const initTimeline = byInitiative.map(toInitBox);
-    const milestoneTimeline = milestonesOf(features);
+    const initTimeline = tlModel.byInitiative.map(toInitBox);
+    const milestoneTimeline = milestonesOf(tlModel.features);
 
     // Drill actions (push onto the stack): entity → initiatives → milestones →
     // features → attributes.
@@ -389,6 +398,12 @@ export default function Executive({model}) {
                     </span>
                 )}
             </div>
+            <FilterBar
+                model={model}
+                sel={tlFilter}
+                onChange={sel => { setTlFilter(sel); setTlPath([]); }}
+                matchCount={tlModel.features.length}
+            />
             <div className="fp-panel">
                 <div className="fp-tl-hint">
                     {tlFrame
@@ -424,10 +439,10 @@ export default function Executive({model}) {
                 ) : tlLevel === 'milestone' ? (
                     <Timeline features={milestoneTimeline} colorOf={colorOf} onDrill={drillMilestone} onPick={m => openFeatures(`${m.name} · features`, m.features)} />
                 ) : (
-                    <Timeline features={features} colorOf={colorOf} onDrill={drillFeature} onPick={pushFeatureAttrs} />
+                    <Timeline features={tlModel.features} colorOf={colorOf} onDrill={drillFeature} onPick={pushFeatureAttrs} />
                 )}
                 <div className="fp-legend">
-                    {(tlPath.length ? [] : tlLevel === 'entity' ? entityTimeline : tlLevel === 'initiative' ? byInitiative : tlLevel === 'milestone' ? milestoneTimeline : []).map(x => (
+                    {(tlPath.length ? [] : tlLevel === 'entity' ? entityTimeline : tlLevel === 'initiative' ? tlModel.byInitiative : tlLevel === 'milestone' ? milestoneTimeline : []).map(x => (
                         <span key={x.name} className="clickable" onClick={() => openFeatures(x.name, x.features)}><i style={{background: colorOf(x.name)}} />{x.name}</span>
                     ))}
                 </div>
