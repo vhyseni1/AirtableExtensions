@@ -156,7 +156,7 @@ function Timeline({features, colorOf, onPick, onDrill}) {
 // shows the milestone span: earliest feature date → the milestone's Due Date.
 const SL_GUTTER = 180; // milestone label column width
 const SL_CARD_W = 208; // feature card width (for horizontal packing)
-const SL_ROW = 60;     // vertical pitch of packed cards inside a lane
+const SL_ROW = 80;     // vertical pitch of packed cards inside a lane
 const SL_PAD = 18;     // lane padding
 function FeatureSwimlane({items, onPick}) {
     const ref = useRef(null);
