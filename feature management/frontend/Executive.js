@@ -70,8 +70,8 @@ function PhaseStrip({phase, mounted}) {
 }
 
 // ── Delivery timeline — markers on a line, labels stacked in clean lanes ───────
-const TL_ROW = 66;   // lane vertical pitch — must exceed the card height
-const CARD_W = 178;  // fixed card width — used for exact horizontal packing
+const TL_ROW = 84;   // lane vertical pitch — must exceed the card height
+const CARD_W = 190;  // fixed card width — used for exact horizontal packing
 function Timeline({features, colorOf, onPick, onDrill}) {
     const ref = useRef(null);
     const [w, setW] = useState(0);
@@ -139,9 +139,10 @@ function Timeline({features, colorOf, onPick, onDrill}) {
                     >
                         <span className="fp-tl-marker" style={{borderColor: colorOf(f.initiative)}} />
                         <span className="fp-tl-connector" style={{height: lane * TL_ROW + 10}} />
-                        <span className="fp-tl-label" style={{borderLeftColor: colorOf(f.initiative)}}>
-                            <span className="fp-tl-line"><b>{fmtShort(f.goLiveMs)}</b><span className="fp-tl-pct">{f.pct}%</span></span>
+                        <span className="fp-tl-label">
                             <span className="fp-tl-feat">{f.name}</span>
+                            <span className="fp-tl-meta">due {fmtShort(f.goLiveMs)} · {f.pct}%</span>
+                            <span className="fp-tl-bar"><i style={{width: `${f.pct}%`, background: colorOf(f.initiative)}} /></span>
                         </span>
                     </div>
                 ))}
@@ -240,8 +241,8 @@ function FeatureSwimlane({items, onPick}) {
                 <div className="fp-swim-today" style={{left: xOf(now)}} title="Today"><span>Today</span></div>
                 {lanes.map((l, i) => (
                     <div key={l.name} className={`fp-swim-lane${i % 2 ? ' alt' : ''}`} style={{top: tops[i], height: l.height}}>
-                        <div className="fp-swim-label" style={{width: SL_GUTTER, borderLeftColor: l.color}}>
-                            <span className="fp-swim-mname" title={l.name}>{l.name}</span>
+                        <div className="fp-swim-label" style={{width: SL_GUTTER}}>
+                            <span className="fp-swim-mname" title={l.name} style={{color: l.color}}>{l.name}</span>
                             <span className="fp-swim-mcount">{l.count} feature{l.count === 1 ? '' : 's'}{l.dueMs != null ? ` · due ${fmtShort(l.dueMs)}` : ''}</span>
                         </div>
                         {/* milestone span bar: earliest feature date → milestone due date */}
@@ -257,7 +258,7 @@ function FeatureSwimlane({items, onPick}) {
                                 onClick={() => onPick(f)}
                             >
                                 <span className="fp-swim-fname">{f.name}</span>
-                                <span className="fp-swim-fmeta">{f.total} attr{f.total === 1 ? '' : 's'} · {f.pct}%</span>
+                                <span className="fp-swim-fmeta">due {fmtShort(f.goLiveMs)} · {f.pct}%</span>
                                 <span className="fp-swim-fbar"><i style={{width: `${f.pct}%`, background: l.color}} /></span>
                             </div>
                         ))}
