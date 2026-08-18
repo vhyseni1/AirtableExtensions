@@ -3,14 +3,14 @@ import {useEffect, useMemo, useRef, useState} from 'react';
 import {PHASE_GROUPS, PHASE_COLORS} from './constants';
 import {HealthDot} from './components';
 import {useDrill, DrillDrawer} from './drill';
-import {filterModel} from './data';
+import {filterModel, parseLooseDate} from './data';
 import FilterBar, {EMPTY_FILTER} from './FilterBar';
 
 // UBS-leaning palette: red lead accent, then deep neutrals/jewels for initiatives.
 const INITIATIVE_COLORS = ['#E60000', '#14274E', '#0F766E', '#6D28D9', '#B45309', '#0E7490'];
 
-const fmtDate = ms => (ms == null ? '—' : new Date(ms).toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: 'numeric'}));
-const fmtShort = ms => new Date(ms).toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: '2-digit'});
+const fmtDate = ms => (ms == null ? '—' : new Date(ms).toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC'}));
+const fmtShort = ms => new Date(ms).toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: '2-digit', timeZone: 'UTC'});
 
 // ── Count-up number ───────────────────────────────────────────────────────────
 function useCountUp(target, ms = 850) {
@@ -258,11 +258,11 @@ export default function Executive({model}) {
         if (w) return Math.round(feats.reduce((s, f) => s + (f.pct || 0) * (f.total || 0), 0) / w);
         return feats.length ? Math.round(feats.reduce((s, f) => s + (f.pct || 0), 0) / feats.length) : 0;
     };
-    const parseMs = s => { const t = s ? Date.parse(s) : NaN; return Number.isNaN(t) ? null : t; };
+    const parseMs = parseLooseDate;
     // Attributes of a feature → timeline items placed by DUE DATE.
     const attrItemsOf = featureName => attrsOf(featureName).map(a => ({
         id: a.id, name: a.businessName || a.attributeId, initiative: featureName,
-        milestone: '', goLiveMs: parseMs(a.dueDate), pct: Math.round((a.maturity || 0) * 100),
+        milestone: '', goLiveMs: a.dueDateMs != null ? a.dueDateMs : parseMs(a.dueDate), pct: Math.round((a.maturity || 0) * 100),
         health: a.isDelivered ? 'delivered' : a.isBlocked ? 'blocked' : 'on-track', record: a.record,
     }));
     // Group a set of features into Milestone boxes (from the feature's Milestone;
@@ -272,7 +272,7 @@ export default function Executive({model}) {
         feats.forEach(f => { const k = f.milestone || 'No milestone'; (groups[k] = groups[k] || []).push(f); });
         return Object.keys(groups).map(name => {
             const fs = groups[name];
-            const dues = fs.map(f => parseMs(f.milestoneDue)).filter(x => x != null);
+            const dues = fs.map(f => (f.milestoneDueMs != null ? f.milestoneDueMs : parseMs(f.milestoneDue))).filter(x => x != null);
             return {
                 id: `m-${name}`, name, initiative: name,
                 features: fs, pct: wmean(fs),

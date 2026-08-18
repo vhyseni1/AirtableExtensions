@@ -22,6 +22,47 @@ export function str(record, field) {
         return '';
     }
 }
+
+// ─── Date reading (locale-safe) ───────────────────────────────────────────────
+// Airtable dates displayed as European DD/MM/YYYY are misread by Date.parse
+// (which assumes US MM/DD/YYYY), turning 01/09/2026 into 9 Jan. Parse day-first,
+// and accept ISO / named-month forms too.
+export function parseLooseDate(s) {
+    if (s == null) return null;
+    const v = String(s).trim();
+    if (!v) return null;
+    // ISO YYYY-MM-DD(…) — unambiguous.
+    let m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) return Date.UTC(+m[1], +m[2] - 1, +m[3]);
+    // Day-first numeric: DD/MM/YYYY, DD.MM.YYYY, DD-MM-YYYY (European).
+    m = v.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/);
+    if (m) {
+        let d = +m[1], mo = +m[2], y = +m[3];
+        if (y < 100) y += 2000;
+        if (mo > 12 && d <= 12) { const t = d; d = mo; mo = t; } // tolerate a US-ordered value
+        if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) return Date.UTC(y, mo - 1, d);
+    }
+    // Named months ("1 September 2026", "1st Sep 2026") — strip ordinal suffixes.
+    const t = Date.parse(v.replace(/(\d+)(st|nd|rd|th)/gi, '$1'));
+    return Number.isNaN(t) ? null : t;
+}
+
+// Read a date cell as epoch-ms. Prefers the raw ISO value Airtable stores
+// (unambiguous); falls back to parsing the displayed string day-first.
+export function dateMs(record, field) {
+    if (!record || !field) return null;
+    let raw = null;
+    try { raw = record.getCellValue(field.id); } catch { raw = null; }
+    if (raw != null) {
+        if (raw instanceof Date) return raw.getTime();
+        if (typeof raw === 'number') return raw;
+        if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw)) {
+            const t = Date.parse(raw);
+            if (!Number.isNaN(t)) return t;
+        }
+    }
+    return parseLooseDate(str(record, field));
+}
 export function bool(record, field) {
     if (!record || !field) return false;
     try {
@@ -158,10 +199,12 @@ export function useModel() {
             initiative: str(r, initiativeField) || 'Ungrouped',
             milestone: (names(r, milestoneField)[0] || str(r, milestoneField) || '').trim(),
             milestoneDue: str(r, milestoneDueField),
+            milestoneDueMs: dateMs(r, milestoneDueField),
             owningTeam: str(r, features.fields.owningTeam),
             status: str(r, features.fields.status),
             priority: str(r, features.fields.priority),
             goLive: str(r, features.fields.goLive),
+            goLiveMs: dateMs(r, features.fields.goLive),
         }));
         // Feature record id → its canonical name, so attributes match features by
         // LINK (robust even if the Features primary field isn't "Feature Name").
@@ -211,6 +254,7 @@ export function useModel() {
                 acceptanceMet: bool(r, attributes.fields.acceptanceMet) || allAcceptanceMet(acceptance),
                 environment: str(r, attributes.fields.environment),
                 dueDate: str(r, attributes.fields.dueDate),
+                dueDateMs: dateMs(r, attributes.fields.dueDate),
                 blockedReason: str(r, attributes.fields.blockedReason),
                 addressedByIds: links(r, attributes.fields.addressedBy).map(x => x.id),
                 forksIntoIds: links(r, attributes.fields.forksInto).map(x => x.id),
@@ -334,10 +378,7 @@ export function deriveModel(ctx) {
 
     // ── Per-feature health (drives the executive RAG status) ──
     const todayMs = Date.now();
-    const parseDate = s => {
-        const t = s ? Date.parse(s) : NaN;
-        return Number.isNaN(t) ? null : t;
-    };
+    const parseDate = parseLooseDate;
     featureList.forEach(f => {
         const v = byFeature[f.name] || {total: 0, pct: 0, blocked: 0, awaiting: 0, ready: 0};
         f.pct = v.pct || 0;
@@ -345,7 +386,7 @@ export function deriveModel(ctx) {
         f.blocked = v.blocked || 0;
         f.awaiting = v.awaiting || 0;
         f.ready = v.ready || 0;
-        f.goLiveMs = parseDate(f.goLive);
+        f.goLiveMs = f.goLiveMs != null ? f.goLiveMs : parseDate(f.goLive);
         const overdue = f.goLiveMs != null && f.goLiveMs < todayMs && f.pct < 100;
         f.health = f.pct >= 100 ? 'delivered' : f.blocked > 0 ? 'blocked' : overdue ? 'at-risk' : 'on-track';
     });
@@ -418,13 +459,12 @@ export function deriveModel(ctx) {
     }).sort((a, b) => (a.name === 'Unassigned' ? 1 : b.name === 'Unassigned' ? -1 : a.name.localeCompare(b.name)));
 
     // ── Per-milestone grouping ──
-    const parseD = s => { const t = s ? Date.parse(s) : NaN; return Number.isNaN(t) ? null : t; };
     const msMap = {};
     featureList.forEach(f => {
         const m = f.milestone || 'No milestone';
         if (!msMap[m]) msMap[m] = {name: m, features: [], dueMs: null};
         msMap[m].features.push(f);
-        const d = parseD(f.milestoneDue);
+        const d = f.milestoneDueMs != null ? f.milestoneDueMs : parseLooseDate(f.milestoneDue);
         if (d != null && msMap[m].dueMs == null) msMap[m].dueMs = d;
     });
     const byMilestone = Object.values(msMap).map(m => ({
