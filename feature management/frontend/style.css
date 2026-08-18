@@ -313,22 +313,32 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 
 /* Hero */
 .fp-hero {
-    display: flex; align-items: center; justify-content: space-between; gap: 24px;
-    background: linear-gradient(115deg, #14274e 0%, #1d3a6b 55%, #24508f 100%);
-    color: #fff; border-radius: 14px; padding: 24px 28px; margin-bottom: 22px;
+    display: flex; align-items: center; justify-content: space-between; gap: 28px;
+    background: linear-gradient(180deg, #fff 0%, #fbfbfc 100%);
+    color: var(--fp-ink); border: 1px solid var(--fp-border);
+    border-radius: 14px; padding: 26px 32px; margin-bottom: 22px;
     box-shadow: var(--fp-shadow); position: relative; overflow: hidden;
 }
-.fp-hero::after {
-    content: ''; position: absolute; right: -40px; top: -40px; width: 220px; height: 220px;
-    background: radial-gradient(circle, rgba(230,0,0,.35), transparent 62%); pointer-events: none;
+/* UBS red key-bar down the left edge */
+.fp-hero::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6px;
+    background: linear-gradient(180deg, #EC0016, #b3000f);
 }
-.fp-eyebrow { text-transform: uppercase; letter-spacing: .14em; font-size: 10.5px; font-weight: 700; color: #ff6a6a; margin-bottom: 6px; }
-.fp-hero h1 { margin: 0 0 6px; font-size: 26px; font-weight: 800; letter-spacing: -.01em; }
-.fp-hero-sub { margin: 0 0 16px; color: #cfd9ec; font-size: 13px; max-width: 60ch; }
-.fp-hero-stats { display: flex; gap: 28px; flex-wrap: wrap; }
+.fp-hero::after {
+    content: ''; position: absolute; right: -70px; top: -70px; width: 260px; height: 260px;
+    background: radial-gradient(circle, rgba(236,0,22,.07), transparent 64%); pointer-events: none;
+}
+.fp-hero-headline { padding-left: 8px; }
+.fp-hero-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.fp-hero-brand .fp-logo-img { height: 26px; }
+.fp-hero-brand-div { width: 1px; height: 20px; background: var(--fp-border); }
+.fp-hero-brand-txt { text-transform: uppercase; letter-spacing: .14em; font-size: 10.5px; font-weight: 700; color: #EC0016; }
+.fp-hero h1 { margin: 0 0 6px; font-size: 30px; font-weight: 700; letter-spacing: -.015em; color: var(--fp-ink); }
+.fp-hero-sub { margin: 0 0 18px; color: var(--fp-muted); font-size: 13px; max-width: 60ch; }
+.fp-hero-stats { display: flex; gap: 30px; flex-wrap: wrap; }
 .fp-hero-stats div { display: flex; flex-direction: column; }
-.fp-hero-stats b { font-size: 26px; font-weight: 800; line-height: 1; }
-.fp-hero-stats span { font-size: 11px; color: #b9c6df; margin-top: 3px; }
+.fp-hero-stats b { font-size: 28px; font-weight: 800; line-height: 1; color: var(--fp-ink); }
+.fp-hero-stats span { font-size: 11px; color: var(--fp-muted); margin-top: 4px; }
 .fp-hero-gauge { flex: 0 0 auto; }
 
 /* Donut */
@@ -336,8 +346,8 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 .fp-donut-pct { font-size: 30px; font-weight: 800; line-height: 1; }
 .fp-donut-pct.sm { font-size: 17px; color: var(--fp-ink); }
-.fp-hero .fp-donut-pct { color: #fff; }
-.fp-donut-cap { font-size: 10px; color: #cfd9ec; margin-top: 3px; line-height: 1.2; }
+.fp-hero .fp-donut-pct { color: #EC0016; }
+.fp-donut-cap { font-size: 10px; color: var(--fp-muted); margin-top: 3px; line-height: 1.2; }
 
 /* Initiative cards */
 /* Entity -> initiative hierarchy */
@@ -486,7 +496,7 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 
 /* Hero stat numbers as buttons */
 .fp-hero-stats button { background: none; border: none; padding: 4px 6px; margin: -4px -6px; border-radius: 8px; color: inherit; text-align: left; cursor: pointer; display: flex; flex-direction: column; }
-.fp-hero-stats button:hover { background: rgba(255,255,255,.08); }
+.fp-hero-stats button:hover { background: rgba(236,0,22,.06); }
 .fp-donut.clickable:hover { transform: scale(1.03); }
 .fp-initcard-head .clickable:hover .fp-initcard-name { color: var(--fp-accent); }
 .fp-initcard-rag span.clickable:hover { color: var(--fp-ink); }

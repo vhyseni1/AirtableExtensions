@@ -5,6 +5,7 @@ import {HealthDot} from './components';
 import {useDrill, DrillDrawer} from './drill';
 import {filterModel} from './data';
 import FilterBar, {EMPTY_FILTER} from './FilterBar';
+import Logo from './Logo';
 
 // UBS-leaning palette: red lead accent, then deep neutrals/jewels for initiatives.
 const INITIATIVE_COLORS = ['#E60000', '#14274E', '#0F766E', '#6D28D9', '#B45309', '#0E7490'];
@@ -460,18 +461,22 @@ export default function Executive({model}) {
             {/* Hero */}
             <section className="fp-hero">
                 <div className="fp-hero-headline">
-                    <div className="fp-eyebrow">UBS Switzerland · ampliFI</div>
+                    <div className="fp-hero-brand">
+                        <Logo className="fp-hero-logo" />
+                        <span className="fp-hero-brand-div" aria-hidden />
+                        <span className="fp-hero-brand-txt">UBS Switzerland · ampliFI</span>
+                    </div>
                     <h1>Program Overview</h1>
-                    <p className="fp-hero-sub">Executive view across initiatives, backlog features and attributes.</p>
+                    <p className="fp-hero-sub">Executive view across initiatives, features and data attributes.</p>
                     <div className="fp-hero-stats">
                         <button type="button" onClick={() => openFeatures('On track', onTrack)}><b><CountUp value={onTrack.length} /></b><span>On track</span></button>
-                        <button type="button" onClick={() => openFeatures('Need attention', needAttn)}><b style={{color: '#ff9d57'}}><CountUp value={needAttn.length} /></b><span>Need attention</span></button>
-                        <button type="button" onClick={() => openFeatures('Delivered', delivered)}><b style={{color: '#6fd1ff'}}><CountUp value={delivered.length} /></b><span>Delivered</span></button>
+                        <button type="button" onClick={() => openFeatures('Need attention', needAttn)}><b style={{color: '#c2410c'}}><CountUp value={needAttn.length} /></b><span>Need attention</span></button>
+                        <button type="button" onClick={() => openFeatures('Delivered', delivered)}><b style={{color: '#0369a1'}}><CountUp value={delivered.length} /></b><span>Delivered</span></button>
                         <button type="button" onClick={() => openFeatures('Go-live ≤ 90 days', goLiveSoon)}><b><CountUp value={goLiveSoon.length} /></b><span>Go-live ≤ 90 days</span></button>
                     </div>
                 </div>
                 <div className="fp-hero-gauge">
-                    <Donut pct={kpis.overallPct} size={156} stroke={16} onClick={() => openFeatures('All features', features)}>
+                    <Donut pct={kpis.overallPct} size={156} stroke={16} color="#EC0016" onClick={() => openFeatures('All features', features)}>
                         <div className="fp-donut-pct"><CountUp value={kpis.overallPct} suffix="%" /></div>
                         <div className="fp-donut-cap">Portfolio<br />maturity</div>
                     </Donut>
