@@ -252,12 +252,12 @@ function FeatureSwimlane({items, onPick}) {
                             <div
                                 key={f.id}
                                 className="fp-swim-card clickable"
-                                style={{left: x, top: row * SL_ROW + 5, width: SL_CARD_W - 10, borderLeftColor: l.color}}
+                                style={{left: x, top: row * SL_ROW + 5, width: SL_CARD_W - 10}}
                                 title={`${f.name} · ${f.total} attributes · ${f.pct}% mature · due ${fmtDate(f.goLiveMs)}`}
                                 onClick={() => onPick(f)}
                             >
                                 <span className="fp-swim-fname">{f.name}</span>
-                                <span className="fp-swim-fmeta">{f.total} attribute{f.total === 1 ? '' : 's'} · {f.pct}% mature</span>
+                                <span className="fp-swim-fmeta">{f.total} attr{f.total === 1 ? '' : 's'} · {f.pct}%</span>
                                 <span className="fp-swim-fbar"><i style={{width: `${f.pct}%`, background: l.color}} /></span>
                             </div>
                         ))}

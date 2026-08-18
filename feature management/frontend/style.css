@@ -140,10 +140,10 @@
 .fp-swim-fpct { font-size: 10px; color: var(--fp-muted, #64748B); margin-left: auto; flex: none; }
 /* Feature cards + milestone span bar (feature swimlane) */
 .fp-swim-span { position: absolute; height: 6px; top: 7px; border-radius: 3px; opacity: .16; z-index: 0; }
-.fp-swim-card { position: absolute; height: 50px; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 6px 12px; background: #fff; border: 1px solid var(--fp-border); border-left-width: 4px; border-radius: 8px; box-sizing: border-box; overflow: hidden; box-shadow: 0 1px 3px rgba(15,23,42,.1); z-index: 1; }
+.fp-swim-card { position: absolute; height: 50px; display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 7px 12px; background: #fff; border: 1px solid var(--fp-border); border-radius: 8px; box-sizing: border-box; overflow: hidden; box-shadow: 0 1px 3px rgba(15,23,42,.1); z-index: 1; }
 .fp-swim-card:hover { border-color: var(--fp-accent); box-shadow: 0 3px 10px rgba(15,23,42,.16); z-index: 4; }
-.fp-swim-card .fp-swim-fname { font-size: 12.5px; font-weight: 700; line-height: 1.15; }
-.fp-swim-fmeta { font-size: 11px; line-height: 1.15; color: var(--fp-ink, #1e293b); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fp-swim-card .fp-swim-fname { font-size: 12px; font-weight: 700; line-height: 1.15; color: var(--fp-ink, #1e293b); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.fp-swim-fmeta { font-size: 10.5px; line-height: 1.1; color: var(--fp-muted, #64748B); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fp-swim-fbar { display: block; height: 5px; background: var(--fp-border); border-radius: 3px; overflow: hidden; margin-top: 1px; }
 .fp-swim-fbar i { display: block; height: 100%; border-radius: 3px; }
 .fp-showmore { margin-top: 8px; width: 100%; border: 1px dashed var(--fp-border); background: #fff; color: var(--fp-accent); border-radius: 8px; padding: 6px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
