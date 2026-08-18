@@ -133,7 +133,7 @@ function Timeline({features, colorOf, onPick, onDrill}) {
                     <div
                         key={f.id}
                         className="fp-tl-flag"
-                        style={{left: `${pct(f.goLiveMs)}%`}}
+                        style={{left: `${pct(f.goLiveMs)}%`, zIndex: 40 - lane}}
                         title={`${f.name} · ${f.initiative} · go-live ${fmtDate(f.goLiveMs)} · ${f.pct}%${onDrill ? '\n(click to drill in)' : ''}`}
                         onClick={() => onFlag(f)}
                     >
