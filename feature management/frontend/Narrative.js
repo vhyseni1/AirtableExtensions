@@ -29,20 +29,30 @@ function HarveyBall({pct, size = 15}) {
     );
 }
 
-// Cumulative onboarding curve (attributes reaching each lifecycle gate) — the
-// deck's "Feeds DEV/UAT/PROD %" mini chart, drawn from the funnel totals.
-function FunnelCurve({points}) {
-    const w = 220, h = 96, pad = 6;
-    const xs = points.map((_, i) => pad + (i / (points.length - 1)) * (w - pad * 2));
-    const yOf = v => h - pad - (v / 100) * (h - pad * 2);
+// Onboarding funnel — % of attributes reaching each lifecycle gate. Self-labelled
+// (value above each point, stage name below) so it reads as part of the numbers.
+const FUNNEL_STAGES = ['Req', 'Model', 'VEST', 'UAT', 'Done'];
+function FunnelCurve({points, compact}) {
+    const w = 320, h = compact ? 128 : 148;
+    const padX = 20, padTop = 22, padBottom = 22;
+    const n = points.length;
+    const xs = points.map((_, i) => padX + (i / (n - 1)) * (w - padX * 2));
+    const base = h - padBottom;
+    const yOf = v => base - (Math.max(0, Math.min(100, v)) / 100) * (base - padTop);
     const line = points.map((v, i) => `${i ? 'L' : 'M'} ${xs[i].toFixed(1)} ${yOf(v).toFixed(1)}`).join(' ');
     return (
-        <svg className="fp-rp-curve" width={w} height={h} aria-hidden>
-            <line x1={pad} y1={yOf(0)} x2={w - pad} y2={yOf(0)} stroke="#d7dce3" />
-            <line x1={pad} y1={yOf(100)} x2={w - pad} y2={yOf(100)} stroke="#eef1f5" strokeDasharray="3 3" />
-            <path d={`${line} L ${xs[xs.length - 1]} ${yOf(0)} L ${xs[0]} ${yOf(0)} Z`} fill="rgba(230,0,0,.08)" />
-            <path d={line} fill="none" stroke="#E60000" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" />
-            {points.map((v, i) => <circle key={i} cx={xs[i]} cy={yOf(v)} r={2.6} fill="#E60000" />)}
+        <svg className="fp-rp-chart" viewBox={`0 0 ${w} ${h}`} width="100%" preserveAspectRatio="xMidYMid meet" aria-hidden>
+            <line x1={padX} y1={yOf(100)} x2={w - padX} y2={yOf(100)} stroke="#eef1f5" strokeDasharray="3 3" />
+            <line x1={padX} y1={base} x2={w - padX} y2={base} stroke="#e3e7ec" />
+            <path d={`${line} L ${xs[n - 1].toFixed(1)} ${base} L ${xs[0].toFixed(1)} ${base} Z`} fill="rgba(230,0,0,.09)" />
+            <path d={line} fill="none" stroke="#E60000" strokeWidth="2.6" strokeLinejoin="round" strokeLinecap="round" />
+            {points.map((v, i) => (
+                <g key={i}>
+                    <circle cx={xs[i]} cy={yOf(v)} r={3.1} fill="#fff" stroke="#E60000" strokeWidth="2" />
+                    <text x={xs[i]} y={yOf(v) - 7} textAnchor="middle" className="fp-rp-chart-val">{v}%</text>
+                    <text x={xs[i]} y={h - 6} textAnchor="middle" className="fp-rp-chart-lbl">{FUNNEL_STAGES[i]}</text>
+                </g>
+            ))}
         </svg>
     );
 }
@@ -135,8 +145,13 @@ function CoverPage({model, d}) {
                 </div>
             </div>
             <div className="fp-rp-cover-side">
-                <FunnelCurve points={[d.totalF.req.pct, d.totalF.model.pct, d.totalF.vest.pct, d.totalF.uat.pct, d.totalF.done.pct]} />
-                <div className="fp-rp-curve-key">Req → Model → VEST → UAT → Complete</div>
+                <div className="fp-rp-chartcard">
+                    <div className="fp-rp-chartcard-head">
+                        <span className="fp-rp-chartcard-title">Onboarding funnel</span>
+                        <span className="fp-rp-chartcard-sub">% of attributes reaching each gate</span>
+                    </div>
+                    <FunnelCurve points={[d.totalF.req.pct, d.totalF.model.pct, d.totalF.vest.pct, d.totalF.uat.pct, d.totalF.done.pct]} />
+                </div>
             </div>
         </div>
     );
@@ -223,8 +238,10 @@ function OnboardingPage({d}) {
                     <div className="fp-rp-railstat"><b>{d.totalF.uat.c}</b> of {d.totalF.t}<span>deployed &amp; tested in UAT ({d.totalF.uat.pct}%)</span></div>
                     <div className="fp-rp-railstat"><b>{d.teamsEngaged}</b> of {d.totalTeams}<span>pods engaged</span></div>
                     <div className="fp-rp-railstat"><b>{d.deliveredFeat}</b> of {d.featTotal}<span>features delivered</span></div>
-                    <FunnelCurve points={[d.totalF.req.pct, d.totalF.model.pct, d.totalF.vest.pct, d.totalF.uat.pct, d.totalF.done.pct]} />
-                    <div className="fp-rp-curve-key">Req → Model → VEST → UAT → Complete</div>
+                    <div className="fp-rp-chartcard">
+                        <div className="fp-rp-chartcard-title">Onboarding funnel</div>
+                        <FunnelCurve points={[d.totalF.req.pct, d.totalF.model.pct, d.totalF.vest.pct, d.totalF.uat.pct, d.totalF.done.pct]} compact />
+                    </div>
                 </aside>
 
                 <div className="fp-rp-tablewrap">
