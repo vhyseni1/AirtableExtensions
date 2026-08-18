@@ -163,7 +163,7 @@
 
 .fp-card {
     text-align: left; width: 100%; background: var(--fp-card); border: 1px solid var(--fp-border);
-    border-left: 4px solid #ccc; border-radius: 9px; padding: 12px; cursor: pointer; font: inherit;
+    border-radius: 9px; padding: 12px; cursor: pointer; font: inherit;
     box-shadow: 0 1px 2px rgba(20,39,78,.05);
 }
 .fp-card[draggable="true"] { cursor: grab; }
@@ -447,7 +447,7 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-kcol-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px 8px; font-size: 12px; font-weight: 700; border-top: 4px solid #ccc; border-radius: 12px 12px 0 0; }
 .fp-kcol-hint { font-size: 10px; color: var(--fp-muted); padding: 0 12px 6px; }
 .fp-kcol-body { padding: 8px; display: flex; flex-direction: column; gap: 8px; min-height: 60px; }
-.fp-kcard { background: #fff; border: 1px solid var(--fp-border); border-left: 4px solid #ccc; border-radius: 9px; padding: 9px 10px; box-shadow: 0 1px 2px rgba(20,39,78,.05); cursor: grab; }
+.fp-kcard { background: #fff; border: 1px solid var(--fp-border); border-radius: 9px; padding: 9px 10px; box-shadow: 0 1px 2px rgba(20,39,78,.05); cursor: grab; }
 .fp-kcard:active { cursor: grabbing; }
 .fp-kcard.busy { opacity: .55; }
 .fp-kcard-title { font-weight: 600; font-size: 12.5px; cursor: pointer; }
@@ -634,7 +634,7 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 
 /* Feature CARDS — the container; attributes nest inside */
 .fp-featcard {
-    border: 1px solid var(--fp-border); border-left: 5px solid var(--fc, #ccc);
+    border: 1px solid var(--fp-border);
     border-radius: 12px; background: #fff; box-shadow: var(--fp-shadow);
     margin-bottom: 18px; overflow: hidden;
 }

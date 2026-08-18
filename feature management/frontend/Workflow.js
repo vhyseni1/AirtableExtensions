@@ -141,7 +141,6 @@ export default function Workflow({model}) {
                                     <div
                                         key={a.id}
                                         className={`fp-kcard${busyId === a.id ? ' busy' : ''}`}
-                                        style={{borderLeftColor: col.accent}}
                                         draggable
                                         onDragStart={() => { dragId.current = a.id; }}
                                         onDragEnd={() => { dragId.current = null; setOverCol(null); }}

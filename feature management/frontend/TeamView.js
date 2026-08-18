@@ -134,7 +134,6 @@ export default function TeamView({model}) {
                                 <div
                                     key={a.id}
                                     className={`fp-card${busyId === a.id ? ' busy' : ''}`}
-                                    style={{borderLeftColor: PHASE_COLORS[p]}}
                                     draggable
                                     onDragStart={() => { dragId.current = a.id; }}
                                     onDragEnd={() => { dragId.current = null; setOverCol(null); }}
