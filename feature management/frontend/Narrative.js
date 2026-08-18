@@ -32,9 +32,9 @@ function HarveyBall({pct, size = 15}) {
 // Onboarding funnel — % of attributes reaching each lifecycle gate. Self-labelled
 // (value above each point, stage name below) so it reads as part of the numbers.
 const FUNNEL_STAGES = ['Req', 'Model', 'VEST', 'UAT', 'Done'];
-function FunnelCurve({points, compact}) {
-    const w = 320, h = compact ? 128 : 148;
-    const padX = 20, padTop = 22, padBottom = 22;
+function FunnelCurve({points, compact, wide}) {
+    const w = wide ? 640 : 320, h = compact ? 128 : wide ? 150 : 148;
+    const padX = wide ? 8 : 20, padTop = 24, padBottom = 22;
     const n = points.length;
     const xs = points.map((_, i) => padX + (i / (n - 1)) * (w - padX * 2));
     const base = h - padBottom;
@@ -42,13 +42,19 @@ function FunnelCurve({points, compact}) {
     const line = points.map((v, i) => `${i ? 'L' : 'M'} ${xs[i].toFixed(1)} ${yOf(v).toFixed(1)}`).join(' ');
     return (
         <svg className="fp-rp-chart" viewBox={`0 0 ${w} ${h}`} width="100%" preserveAspectRatio="xMidYMid meet" aria-hidden>
+            <defs>
+                <linearGradient id="fp-funnel-grad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#E60000" stopOpacity="0.26" />
+                    <stop offset="100%" stopColor="#E60000" stopOpacity="0" />
+                </linearGradient>
+            </defs>
             <line x1={padX} y1={yOf(100)} x2={w - padX} y2={yOf(100)} stroke="#eef1f5" strokeDasharray="3 3" />
-            <line x1={padX} y1={base} x2={w - padX} y2={base} stroke="#e3e7ec" />
-            <path d={`${line} L ${xs[n - 1].toFixed(1)} ${base} L ${xs[0].toFixed(1)} ${base} Z`} fill="rgba(230,0,0,.09)" />
-            <path d={line} fill="none" stroke="#E60000" strokeWidth="2.6" strokeLinejoin="round" strokeLinecap="round" />
+            <line x1={padX} y1={base} x2={w - padX} y2={base} stroke="#e7eaef" />
+            <path d={`${line} L ${xs[n - 1].toFixed(1)} ${base} L ${xs[0].toFixed(1)} ${base} Z`} fill="url(#fp-funnel-grad)" />
+            <path d={line} fill="none" stroke="#E60000" strokeWidth={wide ? 2 : 2.6} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
             {points.map((v, i) => (
                 <g key={i}>
-                    <circle cx={xs[i]} cy={yOf(v)} r={3.1} fill="#fff" stroke="#E60000" strokeWidth="2" />
+                    <circle cx={xs[i]} cy={yOf(v)} r={3.1} fill="#fff" stroke="#E60000" strokeWidth="2" vectorEffect="non-scaling-stroke" />
                     <text x={xs[i]} y={yOf(v) - 7} textAnchor="middle" className="fp-rp-chart-val">{v}%</text>
                     <text x={xs[i]} y={h - 6} textAnchor="middle" className="fp-rp-chart-lbl">{FUNNEL_STAGES[i]}</text>
                 </g>
@@ -130,28 +136,21 @@ function buildData(model) {
 function CoverPage({model, d}) {
     return (
         <div className="fp-rp-cover">
-            <div className="fp-rp-cover-main">
-                <div className="fp-rp-eyebrow">UBS Switzerland</div>
-                <h1 className="fp-rp-title">ampliFI | Product to ledger onboarding — data</h1>
-                <div className="fp-rp-asof">as of {asOf}</div>
-                <p className="fp-rp-lede">
-                    <b>{d.totalF.uat.pct}%</b> of data attributes deployed &amp; tested in UAT · <b>{d.totalF.done.pct}%</b> signed-off
-                </p>
-                <div className="fp-rp-coverstats">
-                    <div><b>{model.byInitiative.length}</b><span>Initiatives</span></div>
-                    <div><b>{model.features.length}</b><span>Features</span></div>
-                    <div><b>{model.attrs.length}</b><span>Attributes</span></div>
-                    <div><b>{model.kpis.overallPct}%</b><span>Overall maturity</span></div>
-                </div>
+            <div className="fp-rp-eyebrow">UBS Switzerland</div>
+            <h1 className="fp-rp-title">ampliFI | Product to ledger onboarding — data</h1>
+            <div className="fp-rp-asof">as of {asOf}</div>
+            <p className="fp-rp-lede">
+                <b>{d.totalF.uat.pct}%</b> of data attributes deployed &amp; tested in UAT · <b>{d.totalF.done.pct}%</b> signed-off
+            </p>
+            <div className="fp-rp-coverstats">
+                <div><b>{model.byInitiative.length}</b><span>Initiatives</span></div>
+                <div><b>{model.features.length}</b><span>Features</span></div>
+                <div><b>{model.attrs.length}</b><span>Attributes</span></div>
+                <div><b>{model.kpis.overallPct}%</b><span>Overall maturity</span></div>
             </div>
-            <div className="fp-rp-cover-side">
-                <div className="fp-rp-chartcard">
-                    <div className="fp-rp-chartcard-head">
-                        <span className="fp-rp-chartcard-title">Onboarding funnel</span>
-                        <span className="fp-rp-chartcard-sub">% of attributes reaching each gate</span>
-                    </div>
-                    <FunnelCurve points={[d.totalF.req.pct, d.totalF.model.pct, d.totalF.vest.pct, d.totalF.uat.pct, d.totalF.done.pct]} />
-                </div>
+            <div className="fp-rp-coverchart">
+                <div className="fp-rp-coverchart-label">Onboarding funnel — % of attributes reaching each gate</div>
+                <FunnelCurve wide points={[d.totalF.req.pct, d.totalF.model.pct, d.totalF.vest.pct, d.totalF.uat.pct, d.totalF.done.pct]} />
             </div>
         </div>
     );

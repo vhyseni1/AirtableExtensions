@@ -805,16 +805,20 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-rp-page { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 
 /* cover */
-.fp-rp-cover { display: flex; align-items: center; justify-content: space-between; gap: 40px; flex: 1; }
-.fp-rp-lede { font-size: 20px; color: #333; margin: 18px 0 24px; font-weight: 300; }
+.fp-rp-cover { display: flex; flex-direction: column; justify-content: center; flex: 1; }
+.fp-rp-lede { font-size: 20px; color: #333; margin: 16px 0 22px; font-weight: 300; }
 .fp-rp-lede b { color: #1a1a1a; font-weight: 700; }
-.fp-rp-coverstats { display: flex; gap: 40px; flex-wrap: wrap; }
+.fp-rp-coverstats { display: flex; gap: 44px; flex-wrap: wrap; }
 .fp-rp-coverstats div { display: flex; flex-direction: column; }
 .fp-rp-coverstats b { font-size: 46px; font-weight: 800; line-height: 1; color: #1a1a1a; }
 .fp-rp-coverstats span { font-size: 13px; color: #6b7280; margin-top: 6px; }
+/* Onboarding funnel — sits UNDER the numbers, borderless with a gradient fill,
+   so the numbers and the graph read as one composition. */
+.fp-rp-coverchart { margin-top: 22px; max-width: 720px; }
+.fp-rp-coverchart-label { font-size: 11px; font-weight: 600; color: #6b7280; margin-bottom: 2px; text-transform: uppercase; letter-spacing: .04em; }
 .fp-rp-cover-side { flex: 0 0 auto; }
-/* Onboarding funnel chart card — a deliberate, aligned panel (not a floating svg) */
-.fp-rp-chartcard { width: 340px; max-width: 40vw; background: #fff; border: 1px solid #e2e5ea; border-radius: 12px; padding: 14px 16px 8px; box-shadow: 0 4px 16px rgba(15,23,42,.06); }
+/* Onboarding funnel chart card — used only on the page-2 rail now. */
+.fp-rp-chartcard { width: 100%; background: #fff; border: 1px solid #e2e5ea; border-radius: 12px; padding: 14px 16px 8px; box-shadow: 0 4px 16px rgba(15,23,42,.06); }
 .fp-rp-chartcard-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
 .fp-rp-chartcard-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #1a1a1a; }
 .fp-rp-chartcard-sub { font-size: 10.5px; color: #6b7280; }
