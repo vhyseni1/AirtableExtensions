@@ -125,7 +125,10 @@
 .fp-swim { position: relative; width: 100%; overflow-x: hidden; }
 .fp-swim-axis { position: relative; height: 20px; margin-bottom: 4px; }
 .fp-swim-tick { position: absolute; top: 0; transform: translateX(-50%); font-size: 11px; color: var(--fp-muted, #64748B); white-space: nowrap; }
+.fp-swim-tick.q { color: var(--fp-ink, #1e293b); font-weight: 700; }
 .fp-swim-body { position: relative; width: 100%; border-top: 1px solid var(--fp-border); }
+.fp-swim-grid { position: absolute; top: 0; bottom: 0; width: 1px; background: #eef1f5; transform: translateX(-50%); z-index: 0; pointer-events: none; }
+.fp-swim-grid.q { background: #d7dfea; }
 .fp-swim-lane { position: absolute; left: 0; right: 0; border-bottom: 1px solid var(--fp-border); }
 .fp-swim-lane.alt { background: color-mix(in srgb, var(--fp-border) 22%, transparent); }
 .fp-swim-label { position: absolute; left: 0; top: 0; bottom: 0; padding: 8px 12px 8px 4px; display: flex; flex-direction: column; justify-content: center; gap: 2px; box-sizing: border-box; }
@@ -377,9 +380,14 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-tl-filter { margin-bottom: 14px; }
 .fp-tl-filter .fp-filterbar { border: 1px solid var(--fp-border); border-radius: 10px; background: linear-gradient(180deg, color-mix(in srgb, var(--fp-border) 16%, #fff), #fff); padding: 9px 14px; margin: 0; }
 .fp-timeline { position: relative; width: 100%; padding: 44px 6px 14px; }
-.fp-timeline-track { position: relative; height: 5px; border-radius: 3px; background: linear-gradient(90deg, #d8e0ec, #c3cee0); }
+/* Month grid behind the flags — quarter starts stronger so start dates read. */
+.fp-tl-grid { position: absolute; top: 34px; bottom: 12px; left: 6px; right: 6px; pointer-events: none; z-index: 0; }
+.fp-tl-grid span { position: absolute; top: 0; bottom: 0; width: 1px; background: #eef1f5; transform: translateX(-50%); }
+.fp-tl-grid span.q { background: #d7dfea; }
+.fp-timeline-track { position: relative; z-index: 1; height: 5px; border-radius: 3px; background: linear-gradient(90deg, #d8e0ec, #c3cee0); }
 .fp-tl-tick { position: absolute; top: -12px; transform: translateX(-50%); color: var(--fp-muted); font-size: 11px; }
-.fp-tl-tick::after { content: ''; position: absolute; left: 50%; top: 16px; width: 1px; height: 10px; background: #dbe2ec; }
+.fp-tl-tick.q { color: var(--fp-ink); font-weight: 700; }
+.fp-tl-tick::after { content: ''; position: absolute; left: 50%; top: 16px; width: 1px; height: 8px; background: #cbd5e3; }
 .fp-tl-today { position: absolute; top: -22px; width: 2px; background: var(--fp-accent); transform: translateX(-50%); border-radius: 2px; }
 .fp-tl-today span { position: absolute; top: -4px; left: 6px; font-size: 10px; font-weight: 800; color: var(--fp-accent); white-space: nowrap; }
 /* The flag column is transparent to clicks in its empty band — only the marker

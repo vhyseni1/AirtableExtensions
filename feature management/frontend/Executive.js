@@ -122,12 +122,24 @@ function Timeline({features, colorOf, onPick, onDrill}) {
 
     return (
         <div className="fp-timeline" ref={ref} style={{minHeight: 92 + rows * TL_ROW}}>
+            {/* month grid — quarter starts drawn stronger so start dates read easily */}
+            <div className="fp-tl-grid" aria-hidden>
+                {ticks.map(t => {
+                    const dt = new Date(t);
+                    const q = dt.getUTCMonth() % 3 === 0;
+                    return <span key={t} className={q ? 'q' : ''} style={{left: `${pct(t)}%`}} />;
+                })}
+            </div>
             <div className="fp-timeline-track">
-                {ticks.map(t => (
-                    <div key={t} className="fp-tl-tick" style={{left: `${pct(t)}%`}}>
-                        <span>{new Date(t).toLocaleDateString('en-GB', {month: 'short', year: '2-digit'})}</span>
-                    </div>
-                ))}
+                {ticks.map(t => {
+                    const dt = new Date(t);
+                    const q = dt.getUTCMonth() % 3 === 0;
+                    return (
+                        <div key={t} className={`fp-tl-tick${q ? ' q' : ''}`} style={{left: `${pct(t)}%`}}>
+                            <span>{dt.toLocaleDateString('en-GB', {month: 'short', year: '2-digit', timeZone: 'UTC'})}</span>
+                        </div>
+                    );
+                })}
                 <div className="fp-tl-today" style={{left: `${pct(now)}%`, bottom: -(rows * TL_ROW + 14)}}><span>Today</span></div>
                 {placed.map(({f, lane}) => (
                     <div
@@ -231,13 +243,21 @@ function FeatureSwimlane({items, onPick}) {
     return (
         <div className="fp-swim" ref={ref}>
             <div className="fp-swim-axis" style={{marginLeft: SL_GUTTER}}>
-                {ticks.map(t => (
-                    <span key={t} className="fp-swim-tick" style={{left: `${((t - start) / span) * 100}%`}}>
-                        {new Date(t).toLocaleDateString('en-GB', {month: 'short', year: '2-digit', timeZone: 'UTC'})}
-                    </span>
-                ))}
+                {ticks.map(t => {
+                    const q = new Date(t).getUTCMonth() % 3 === 0;
+                    return (
+                        <span key={t} className={`fp-swim-tick${q ? ' q' : ''}`} style={{left: `${((t - start) / span) * 100}%`}}>
+                            {new Date(t).toLocaleDateString('en-GB', {month: 'short', year: '2-digit', timeZone: 'UTC'})}
+                        </span>
+                    );
+                })}
             </div>
             <div className="fp-swim-body" style={{height: totalH}}>
+                {/* month grid spanning all lanes (quarter starts stronger) */}
+                {ticks.map(t => {
+                    const q = new Date(t).getUTCMonth() % 3 === 0;
+                    return <div key={`g-${t}`} className={`fp-swim-grid${q ? ' q' : ''}`} style={{left: xOf(t)}} />;
+                })}
                 <div className="fp-swim-today" style={{left: xOf(now)}} title="Today"><span>Today</span></div>
                 {lanes.map((l, i) => (
                     <div key={l.name} className={`fp-swim-lane${i % 2 ? ' alt' : ''}`} style={{top: tops[i], height: l.height}}>
