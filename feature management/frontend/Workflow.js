@@ -129,7 +129,7 @@ export default function Workflow({model}) {
                         onDragLeave={() => setOverCol(c => (c === col.key ? null : c))}
                         onDrop={onDrop(col.key)}
                     >
-                        <div className="fp-kcol-head" style={{borderTopColor: col.accent}}>
+                        <div className="fp-kcol-head" style={{background: `linear-gradient(180deg, color-mix(in srgb, ${col.accent} 24%, #fff), transparent)`}}>
                             <span>{col.title}</span>
                             <span className="fp-col-count clickable" title="Open as list" onClick={() => drill.openAttrs(col.title, lanes[col.key])}>{lanes[col.key].length}</span>
                         </div>

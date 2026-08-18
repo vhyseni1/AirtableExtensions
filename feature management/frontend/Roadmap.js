@@ -9,7 +9,7 @@ function PipelineRail({phaseCounts, onPick}) {
         <div className="fp-rail" role="list" aria-label="Pipeline phases">
             {PHASE_GROUPS.map((p, i) => (
                 <div className="fp-rail-seg" role="listitem" key={p}>
-                    <div className="fp-rail-card clickable" style={{borderTopColor: PHASE_COLORS[p]}} onClick={() => onPick(p)} title={`See ${p} attributes`}>
+                    <div className="fp-rail-card clickable" onClick={() => onPick(p)} title={`See ${p} attributes`}>
                         <div className="fp-rail-count" style={{color: PHASE_COLORS[p]}}>{phaseCounts[p] || 0}</div>
                         <div className="fp-rail-name">{p}</div>
                     </div>

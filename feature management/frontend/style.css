@@ -70,7 +70,7 @@
 .fp-rail-seg { display: flex; align-items: center; flex: 1 1 0; min-width: 104px; }
 .fp-rail-card {
     flex: 1; background: var(--fp-card); border: 1px solid var(--fp-border);
-    border-top: 3px solid #ccc; border-radius: var(--fp-radius); padding: 16px 10px; text-align: center;
+    border-radius: var(--fp-radius); padding: 16px 10px; text-align: center;
     box-shadow: var(--fp-shadow);
 }
 .fp-rail-count { font-size: 30px; font-weight: 800; line-height: 1; }
@@ -102,9 +102,9 @@
 /* ── Top-bar filter (Entity / Initiative / Feature / Milestone) ── */
 .fp-filterbar {
     display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px;
-    padding: 10px 16px; margin: 0 0 4px;
-    background: color-mix(in srgb, var(--fp-border) 22%, #fff);
-    border-bottom: 1px solid var(--fp-border);
+    padding: 10px 14px; margin: 0 0 18px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--fp-border) 14%, #fff), #fff);
+    border: 1px solid var(--fp-border); border-radius: 10px;
 }
 .fp-filterbar-icon { font-size: 14px; color: var(--fp-muted, #64748B); }
 .fp-filter-sel { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
@@ -444,7 +444,7 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-kanban { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 20px; align-items: start; }
 .fp-kcol { background: #eef1f6; border-radius: 12px; display: flex; flex-direction: column; min-height: 120px; border: 2px solid transparent; transition: border-color .15s, background .15s; }
 .fp-kcol.over { border-color: var(--fp-accent); background: #fff4f4; }
-.fp-kcol-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px 8px; font-size: 12px; font-weight: 700; border-top: 4px solid #ccc; border-radius: 12px 12px 0 0; }
+.fp-kcol-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 12px 8px; font-size: 12px; font-weight: 700; border-radius: 12px 12px 0 0; }
 .fp-kcol-hint { font-size: 10px; color: var(--fp-muted); padding: 0 12px 6px; }
 .fp-kcol-body { padding: 8px; display: flex; flex-direction: column; gap: 8px; min-height: 60px; }
 .fp-kcard { background: #fff; border: 1px solid var(--fp-border); border-radius: 9px; padding: 9px 10px; box-shadow: 0 1px 2px rgba(20,39,78,.05); cursor: grab; }
