@@ -122,7 +122,7 @@
 .fp-filterbar-clear:hover { background: #fff6f6; border-color: var(--fp-accent, #E60000); }
 
 /* ── Swimlane timeline (features grouped by milestone) ── */
-.fp-swim { position: relative; width: 100%; }
+.fp-swim { position: relative; width: 100%; overflow-x: hidden; }
 .fp-swim-axis { position: relative; height: 20px; margin-bottom: 4px; }
 .fp-swim-tick { position: absolute; top: 0; transform: translateX(-50%); font-size: 11px; color: var(--fp-muted, #64748B); white-space: nowrap; }
 .fp-swim-body { position: relative; width: 100%; border-top: 1px solid var(--fp-border); }
@@ -346,7 +346,7 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-entity-head:hover .fp-entity-name { color: var(--fp-accent); }
 .fp-entity-meta { font-size: 12px; color: var(--fp-muted); }
 .fp-initgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; margin-bottom: 10px; }
-.fp-initcard { background: var(--fp-card); border: 1px solid var(--fp-border); border-top: 4px solid #ccc; border-radius: 12px; padding: 16px 16px 14px; box-shadow: var(--fp-shadow); }
+.fp-initcard { background: var(--fp-card); border: 1px solid var(--fp-border); border-radius: 12px; padding: 16px 16px 14px; box-shadow: var(--fp-shadow); overflow: hidden; }
 .fp-initcard-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .fp-initcard-kicker { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: var(--fp-muted); margin-bottom: 1px; }
 .fp-initcard-name { font-size: 15px; font-weight: 700; }
@@ -372,6 +372,10 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-exec-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 
 /* Delivery timeline — markers on a baseline; labels stacked in clean lanes */
+/* Timeline panel — filter sits inside, as an inset toolbar; nothing overflows. */
+.fp-tl-panel { overflow: hidden; }
+.fp-tl-filter { margin-bottom: 14px; }
+.fp-tl-filter .fp-filterbar { border: 1px solid var(--fp-border); border-radius: 10px; background: linear-gradient(180deg, color-mix(in srgb, var(--fp-border) 16%, #fff), #fff); padding: 9px 14px; margin: 0; }
 .fp-timeline { position: relative; width: 100%; padding: 44px 6px 14px; }
 .fp-timeline-track { position: relative; height: 5px; border-radius: 3px; background: linear-gradient(90deg, #d8e0ec, #c3cee0); }
 .fp-tl-tick { position: absolute; top: -12px; transform: translateX(-50%); color: var(--fp-muted); font-size: 11px; }

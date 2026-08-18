@@ -188,13 +188,17 @@ function FeatureSwimlane({items, onPick}) {
 
     const now = Date.now();
     const allMs = dated.map(f => f.goLiveMs);
-    const min = Math.min(now, ...allMs);
-    const max = Math.max(now, ...allMs);
+    // Include milestone due dates in the axis so their span bars stay in bounds.
+    const dueAll = items.map(f => f.milestoneDueMs).filter(x => x != null);
+    const min = Math.min(now, ...allMs, ...dueAll);
+    const max = Math.max(now, ...allMs, ...dueAll);
     const pad = (max - min) * 0.07 || 86400000 * 20;
     const start = min - pad, end = max + pad, span = end - start || 1;
     const W = w || 900;
     const trackW = Math.max(240, W - SL_GUTTER);
+    const RIGHT = SL_GUTTER + trackW;
     const xOf = ms => SL_GUTTER + ((ms - start) / span) * trackW;
+    const clampX = ms => Math.max(SL_GUTTER, Math.min(xOf(ms), RIGHT));
 
     const ticks = [];
     const d = new Date(start);
@@ -242,7 +246,7 @@ function FeatureSwimlane({items, onPick}) {
                         </div>
                         {/* milestone span bar: earliest feature date → milestone due date */}
                         {l.startMs != null && l.dueMs != null && l.dueMs > l.startMs && (
-                            <div className="fp-swim-span" style={{left: xOf(l.startMs), width: Math.max(2, xOf(l.dueMs) - xOf(l.startMs)), background: l.color}} />
+                            <div className="fp-swim-span" style={{left: clampX(l.startMs), width: Math.max(2, clampX(l.dueMs) - clampX(l.startMs)), background: l.color}} />
                         )}
                         {l.placed.map(({f, x, row}) => (
                             <div
@@ -283,7 +287,7 @@ function EntityCard({e, colorOf, mounted, model, openInitiatives, openFeatures})
     const shown = showAll ? e.initiatives : e.initiatives.slice(0, CARD_CAP);
 
     return (
-        <div className="fp-initcard" style={{borderTopColor: c}}>
+        <div className="fp-initcard" style={{background: `linear-gradient(180deg, color-mix(in srgb, ${c} 18%, #fff) 0%, var(--fp-card) 76px)`}}>
             <div className="fp-initcard-head">
                 <div className="clickable" onClick={() => openInitiatives(e.name, e.initiatives)}>
                     <div className="fp-initcard-kicker">Entity</div>
@@ -479,13 +483,15 @@ export default function Executive({model}) {
                     </span>
                 )}
             </div>
-            <FilterBar
-                model={model}
-                sel={tlFilter}
-                onChange={sel => { setTlFilter(sel); setTlPath([]); }}
-                matchCount={tlModel.features.length}
-            />
-            <div className="fp-panel">
+            <div className="fp-panel fp-tl-panel">
+                <div className="fp-tl-filter">
+                    <FilterBar
+                        model={model}
+                        sel={tlFilter}
+                        onChange={sel => { setTlFilter(sel); setTlPath([]); }}
+                        matchCount={tlModel.features.length}
+                    />
+                </div>
                 <div className="fp-tl-hint">
                     {tlFrame
                         ? (tlFrame.kind === 'initiatives'
