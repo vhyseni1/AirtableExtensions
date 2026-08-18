@@ -319,26 +319,20 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
     border-radius: 14px; padding: 26px 32px; margin-bottom: 22px;
     box-shadow: var(--fp-shadow); position: relative; overflow: hidden;
 }
-/* UBS red key-bar down the left edge */
-.fp-hero::before {
-    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6px;
-    background: linear-gradient(180deg, #EC0016, #b3000f);
-}
 .fp-hero::after {
     content: ''; position: absolute; right: -70px; top: -70px; width: 260px; height: 260px;
     background: radial-gradient(circle, rgba(236,0,22,.07), transparent 64%); pointer-events: none;
 }
-.fp-hero-headline { padding-left: 8px; }
+.fp-hero-headline { padding-left: 0; }
 .fp-hero-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
 .fp-hero-brand .fp-logo-img { height: 26px; }
 .fp-hero-brand-div { width: 1px; height: 20px; background: var(--fp-border); }
 .fp-hero-brand-txt { text-transform: uppercase; letter-spacing: .14em; font-size: 10.5px; font-weight: 700; color: #EC0016; }
 .fp-hero h1 { margin: 0 0 6px; font-size: 30px; font-weight: 700; letter-spacing: -.015em; color: var(--fp-ink); }
 .fp-hero-sub { margin: 0 0 18px; color: var(--fp-muted); font-size: 13px; max-width: 60ch; }
-.fp-hero-stats { display: flex; gap: 30px; flex-wrap: wrap; }
-.fp-hero-stats div { display: flex; flex-direction: column; }
-.fp-hero-stats b { font-size: 28px; font-weight: 800; line-height: 1; color: var(--fp-ink); }
-.fp-hero-stats span { font-size: 11px; color: var(--fp-muted); margin-top: 4px; }
+.fp-hero-stats { display: flex; align-items: center; gap: 0; flex-wrap: wrap; }
+.fp-hero-stats b { font-size: 20px; font-weight: 800; line-height: 1; color: var(--fp-ink); font-variant-numeric: tabular-nums; }
+.fp-hero-stats span { font-size: 12px; color: var(--fp-muted); }
 .fp-hero-gauge { flex: 0 0 auto; }
 
 /* Donut */
@@ -495,8 +489,11 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-feat-bar i, .fp-pb-track i, .fp-phasestrip span { transition: width .8s cubic-bezier(.22,.61,.36,1); }
 
 /* Hero stat numbers as buttons */
-.fp-hero-stats button { background: none; border: none; padding: 4px 6px; margin: -4px -6px; border-radius: 8px; color: inherit; text-align: left; cursor: pointer; display: flex; flex-direction: column; }
-.fp-hero-stats button:hover { background: rgba(236,0,22,.06); }
+.fp-hero-stats button { position: relative; background: none; border: none; padding: 3px 18px; border-radius: 8px; color: inherit; cursor: pointer; display: inline-flex; align-items: baseline; gap: 7px; }
+.fp-hero-stats button:first-child { padding-left: 0; }
+.fp-hero-stats button:not(:last-child)::after { content: ''; position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 1px; height: 20px; background: var(--fp-border); }
+.fp-hero-stats button:hover span { color: var(--fp-ink); }
+.fp-hero-stats button:hover b { text-decoration: underline; text-underline-offset: 3px; }
 .fp-donut.clickable:hover { transform: scale(1.03); }
 .fp-initcard-head .clickable:hover .fp-initcard-name { color: var(--fp-accent); }
 .fp-initcard-rag span.clickable:hover { color: var(--fp-ink); }
