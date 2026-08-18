@@ -138,6 +138,13 @@
 .fp-swim-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .fp-swim-fname { font-size: 11px; font-weight: 600; color: var(--fp-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fp-swim-fpct { font-size: 10px; color: var(--fp-muted, #64748B); margin-left: auto; flex: none; }
+/* Feature cards + milestone span bar (feature swimlane) */
+.fp-swim-span { position: absolute; height: 6px; top: 6px; border-radius: 3px; opacity: .16; z-index: 0; }
+.fp-swim-card { position: absolute; height: 34px; display: flex; flex-direction: column; justify-content: center; gap: 1px; padding: 3px 9px; background: #fff; border: 1px solid var(--fp-border); border-left-width: 3px; border-radius: 6px; box-sizing: border-box; overflow: hidden; box-shadow: 0 1px 2px rgba(15,23,42,.08); z-index: 1; }
+.fp-swim-card:hover { border-color: var(--fp-accent); box-shadow: 0 2px 8px rgba(15,23,42,.14); z-index: 3; }
+.fp-swim-fmeta { font-size: 9.5px; color: var(--fp-muted, #64748B); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fp-swim-fbar { display: block; height: 3px; background: var(--fp-border); border-radius: 2px; overflow: hidden; margin-top: 2px; }
+.fp-swim-fbar i { display: block; height: 100%; border-radius: 2px; }
 .fp-showmore { margin-top: 8px; width: 100%; border: 1px dashed var(--fp-border); background: #fff; color: var(--fp-accent); border-radius: 8px; padding: 6px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
 .fp-showmore:hover { background: #fff6f6; border-style: solid; }
 

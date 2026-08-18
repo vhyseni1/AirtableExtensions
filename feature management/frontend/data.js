@@ -191,6 +191,8 @@ export function useModel() {
         const initiativeField = findField(features.fields.initiative, /initiative/i);
         const milestoneDueField = features.fields.milestoneDue || ff.find(f => /milestone/i.test(f.name) && /due/i.test(f.name)) || null;
         const milestoneField = features.fields.milestone || ff.find(f => /milestone/i.test(f.name) && !/due/i.test(f.name)) || null;
+        // The feature's OWN due date — a "Due Date" column (never the milestone's).
+        const featureDueField = features.fields.dueDate || ff.find(f => /due/i.test(f.name) && !/milestone/i.test(f.name)) || null;
         const featureList = (featureRecords || []).map(r => ({
             id: r.id,
             record: r,
@@ -200,6 +202,8 @@ export function useModel() {
             milestone: (names(r, milestoneField)[0] || str(r, milestoneField) || '').trim(),
             milestoneDue: str(r, milestoneDueField),
             milestoneDueMs: dateMs(r, milestoneDueField),
+            due: str(r, featureDueField),
+            dueMs: dateMs(r, featureDueField),
             owningTeam: str(r, features.fields.owningTeam),
             status: str(r, features.fields.status),
             priority: str(r, features.fields.priority),
@@ -386,7 +390,8 @@ export function deriveModel(ctx) {
         f.blocked = v.blocked || 0;
         f.awaiting = v.awaiting || 0;
         f.ready = v.ready || 0;
-        f.goLiveMs = f.goLiveMs != null ? f.goLiveMs : parseDate(f.goLive);
+        // Timeline date = the feature's own Due Date; fall back to Target Go-Live.
+        f.goLiveMs = f.dueMs != null ? f.dueMs : (f.goLiveMs != null ? f.goLiveMs : parseDate(f.goLive));
         const overdue = f.goLiveMs != null && f.goLiveMs < todayMs && f.pct < 100;
         f.health = f.pct >= 100 ? 'delivered' : f.blocked > 0 ? 'blocked' : overdue ? 'at-risk' : 'on-track';
     });

@@ -34,6 +34,7 @@ export const FIELDS = {
         initiative: 'Initiative',
         milestone: 'Milestones', // link → Milestone table (name resolved via the link)
         milestoneDue: 'Milestone Due Date',
+        dueDate: 'Due Date', // the feature's own due date (drives the timeline)
         owningTeam: 'Owning Team',
         status: 'Status',
         priority: 'Priority',
