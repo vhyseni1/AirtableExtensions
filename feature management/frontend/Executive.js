@@ -154,10 +154,10 @@ function Timeline({features, colorOf, onPick, onDrill}) {
 // time axis by the feature's Due Date. Each card shows the feature name, its
 // attribute count and maturity; clicking a card opens the side panel. Each lane
 // shows the milestone span: earliest feature date → the milestone's Due Date.
-const SL_GUTTER = 176; // milestone label column width
-const SL_CARD_W = 176; // feature card width (for horizontal packing)
-const SL_ROW = 40;     // vertical pitch of packed cards inside a lane
-const SL_PAD = 16;     // lane padding
+const SL_GUTTER = 180; // milestone label column width
+const SL_CARD_W = 208; // feature card width (for horizontal packing)
+const SL_ROW = 60;     // vertical pitch of packed cards inside a lane
+const SL_PAD = 18;     // lane padding
 function FeatureSwimlane({items, onPick}) {
     const ref = useRef(null);
     const [w, setW] = useState(0);
@@ -253,7 +253,7 @@ function FeatureSwimlane({items, onPick}) {
                                 onClick={() => onPick(f)}
                             >
                                 <span className="fp-swim-fname">{f.name}</span>
-                                <span className="fp-swim-fmeta">{f.total} attr{f.total === 1 ? '' : 's'} · {f.pct}%</span>
+                                <span className="fp-swim-fmeta">{f.total} attribute{f.total === 1 ? '' : 's'} · {f.pct}% mature</span>
                                 <span className="fp-swim-fbar"><i style={{width: `${f.pct}%`, background: l.color}} /></span>
                             </div>
                         ))}
