@@ -1,6 +1,6 @@
 # Feature Management — Pipeline Tracker (Airtable custom extension)
 
-A single Airtable Blocks SDK extension with a three-way view toggle:
+A single Airtable Blocks SDK extension with a four-way view toggle:
 
 - **Roadmap** — bird's-eye: features grouped by **Initiative**, each with a maturity rail across
   the 7 phases plus its Target Go-Live date and % maturity. Includes a pipeline rail, KPI strip
@@ -9,6 +9,10 @@ A single Airtable Blocks SDK extension with a three-way view toggle:
   grouped by stage/phase.
 - **Workflow** — operational lanes (Incoming / In progress / Blocked / Ready-to-push) with
   **Promote** and **Accept / Return** actions that write to the base.
+- **Executive review** — a **stories reel**: full-bleed cards that auto-advance with a pip rail,
+  tap zones, keyboard control and pause. Built for showing, not browsing. Deck order: overview →
+  pipeline → one card per initiative → delivery risk → blocked → decision queue → rework →
+  momentum → the ask.
 
 The extension holds **no data** — it binds to the live base at runtime (`useBase`/`useRecords`)
 and joins/aggregates client-side. The base is small (~hundreds of rows), so no native
@@ -110,3 +114,6 @@ an in-flight guard prevents double-firing.
 - **By team**: selecting a team shows only that team's attributes and its roster.
 - **Workflow**: Promote a ready attribute → handshake appears in the feed; Accept advances its
   stage on the roadmap; Return requires a comment and bumps Cycle Number.
+- **Executive review**: the deck length is 9 + one card per initiative; ← / → and the tap zones
+  move between cards; pause holds the current card; a feature with a past go-live reads
+  "date passed, N% left", never a bare minus or an em-dash pace.

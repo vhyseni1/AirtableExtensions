@@ -30,6 +30,15 @@ export function bool(record, field) {
         return false;
     }
 }
+export function num(record, field) {
+    if (!record || !field) return 0;
+    try {
+        const v = record.getCellValue(field.id);
+        return typeof v === 'number' ? v : Number(v) || 0;
+    } catch {
+        return 0;
+    }
+}
 export function links(record, field) {
     if (!record || !field) return [];
     try {
@@ -151,6 +160,8 @@ export function useModel() {
             goLive: str(r, features.fields.goLive),
         }));
         const featureOrder = featureList.map(f => f.name).filter(Boolean);
+        const featuresByName = {};
+        featureList.forEach(f => (featuresByName[f.name] = f));
 
         // ── Attributes = work items ──
         const attrs = (attributeRecords || []).map(r => {
@@ -191,6 +202,7 @@ export function useModel() {
                 environment: str(r, attributes.fields.environment),
                 dueDate: str(r, attributes.fields.dueDate),
                 blockedReason: str(r, attributes.fields.blockedReason),
+                cycleNumber: num(r, attributes.fields.cycleNumber) || 1,
             };
             a.nextCode = nextStageCode(pathAttr, currentCode);
             a.hasNext = !!a.nextCode;
@@ -283,6 +295,7 @@ export function useModel() {
             usersByTeam,
             features: featureList,
             featureOrder,
+            featuresByName,
             initiatives,
             attrs,
             byFeature,

@@ -2,15 +2,18 @@ import {initializeBlock} from '@airtable/blocks/interface/ui';
 import {useState} from 'react';
 import {useModel} from './data';
 import {SetupBanner} from './components';
+import {BRAND} from './constants';
 import Roadmap from './Roadmap';
 import TeamView from './TeamView';
 import Workflow from './Workflow';
+import Executive from './Executive';
 import './style.css';
 
 const MODES = [
     {key: 'roadmap', label: 'Roadmap'},
     {key: 'team', label: 'By team'},
     {key: 'workflow', label: 'Workflow'},
+    {key: 'executive', label: BRAND.review},
 ];
 
 function App() {
@@ -28,7 +31,7 @@ function App() {
     return (
         <div className="fp-app">
             <header className="fp-header">
-                <div className="fp-brand">Feature Management — Pipeline Tracker</div>
+                <div className="fp-brand">{BRAND.appName} — {BRAND.subtitle}</div>
                 <div className="fp-modeswitch" role="tablist" aria-label="View">
                     {MODES.map(m => (
                         <button
@@ -51,8 +54,10 @@ function App() {
                 <Roadmap model={model} />
             ) : mode === 'team' ? (
                 <TeamView model={model} />
-            ) : (
+            ) : mode === 'workflow' ? (
                 <Workflow model={model} />
+            ) : (
+                <Executive model={model} />
             )}
 
             {model.missing.length > 0 && (
