@@ -14,6 +14,7 @@ export function PersonCard({node, variant, directs, total, statusColor, showAvat
     const cls = ['person-card', `person-card-${variant}`, 'clickable'];
     if (!showAvatar) cls.push('no-avatar');
     if (node.vacant) cls.push('vacant');
+    if (statusColor) cls.push('has-accent');
     // Reports drill into their own subtree; the focus card opens the record.
     const onClick = variant === 'report' ? () => onDrill(node.id) : () => onOpen(node);
     const title = variant === 'report'
@@ -22,7 +23,7 @@ export function PersonCard({node, variant, directs, total, statusColor, showAvat
     return (
         <div
             className={cls.join(' ')}
-            style={statusColor ? {borderLeftColor: statusColor, borderLeftWidth: 4} : undefined}
+            style={statusColor ? {'--card-accent': statusColor} : undefined}
             onClick={onClick}
             title={title}
         >

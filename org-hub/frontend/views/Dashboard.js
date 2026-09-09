@@ -5,67 +5,14 @@
 // always a small ranked list, and a dependency-free bar keeps the bundle small
 // and prints cleanly in the PNG/PDF exports.
 
-import {useMemo, useRef, useState} from 'react';
+import {useMemo, useRef} from 'react';
 import {readText} from '../lib/fields';
+import {fmtNum as fmt} from '../lib/orgMetrics';
 import {depthByNode} from '../lib/people';
 import {ExportMenu} from '../components/Controls';
+import {StatTile, BarList} from '../components/Charts';
 import {toCSV, downloadText, exportPNG} from '../lib/exports';
-import {SO_STATUS_COLORS, SCOPING_COLORS} from '../config';
-
-function fmt(n, digits = 0) {
-    if (n == null || isNaN(n)) return '—';
-    return Number(n).toLocaleString(undefined, {
-        minimumFractionDigits: digits,
-        maximumFractionDigits: digits,
-    });
-}
-
-function StatTile({label, value, sub, tone}) {
-    return (
-        <div className={`stat-tile${tone ? ` stat-${tone}` : ''}`}>
-            <div className="stat-value">{value}</div>
-            <div className="stat-label">{label}</div>
-            {sub && <div className="stat-sub">{sub}</div>}
-        </div>
-    );
-}
-
-// rows: [{label, value, color?}] — sorted by the caller.
-function BarList({title, rows, unit = '', limit = 10, emptyText = 'No data'}) {
-    const [expanded, setExpanded] = useState(false);
-    const shown = expanded ? rows : rows.slice(0, limit);
-    const max = Math.max(...rows.map(r => r.value), 1);
-    return (
-        <div className="panel">
-            <div className="panel-head">
-                <span className="panel-title">{title}</span>
-                {rows.length > limit && (
-                    <button className="panel-more" onClick={() => setExpanded(v => !v)}>
-                        {expanded ? 'Show top ' + limit : `Show all ${rows.length}`}
-                    </button>
-                )}
-            </div>
-            {rows.length === 0 && <div className="panel-empty">{emptyText}</div>}
-            <div className="bar-list">
-                {shown.map(r => (
-                    <div key={r.label} className="bar-row" title={`${r.label}: ${fmt(r.value)}${unit}`}>
-                        <span className="bar-label">{r.label}</span>
-                        <span className="bar-track">
-                            <span
-                                className="bar-fill"
-                                style={{
-                                    width: `${Math.max(2, (r.value / max) * 100)}%`,
-                                    background: r.color || '#2563eb',
-                                }}
-                            />
-                        </span>
-                        <span className="bar-value">{fmt(r.value)}{unit}</span>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-}
+import {SO_STATUS_COLORS, SCOPING_COLORS, VIZ} from '../config';
 
 // Count records by the text value of a field, dropping blanks.
 function countBy(records, field) {
@@ -201,19 +148,20 @@ export default function Dashboard({org, supOrg, peopleTable, supOrgTable, dimens
             </div>
 
             <div className="dashboard-scroll" ref={boardRef}>
-                <div className="stat-row">
-                    <StatTile label="Positions" value={fmt(metrics.total)} sub={`${fmt(metrics.fte, 1)} FTE`} />
-                    <StatTile label="Filled" value={fmt(metrics.filled)} tone="good" />
+                <div className="tile-row">
+                    <StatTile accent={VIZ.magnitude} label="Positions" value={fmt(metrics.total)} sub={`${fmt(metrics.fte, 1)} FTE`} />
+                    <StatTile accent={VIZ.positive} label="Filled" value={fmt(metrics.filled)} tone="good" />
                     <StatTile
                         label="Vacant"
+                        accent={VIZ.status.risk.color}
                         value={fmt(metrics.vacant)}
                         sub={`${vacancyRate.toFixed(1)}% of positions`}
                         tone={vacancyRate > 10 ? 'warn' : undefined}
                     />
-                    <StatTile label="Managers" value={fmt(metrics.managers)} sub={`${fmt(metrics.ics)} individual contributors`} />
-                    <StatTile label="Avg span of control" value={fmt(metrics.avgSpan, 1)} sub={`largest: ${fmt(metrics.maxSpan)}`} />
+                    <StatTile accent={VIZ.magnitude} label="Managers" value={fmt(metrics.managers)} sub={`${fmt(metrics.ics)} individual contributors`} />
+                    <StatTile accent={VIZ.neutral} label="Avg span of control" value={fmt(metrics.avgSpan, 1)} sub={`largest: ${fmt(metrics.maxSpan)}`} />
                     <StatTile
-                        label="Management layers"
+                        accent={VIZ.neutral} label="Management layers"
                         value={fmt(metrics.layers)}
                         sub={`avg depth ${fmt(metrics.avgDepth + 1, 1)}`}
                     />

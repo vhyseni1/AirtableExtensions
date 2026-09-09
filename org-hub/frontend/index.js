@@ -36,6 +36,9 @@ import SupOrgChart from './views/SupOrgChart';
 import PeopleTree from './views/PeopleTree';
 import DataTable from './views/DataTable';
 import StackedDeck from './views/StackedDeck';
+import PeopleImpact from './views/PeopleImpact';
+import Savings from './views/Savings';
+import WorksCouncil from './views/WorksCouncil';
 
 // ─── Navigation model ────────────────────────────────────────────────────────
 //
@@ -53,6 +56,15 @@ const NAV = [
             {key: 'position', label: 'Position view'},
             {key: 'suporg', label: 'Supervisory org tree'},
             {key: 'people-tree', label: 'People tree'},
+        ],
+    },
+    {
+        key: 'impact',
+        label: 'Impact',
+        subs: [
+            {key: 'people-impact', label: 'People impact'},
+            {key: 'savings', label: 'Savings'},
+            {key: 'works-council', label: 'Works council'},
         ],
     },
     {
@@ -226,6 +238,9 @@ function OrgDesignBody({table, notesMap, view}) {
             />
         );
     }
+    if (view === 'people-impact') return <PeopleImpact model={model} />;
+    if (view === 'savings') return <Savings model={model} />;
+    if (view === 'works-council') return <WorksCouncil model={model} />;
     return <StackedDeck model={model} variant={view} />;
 }
 
@@ -296,14 +311,17 @@ function OrgHub({peopleTable, supOrgTable, designTable, notesTable, tab, setTab,
         stacked: designTable,
         comparison: designTable,
         'design-data': designTable,
+        'people-impact': designTable,
+        savings: designTable,
+        'works-council': designTable,
         suporg: supOrgTable,
         'suporg-data': supOrgTable,
     };
-    const fallback = {charts: 'position', data: 'people-data'};
+    const fallback = {charts: 'position', data: 'people-data', impact: null};
     const available = !(sub in requires) || !!requires[sub];
     const effectiveSub = available ? sub : (fallback[tab] || sub);
 
-    const missingTableFor = key => (key === 'stacked' || key === 'comparison' || key === 'design-data'
+    const missingTableFor = key => (key in requires && requires[key] === designTable
         ? ORG_DESIGN.tableName
         : SUP_ORG.tableName);
 
@@ -344,6 +362,19 @@ function OrgHub({peopleTable, supOrgTable, designTable, notesTable, tab, setTab,
                 dimensionFields={dimensionFields}
                 supOrgDimensionFields={[]}
             />
+        );
+    } else if (tab === 'impact') {
+        body = designTable ? (
+            <OrgDesignSection
+                table={designTable}
+                notesTable={notesTable}
+                view={effectiveSub}
+            />
+        ) : (
+            <Notice tone="warn">
+                The impact views need a table named “{ORG_DESIGN.tableName}”.
+                See <code>sample-data/IMPORT.md</code>.
+            </Notice>
         );
     } else if (effectiveSub === 'stacked' || effectiveSub === 'comparison') {
         body = (

@@ -161,3 +161,82 @@ export const STATUS_COLORS = {
 // The slide canvas. 1280×720 is the 16:9 geometry the Apps Script decks use,
 // and what the PDF export writes one slide per page at.
 export const SLIDE = {width: 1280, height: 720};
+
+// ─── Visualization palette ───────────────────────────────────────────────────
+//
+// Validated against a #ffffff surface: lightness band, chroma floor, CVD
+// separation and normal-vision separation all pass; the yellow sits below 3:1
+// contrast, which is relieved by every bar carrying a visible label and value.
+// Re-run any change through a palette validator rather than eyeballing it.
+//
+// These are the DASHBOARD colours. The deck slides keep their own ported
+// palette (STATUS_COLORS above) so exported decks still match the client's
+// existing ones — the two are deliberately allowed to differ.
+export const VIZ = {
+    // Workforce-transition status → colour. Order matters: adjacent pairs were
+    // checked for colour-blind separation in this sequence.
+    status: {
+        risk: {color: '#d03b3b', label: 'At risk'},
+        selection: {color: '#eda100', label: 'In selection'},
+        mapped: {color: '#2a78d6', label: 'Mapped'},
+        posted: {color: '#0ca30c', label: 'New position'},
+    },
+    // Single hue for magnitude-only charts (one series, no identity to encode).
+    magnitude: '#2a78d6',
+    positive: '#0ca30c',
+    negative: '#d03b3b',
+    neutral: '#94a3b8',
+};
+
+// ─── Savings model ───────────────────────────────────────────────────────────
+//
+// Demo assumptions. Fully-loaded annual cost per FTE by country, scaled by a
+// seniority multiplier per DLT level, plus the one-off costs of executing the
+// change. Every number here is an input to the Savings view and is shown to the
+// user as an assumption — nothing is hidden inside the maths.
+export const RATE_CARD = {
+    currency: 'CHF',
+    defaultCostPerFte: 145000,
+    byCountry: {
+        CHE: 168000, DEU: 132000, ESP: 96000, IRL: 118000,
+        POL: 74000, SGP: 121000, GBR: 128000, USA: 156000,
+    },
+    // Seniority multiplier on the country rate, keyed by the row's DLT level.
+    levelUplift: {'DLT': 2.4, 'DLT-1': 1.9, 'DLT-2': 1.5, 'DLT-3': 1.15},
+    defaultUplift: 1.0,
+    // One-off cost of executing the change.
+    severanceMonths: 9,          // months of salary per at-risk FTE
+    recruitmentCostPerHire: 18000,
+    transitionCostPerFte: 3500,
+};
+
+// ─── Works council / employee representation ─────────────────────────────────
+//
+// Which body must be consulted per country, how much notice it needs, and when
+// consultation (rather than information) is triggered.
+//
+// Collective-redundancy rules are typically the LOWER of an absolute floor and
+// a percentage of the local establishment — a handful of people at a small site
+// can trigger the same duty as a large number at a big one. Modelling only the
+// absolute number makes every small country look exempt, which is exactly the
+// mistake that gets missed in planning.
+//
+// Demo values — confirm against local counsel before real use.
+export const WORKS_COUNCIL = {
+    byCountry: {
+        DEU: {body: 'Betriebsrat', noticeWeeks: 8, threshold: 26, thresholdPct: 0.10},
+        ESP: {body: 'Comité de Empresa', noticeWeeks: 4, threshold: 10, thresholdPct: 0.10},
+        POL: {body: 'Rada Pracowników', noticeWeeks: 4, threshold: 20, thresholdPct: 0.10},
+        CHE: {body: 'Arbeitnehmervertretung', noticeWeeks: 2, threshold: 30, thresholdPct: 0.10},
+        IRL: {body: 'Employee Forum', noticeWeeks: 4, threshold: 20, thresholdPct: 0.10},
+        SGP: {body: 'Union representative', noticeWeeks: 4, threshold: 5, thresholdPct: 0.25},
+        GBR: {body: 'Employee Consultation Forum', noticeWeeks: 6, threshold: 20, thresholdPct: 0.10},
+        USA: {body: 'None (at-will)', noticeWeeks: 0, threshold: 50, thresholdPct: 0.33},
+    },
+    defaultBody: 'Local employee representatives',
+    defaultNoticeWeeks: 4,
+    defaultThreshold: 20,
+    defaultThresholdPct: 0.10,
+    // Where the demo says the exported pack lands.
+    driveLocation: 'PwC · Org Design Shared Drive / Works Council Packs',
+};

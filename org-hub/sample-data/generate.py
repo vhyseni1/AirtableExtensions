@@ -149,6 +149,23 @@ JOB_FAMILY = {
 LOCATIONS = ["Basel", "Zurich", "Lausanne", "Berlin", "Barcelona", "Dublin", "Warsaw", "Singapore"]
 LOCATION_WEIGHTS = [30, 18, 8, 12, 8, 8, 10, 6]
 
+# Each org has a home site. Real organisations are sited — a data-engineering
+# team sits somewhere, it is not sprinkled across eight countries — and the
+# works-council view depends on that: consultation obligations are per country,
+# so scattering people at random would put every org in every jurisdiction.
+ORG_SITE = {
+    "EX": "Basel", "DSG": "Basel",
+    "DSGA": "Zurich", "DSGAE": "Barcelona", "DSGAI": "Warsaw",
+    "DSGP": "Zurich", "DSGPC": "Dublin", "DSGPA": "Warsaw", "DSGD": "Berlin",
+    "FIN": "Basel", "FINC": "Berlin", "FINT": "Basel",
+    "HR": "Basel", "HRTA": "Barcelona", "HROP": "Warsaw",
+    "COM": "Zurich", "COMSE": "Berlin", "COMMK": "Barcelona",
+    "OPS": "Basel", "OPSSC": "Warsaw", "OPSQC": "Dublin",
+    "RND": "Basel", "RNDCD": "Singapore", "RNDPR": "Lausanne",
+}
+# Share of an org's people who sit at its home site; the rest spread globally.
+HOME_SITE_SHARE = 0.75
+
 EMPLOYMENT_TYPES = ["Permanent", "Fixed-term", "Contractor"]
 EMPLOYMENT_WEIGHTS = [82, 8, 10]
 
@@ -215,30 +232,42 @@ LOCATION_ISO = {
 # Vacancies already in the people table are emitted as posted roles automatically.
 
 SCENARIO = {
-    "DSGAE": {"new": [("Streaming Data Engineer", 3), ("Data Reliability Engineer", 2)],
-              "selection": ["Data Engineer"]},
-    "DSGAI": {"new": [("Machine Learning Engineer", 2)],
-              "selection": ["Reporting Analyst"]},
-    "DSGPC": {"new": [("Platform Security Engineer", 2)],
-              "at_risk": {"Network Engineer": 2}},
-    "DSGPA": {"at_risk": {"SAP Specialist": 3, "Integration Engineer": 2},
+    # A consolidation: roles reduce in the functions being centralised or
+    # outsourced, and a smaller number of new capabilities are created. Net
+    # headcount falls, which is what makes the Savings view tell a story.
+    "DSGAE": {"new": [("Streaming Data Engineer", 2)],
+              "selection": ["Data Engineer"],
+              "at_risk": {"Analytics Engineer": 2}},
+    "DSGAI": {"new": [("Machine Learning Engineer", 1)],
+              "selection": ["Reporting Analyst"],
+              "at_risk": {"Business Intelligence Analyst": 2}},
+    "DSGPC": {"new": [("Platform Security Engineer", 1)],
+              "at_risk": {"Network Engineer": 2, "Site Reliability Engineer": 2}},
+    "DSGPA": {"at_risk": {"SAP Specialist": 3, "Integration Engineer": 3,
+                          "Salesforce Administrator": 2},
               "selection": ["Application Engineer"]},
-    "DSGD":  {"new": [("Design Systems Lead", 1), ("Product Analyst", 2)]},
-    "FINC":  {"at_risk": {"Cost Accountant": 2}},
+    "DSGD":  {"new": [("Design Systems Lead", 1)]},
+    "DSGA":  {"at_risk": {"Master Data Analyst": 1}},
+    "FINC":  {"at_risk": {"Cost Accountant": 2, "Reporting Accountant": 2}},
     "FINT":  {"at_risk": {"Treasury Analyst": 2, "Tax Specialist": 1, "Cash Manager": 1,
                           "Compliance Accountant": 1, "Head of Treasury & Tax": 1}},
-    "HRTA":  {"at_risk": {"Sourcing Specialist": 2}, "new": [("Talent Intelligence Analyst", 1)]},
-    "HROP":  {"new": [("People Analytics Engineer", 2)],
-              "at_risk": {"Payroll Specialist": 2}},
-    "COMSE": {"selection": ["Account Manager", "Inside Sales Representative"]},
-    "COMMK": {"new": [("Marketing Automation Specialist", 1)]},
-    "OPSSC": {"new": [("Supply Chain Data Analyst", 2)],
-              "at_risk": {"Logistics Coordinator": 2}},
-    "OPSQC": {"new": [("Computer System Validation Engineer", 2)]},
-    "RNDCD": {"new": [("Decentralised Trials Manager", 2)],
-              "selection": ["Clinical Research Associate"]},
-    "RNDPR": {"at_risk": {"Laboratory Technician": 3}},
+    "HRTA":  {"at_risk": {"Sourcing Specialist": 2, "Recruiter": 2},
+              "new": [("Talent Intelligence Analyst", 1)]},
+    "HROP":  {"new": [("People Analytics Engineer", 1)],
+              "at_risk": {"Payroll Specialist": 2, "HR Operations Specialist": 2}},
+    "COMSE": {"selection": ["Account Manager"],
+              "at_risk": {"Inside Sales Representative": 2}},
+    "COMMK": {"at_risk": {"Content Specialist": 1}},
+    "OPSSC": {"new": [("Supply Chain Data Analyst", 1)],
+              "at_risk": {"Logistics Coordinator": 3, "Procurement Specialist": 2}},
+    "OPSQC": {"new": [("Computer System Validation Engineer", 1)],
+              "at_risk": {"QA Specialist": 2}},
+    "RNDCD": {"new": [("Decentralised Trials Manager", 1)],
+              "selection": ["Clinical Research Associate"],
+              "at_risk": {"Medical Writer": 2}},
+    "RNDPR": {"at_risk": {"Laboratory Technician": 3, "Bioinformatician": 1}},
 }
+
 
 # Per-slide commentary shown in the notes band.
 SLIDE_NOTES = {
@@ -387,7 +416,9 @@ def main():
             "Short Code": code,
             "[D] Employee Decision": "" if vacant else random.choices(DECISIONS, DECISION_WEIGHTS)[0],
             "[E] Email": email,
-            "[E] Location": random.choices(LOCATIONS, LOCATION_WEIGHTS)[0],
+            "[E] Location": (ORG_SITE.get(code)
+                             if (code in ORG_SITE and random.random() < HOME_SITE_SHARE)
+                             else random.choices(LOCATIONS, LOCATION_WEIGHTS)[0]),
             "[E] Job Family": JOB_FAMILY[code],
             "[E] Grade": "",
             "[E] FTE": 1.0,
@@ -528,13 +559,26 @@ def write_org_design(people, org_by_code, depth_of):
                     and Stack "Future" (current=0, future=n-k, mapped)
       new / vacant  one row, Stack "Future"     — status "Posted"
     """
-    # Distinct ISO-3 codes per org, from where its people actually sit.
-    countries_by_code = {}
+    # Countries per org, ordered by how many of its people actually sit there.
+    # The FIRST code is the org's primary country: costing and works-council
+    # obligations key off it, so a sorted list (always "CHE" first) would
+    # collapse every breakdown onto one country.
+    iso_counts = {}
     for person in people:
         iso = LOCATION_ISO.get(person["[E] Location"])
         if not iso:
             continue
-        countries_by_code.setdefault(person["_code"], set()).add(iso)
+        iso_counts.setdefault(person["_code"], {})
+        iso_counts[person["_code"]][iso] = iso_counts[person["_code"]].get(iso, 0) + 1
+
+    countries_by_code = {}
+    for code, counts in iso_counts.items():
+        ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+        total = sum(counts.values())
+        # Keep the primary, plus any country holding at least a quarter of the
+        # org — a genuinely split team, not a single stray secondment.
+        keep = [ranked[0][0]] + [c for c, n in ranked[1:] if n / total >= 0.25]
+        countries_by_code[code] = keep[:3]
 
     # Filled and vacant counts per (org code, title).
     filled, vacant = {}, {}
@@ -574,7 +618,7 @@ def write_org_design(people, org_by_code, depth_of):
         if cur == 0 and fut == 0:
             return
         cols = dlt_columns(slide_code)
-        iso = sorted(countries_by_code.get(org_code, {"CHE"}))
+        iso = countries_by_code.get(org_code, ["CHE"])
         rows.append({
             "Slide Title": name_of[slide_code],
             "Section Name": name_of[slide_code],
@@ -588,7 +632,7 @@ def write_org_design(people, org_by_code, depth_of):
             "Current HC": cur,
             "Future HC": fut,
             "FTE": 1.0,
-            "Country": ", ".join(iso[:3]),
+            "Country": ", ".join(iso),
             "Stack": stack,
             "Status": status,
             "DLT": cols.get("DLT", ""),
