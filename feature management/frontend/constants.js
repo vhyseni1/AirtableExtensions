@@ -12,21 +12,6 @@
 //   Stages      — thin reference ladder: order, phase, responsible/approver team
 //   Handshakes  — audit log of every promote / accept / return
 
-// ─── Branding ────────────────────────────────────────────────────────────────
-// This bundle ships NO client or vendor marks: no logos, no house palette, no
-// internal product names in the chrome. Re-label the extension by editing the
-// two strings below — do not add image assets to the repo.
-//
-// Note on option strings: values like `Feed-specific (MOR)` / `(MIDAS)` below
-// are the field contract, i.e. they must match the live base verbatim. They are
-// data, not branding — rename them in the base FIRST if they need to change,
-// then here, or the binding breaks.
-export const BRAND = {
-    appName: 'Feature Management',
-    subtitle: 'Pipeline Tracker',
-    review: 'Executive review',
-};
-
 export const TABLES = {
     teams: 'Teams',
     features: 'Features',
@@ -45,7 +30,11 @@ export const FIELDS = {
     },
     features: {
         name: 'Feature Name',
+        entity: 'Entity',
         initiative: 'Initiative',
+        milestone: 'Milestones', // link → Milestone table (name resolved via the link)
+        milestoneDue: 'Milestone Due Date',
+        dueDate: 'Due Date', // the feature's own due date (drives the timeline)
         owningTeam: 'Owning Team',
         status: 'Status',
         priority: 'Priority',
@@ -78,6 +67,11 @@ export const FIELDS = {
         blockedReason: 'Blocked Reason',
         comments: 'Comments / Handoff Notes',
         cycleNumber: 'Cycle Number',
+        // Self-referential links (Attributes → Attributes). Optional — absent
+        // fields read as empty. "Addressed By" = other attributes that resolve
+        // this one; "Forks Into" = downstream attributes this one spawns.
+        addressedBy: 'Addressed By',
+        forksInto: 'Forks Into',
     },
     stages: {
         name: 'Stage Name',
@@ -141,14 +135,18 @@ export const PHASE_GROUPS = [
     'Report',
 ];
 
+// Validated categorical palette (dataviz six checks: lightness band, chroma
+// floor, adjacent-pair CVD, contrast). Amber↔orange sits in the CVD floor band,
+// which is legal because phase colors are always paired with direct labels and
+// fills keep a 2px surface gap.
 export const PHASE_COLORS = {
-    Requirements: '#4f8cff',
-    Modelling: '#a371f7',
-    Transformation: '#2dd4bf',
-    Sourcing: '#34d399',
-    'Sub-ledger': '#fb923c',
-    Calculate: '#fbbf24',
-    Report: '#f87171',
+    Requirements: '#2a78d6',
+    Modelling: '#4a3aa7',
+    Transformation: '#0d9488',
+    Sourcing: '#008300',
+    'Sub-ledger': '#eb6834',
+    Calculate: '#c28a00',
+    Report: '#e34948',
 };
 
 export const STATUS_COLORS = {
@@ -215,40 +213,3 @@ export function maturityFraction(attr, currentCode) {
     if (i === -1 || path.length <= 1) return 0;
     return i / (path.length - 1);
 }
-
-
-// ─── Executive review (stories) ──────────────────────────────────────────────
-// Story cards auto-advance like a social "stories" reel. Times in milliseconds.
-export const STORY = {
-    slideMs: 9000,   // dwell time per card when playing
-    tickMs: 100,     // progress-bar refresh
-};
-
-// Risk model for the executive review — deliberately explicit, no black box.
-// requiredPace = remaining maturity points ÷ days left before Target Go-Live.
-// Read as "this feature must mature X% per day to hit its date".
-export const RISK = {
-    high: 2.0,   // ≥ 2.0 %/day  → High risk
-    watch: 1.0,  // ≥ 1.0 %/day  → Watch
-};
-
-export function featureRisk(pct, goLive, now) {
-    const gap = Math.max(0, 100 - (pct || 0));
-    if (!goLive) return {level: gap > 0 ? 'No date' : 'Delivered', days: null, pace: null, gap};
-    const days = Math.round((Date.parse(goLive + 'T00:00:00Z') - now) / 86400000);
-    if (gap === 0) return {level: 'Delivered', days, pace: 0, gap};
-    if (Number.isNaN(days)) return {level: 'No date', days: null, pace: null, gap};
-    if (days <= 0) return {level: 'Past date', days, pace: Infinity, gap};
-    const pace = gap / days;
-    const level = pace >= RISK.high ? 'High risk' : pace >= RISK.watch ? 'Watch' : 'On track';
-    return {level, days, pace, gap};
-}
-
-export const RISK_COLORS = {
-    'Past date': '#ef4444',
-    'High risk': '#f97316',
-    Watch: '#fbbf24',
-    'On track': '#22c55e',
-    Delivered: '#16a34a',
-    'No date': '#94a3b8',
-};

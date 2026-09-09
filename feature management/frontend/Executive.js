@@ -1,703 +1,601 @@
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {
-    BRAND,
-    PHASE_GROUPS,
-    PHASE_COLORS,
-    STATUS_COLORS,
-    STORY,
-    RISK,
-    RISK_COLORS,
-    featureRisk,
-} from './constants';
+import {expandRecord} from '@airtable/blocks/interface/ui';
+import {useEffect, useMemo, useRef, useState} from 'react';
+import {PHASE_GROUPS, PHASE_COLORS} from './constants';
+import {HealthDot} from './components';
+import {useDrill, DrillDrawer} from './drill';
+import {filterModel} from './data';
+import FilterBar, {EMPTY_FILTER} from './FilterBar';
+import Logo from './Logo';
 
-// ─── Executive review ────────────────────────────────────────────────────────
-// A stories reel: one full-bleed card per message, auto-advancing with a pip
-// rail, tap/keyboard navigation and a pause control. The deck is built from the
-// live model — every card states the numbers behind it, no card is decorative.
+// UBS-leaning palette: red lead accent, then deep neutrals/jewels for initiatives.
+const INITIATIVE_COLORS = ['#E60000', '#14274E', '#0F766E', '#6D28D9', '#B45309', '#0E7490'];
 
-const fmtPace = p =>
-    p === Infinity || p == null ? '—' : `${p.toFixed(p >= 10 ? 0 : 1)}%/day`;
-// One phrase covering every risk state, so no card ever prints "needs —".
-function paceLabel(risk) {
-    if (risk.level === 'Delivered') return 'complete';
-    if (risk.level === 'Past date') return `date passed, ${Math.round(risk.gap)}% left`;
-    if (risk.level === 'No date') return `no date, ${Math.round(risk.gap)}% left`;
-    return `needs ${fmtPace(risk.pace)}`;
+const fmtDate = ms => (ms == null ? 'â€”' : new Date(ms).toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC'}));
+const fmtShort = ms => new Date(ms).toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: '2-digit', timeZone: 'UTC'});
+
+// â”€â”€ Count-up number â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function useCountUp(target, ms = 850) {
+    const [v, setV] = useState(0);
+    useEffect(() => {
+        let raf;
+        const start = performance.now();
+        const tick = now => {
+            const t = Math.min(1, (now - start) / ms);
+            setV(Math.round(target * (t * (2 - t)))); // easeOutQuad
+            if (t < 1) raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(raf);
+    }, [target, ms]);
+    return v;
 }
-const plural = (n, one, many) => `${n} ${n === 1 ? one : many || one + 's'}`;
-// Days-to-date reads as prose: "in 24 days" / "12 days ago", never a bare minus.
-const fmtDays = d =>
-    d == null || Number.isNaN(d) ? 'no date' : d === 0 ? 'today' : d > 0 ? `in ${plural(d, 'day')}` : `${plural(-d, 'day')} ago`;
-
-// ─── Card chrome ─────────────────────────────────────────────────────────────
-function Card({kicker, title, lede, accent, children, footnote}) {
-    return (
-        <div className="ex-card" style={{'--ex-accent': accent || '#38bdf8'}}>
-            <div className="ex-card-head">
-                <div className="ex-kicker">{kicker}</div>
-                <h2 className="ex-title">{title}</h2>
-                {lede && <p className="ex-lede">{lede}</p>}
-            </div>
-            <div className="ex-card-body">
-                <div className="ex-body-inner">{children}</div>
-            </div>
-            {footnote && <div className="ex-footnote">{footnote}</div>}
-        </div>
-    );
+function CountUp({value, suffix}) {
+    return <>{useCountUp(value)}{suffix || ''}</>;
 }
 
-function Ring({pct, accent}) {
-    const r = 76;
+// â”€â”€ Animated SVG progress donut â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function Donut({pct, size = 132, stroke = 13, color = '#E60000', onClick, children}) {
+    const r = (size - stroke) / 2;
     const c = 2 * Math.PI * r;
+    const [p, setP] = useState(0);
+    useEffect(() => {
+        const id = requestAnimationFrame(() => setP(pct));
+        return () => cancelAnimationFrame(id);
+    }, [pct]);
+    const off = c * (1 - Math.max(0, Math.min(100, p)) / 100);
     return (
-        <div className="ex-ring">
-            <svg viewBox="0 0 180 180" width="180" height="180" aria-hidden>
-                <circle cx="90" cy="90" r={r} className="ex-ring-track" />
+        <div className={`fp-donut${onClick ? ' clickable' : ''}`} style={{width: size, height: size}} onClick={onClick}>
+            <svg width={size} height={size} aria-hidden>
+                <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#EDF0F4" strokeWidth={stroke} />
                 <circle
-                    cx="90"
-                    cy="90"
-                    r={r}
-                    className="ex-ring-fill"
-                    stroke={accent}
-                    strokeDasharray={`${(c * pct) / 100} ${c}`}
+                    cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+                    strokeLinecap="round" strokeDasharray={c} strokeDashoffset={off}
+                    transform={`rotate(-90 ${size / 2} ${size / 2})`} style={{transition: 'stroke-dashoffset .9s cubic-bezier(.22,.61,.36,1)'}}
                 />
             </svg>
-            <div className="ex-ring-label">
-                <div className="ex-huge">{pct}%</div>
-                <div className="ex-ring-sub">overall maturity</div>
-            </div>
+            <div className="fp-donut-center">{children}</div>
         </div>
     );
 }
 
-function StatRow({items}) {
+function PhaseStrip({phase, mounted}) {
+    const total = PHASE_GROUPS.reduce((s, p) => s + (phase[p] || 0), 0) || 1;
     return (
-        <div className="ex-stats">
-            {items.map(s => (
-                <div className="ex-stat" key={s.label}>
-                    <div className="ex-stat-value" style={s.color ? {color: s.color} : undefined}>
-                        {s.value}
-                    </div>
-                    <div className="ex-stat-label">{s.label}</div>
-                </div>
-            ))}
+        <div className="fp-phasestrip" role="img" aria-label="Phase distribution">
+            {PHASE_GROUPS.map(p => {
+                const w = ((phase[p] || 0) / total) * 100;
+                return w > 0 ? <span key={p} title={`${p}: ${phase[p]}`} style={{width: mounted ? `${w}%` : 0, background: PHASE_COLORS[p]}} /> : null;
+            })}
         </div>
     );
 }
 
-// Horizontal bar row — value, label and a proportional fill.
-function BarRow({label, value, max, color, note}) {
-    return (
-        <div className="ex-bar-row">
-            <div className="ex-bar-label">{label}</div>
-            <div className="ex-bar-track">
-                <div
-                    className="ex-bar-fill"
-                    style={{width: `${max ? (value / max) * 100 : 0}%`, backgroundColor: color}}
-                />
-            </div>
-            <div className="ex-bar-value">{value}</div>
-            {note && <div className="ex-bar-note">{note}</div>}
-        </div>
-    );
-}
+// â”€â”€ Delivery timeline â€” markers on a line, labels stacked in clean lanes â”€â”€â”€â”€â”€â”€â”€
+const TL_ROW = 84;   // lane vertical pitch â€” must exceed the card height
+const CARD_W = 190;  // fixed card width â€” used for exact horizontal packing
+function Timeline({features, colorOf, onPick, onDrill}) {
+    const ref = useRef(null);
+    const [w, setW] = useState(0);
+    // A single click drills in when we can (onDrill), otherwise it opens the
+    // record/attribute drawer (onPick). No double-click â€” one click, one action.
+    const onFlag = f => { if (onDrill) onDrill(f); else onPick(f); };
+    useEffect(() => {
+        const el = ref.current;
+        if (!el) return undefined;
+        const ro = new ResizeObserver(entries => setW(entries[0].contentRect.width));
+        ro.observe(el);
+        setW(el.clientWidth);
+        return () => ro.disconnect();
+    }, []);
 
-// Ranking: overdue first (most work left = worst), then live features by the
-// pace they need, then undated, then delivered. Sorting on pace alone would put
-// a 96%-complete overdue feature above a 0%-complete one.
-const RISK_TIER = {'Past date': 0, 'High risk': 1, Watch: 1, 'On track': 1, 'No date': 2, Delivered: 3};
-function byRisk(a, b) {
-    const ta = RISK_TIER[a.risk.level] ?? 9;
-    const tb = RISK_TIER[b.risk.level] ?? 9;
-    if (ta !== tb) return ta - tb;
-    if (ta === 1) return (b.risk.pace || 0) - (a.risk.pace || 0);
-    return (b.risk.gap || 0) - (a.risk.gap || 0);
-}
+    const dated = features.filter(f => f.goLiveMs != null).sort((a, b) => a.goLiveMs - b.goLiveMs);
+    const now = Date.now();
+    if (dated.length === 0) return <div className="fp-muted">No target go-live dates set.</div>;
 
-function RiskPill({level}) {
-    return (
-        <span className="ex-pill" style={{backgroundColor: RISK_COLORS[level] || '#64748b'}}>
-            {level}
-        </span>
-    );
-}
+    const min = Math.min(now, dated[0].goLiveMs);
+    const max = Math.max(now, dated[dated.length - 1].goLiveMs);
+    const pad = (max - min) * 0.07 || 86400000 * 20;
+    const start = min - pad;
+    const end = max + pad;
+    const span = end - start || 1;
+    const pct = ms => ((ms - start) / span) * 100;
 
-// ─── Cards ───────────────────────────────────────────────────────────────────
-function CoverCard({model, asOf}) {
-    const {kpis, attrs, features, initiatives} = model;
-    return (
-        <Card
-            kicker={BRAND.review}
-            title={`${BRAND.appName} — portfolio at ${kpis.overallPct}%`}
-            lede={`Every feature, attribute and handshake in the base as of ${asOf}.`}
-            accent="#38bdf8"
-            footnote="Maturity = how far each attribute has travelled its own stage path, averaged across the portfolio."
-        >
-            <div className="ex-cover">
-                <Ring pct={kpis.overallPct} accent="#38bdf8" />
-                <StatRow
-                    items={[
-                        {label: 'Initiatives', value: Object.keys(initiatives).length},
-                        {label: 'Features', value: features.length},
-                        {label: 'Attributes', value: attrs.length},
-                        {label: 'Delivered', value: attrs.filter(a => a.isDelivered).length, color: '#4ade80'},
-                        {label: 'Blocked', value: kpis.blocked, color: '#f87171'},
-                        {label: 'Awaiting review', value: kpis.awaitingReview, color: '#fbbf24'},
-                    ]}
-                />
-            </div>
-        </Card>
-    );
-}
-
-function PipelineCard({model}) {
-    const max = Math.max(1, ...PHASE_GROUPS.map(p => model.phaseCounts[p] || 0));
-    const total = model.attrs.length || 1;
-    return (
-        <Card
-            kicker="Where the work sits"
-            title="Attributes by phase"
-            lede={`All ${model.attrs.length} attributes, each counted once at its current stage.`}
-            accent="#a371f7"
-            footnote="Weight at the front of the pipeline means downstream stages have not been exercised yet."
-        >
-            {PHASE_GROUPS.map(p => (
-                <BarRow
-                    key={p}
-                    label={p}
-                    value={model.phaseCounts[p] || 0}
-                    max={max}
-                    color={PHASE_COLORS[p]}
-                    note={`${Math.round(((model.phaseCounts[p] || 0) / total) * 100)}%`}
-                />
-            ))}
-        </Card>
-    );
-}
-
-function InitiativeCard({model, name, features, now}) {
-    const rows = features
-        .map(f => {
-            const agg = model.byFeature[f.name] || {pct: 0, total: 0, blocked: 0};
-            return {f, agg, risk: featureRisk(agg.pct, f.goLive, now)};
-        })
-        .sort((a, b) => a.agg.pct - b.agg.pct);
-    const avg = rows.length ? Math.round(rows.reduce((s, r) => s + r.agg.pct, 0) / rows.length) : 0;
-    const attrs = rows.reduce((s, r) => s + r.agg.total, 0);
-    const blocked = rows.reduce((s, r) => s + (r.agg.blocked || 0), 0);
-    const dated = rows.filter(r => r.f.goLive).sort((a, b) => (a.f.goLive < b.f.goLive ? -1 : 1));
-    const nearest = dated.length ? dated[0] : null;
-
-    return (
-        <Card
-            kicker="Initiative"
-            title={name}
-            lede={`${plural(rows.length, 'feature')} · ${plural(attrs, 'attribute')} · ${avg}% average maturity`}
-            accent="#2dd4bf"
-            footnote={
-                nearest
-                    ? `Nearest go-live: ${nearest.f.name} on ${nearest.f.goLive} — ${fmtDays(nearest.risk.days)}.`
-                    : 'No target go-live dates set on this initiative.'
-            }
-        >
-            {blocked > 0 && (
-                <div className="ex-alert">{plural(blocked, 'attribute')} blocked inside this initiative.</div>
-            )}
-            <div className="ex-list">
-                {rows.map(({f, agg, risk}) => (
-                    <div className="ex-row" key={f.id}>
-                        <div className="ex-row-main">
-                            <div className="ex-row-title">{f.name}</div>
-                            <div className="ex-row-sub">
-                                {f.priority && <span className="ex-tag">{f.priority}</span>}
-                                <span className="ex-tag">{plural(agg.total, 'attribute')}</span>
-                                {f.goLive && <span className="ex-tag">🏁 {f.goLive}</span>}
-                                <RiskPill level={risk.level} />
-                            </div>
-                        </div>
-                        <div className="ex-row-bar">
-                            <div className="ex-bar-track">
-                                <div
-                                    className="ex-bar-fill"
-                                    style={{width: `${agg.pct}%`, backgroundColor: RISK_COLORS[risk.level]}}
-                                />
-                            </div>
-                        </div>
-                        <div className="ex-row-pct">{agg.pct}%</div>
-                    </div>
-                ))}
-            </div>
-        </Card>
-    );
-}
-
-function RiskCard({model, now}) {
-    const rows = model.features
-        .map(f => {
-            const agg = model.byFeature[f.name] || {pct: 0, total: 0};
-            return {f, agg, risk: featureRisk(agg.pct, f.goLive, now)};
-        })
-        .sort(byRisk);
-    const pressing = rows.filter(r => r.risk.level === 'Past date' || r.risk.level === 'High risk');
-
-    return (
-        <Card
-            kicker="Delivery risk"
-            title={
-                pressing.length
-                    ? `${plural(pressing.length, 'feature')} cannot hit the date at today's maturity`
-                    : 'Every feature is pacing to its date'
-            }
-            lede="Required pace = remaining maturity ÷ days left. Ranked hardest first."
-            accent="#f97316"
-            footnote={`Thresholds: ≥ ${RISK.high}%/day = high risk, ≥ ${RISK.watch}%/day = watch. Pace assumes maturity accrues evenly — it is a flag, not a forecast.`}
-        >
-            <div className="ex-list">
-                {rows.map(({f, agg, risk}) => (
-                    <div className="ex-row" key={f.id}>
-                        <div className="ex-row-main">
-                            <div className="ex-row-title">{f.name}</div>
-                            <div className="ex-row-sub">
-                                <span className="ex-tag">{f.initiative}</span>
-                                {f.goLive ? (
-                                    <span className="ex-tag">
-                                        🏁 {f.goLive} · {fmtDays(risk.days)}
-                                    </span>
-                                ) : (
-                                    <span className="ex-tag">no date</span>
-                                )}
-                                <span className="ex-tag">{paceLabel(risk)}</span>
-                                <RiskPill level={risk.level} />
-                            </div>
-                        </div>
-                        <div className="ex-row-bar">
-                            <div className="ex-bar-track">
-                                <div
-                                    className="ex-bar-fill"
-                                    style={{width: `${agg.pct}%`, backgroundColor: RISK_COLORS[risk.level]}}
-                                />
-                            </div>
-                        </div>
-                        <div className="ex-row-pct">{agg.pct}%</div>
-                    </div>
-                ))}
-                {rows.length === 0 && <div className="ex-empty">No features in the base.</div>}
-            </div>
-        </Card>
-    );
-}
-
-function BlockedCard({model}) {
-    const blocked = model.attrs.filter(a => a.isBlocked);
-    const byTeam = {};
-    blocked.forEach(a => (byTeam[a.assignedTeamName || '(unassigned)'] = (byTeam[a.assignedTeamName || '(unassigned)'] || 0) + 1));
-    return (
-        <Card
-            kicker="Blocked"
-            title={blocked.length ? `${plural(blocked.length, 'attribute')} stopped` : 'Nothing is blocked'}
-            lede={
-                blocked.length
-                    ? `Sitting with ${plural(Object.keys(byTeam).length, 'team')}. Each needs a named owner and a date.`
-                    : 'No attribute currently carries Blocked status.'
-            }
-            accent="#ef4444"
-            footnote={blocked.length ? 'Blocked work does not advance and does not appear in any team’s ready-to-push lane.' : undefined}
-        >
-            <div className="ex-list">
-                {blocked.map(a => (
-                    <div className="ex-row block" key={a.id}>
-                        <div className="ex-row-main">
-                            <div className="ex-row-title">
-                                {a.businessName || a.attributeId}
-                                <span className="ex-row-id">{a.attributeId}</span>
-                            </div>
-                            <div className="ex-row-sub">
-                                <span className="ex-tag">{a.featureName}</span>
-                                <span className="ex-tag">{a.currentStageName}</span>
-                                <span className="ex-tag">{a.assignedTeamName || 'unassigned'}</span>
-                                {a.dueDate && <span className="ex-tag">due {a.dueDate}</span>}
-                            </div>
-                            <div className="ex-reason">{a.blockedReason || 'No reason recorded.'}</div>
-                        </div>
-                    </div>
-                ))}
-                {blocked.length === 0 && <div className="ex-empty">Clean board.</div>}
-            </div>
-        </Card>
-    );
-}
-
-function DecisionCard({model}) {
-    const waiting = model.attrs.filter(a => a.isAwaitingReview);
-    const byTeam = {};
-    waiting.forEach(a => {
-        const k = a.approverTeamName || '(no approver set)';
-        (byTeam[k] = byTeam[k] || []).push(a);
+    // Greedy lane packing: a label drops to the next lane whenever its fixed-width
+    // card would collide with the last one placed in that lane. Same-lane cards are
+    // therefore horizontally clear, and lanes are TL_ROW apart vertically â€” so no
+    // card can overlap another.
+    const W = w || 900;
+    const laneRight = [];
+    const placed = dated.map(f => {
+        const cx = (pct(f.goLiveMs) / 100) * W;
+        const left = cx - CARD_W / 2;
+        let lane = 0;
+        while (lane < laneRight.length && left < laneRight[lane] + 14) lane++;
+        laneRight[lane] = cx + CARD_W / 2;
+        return {f, lane};
     });
-    const teams = Object.keys(byTeam).sort((a, b) => byTeam[b].length - byTeam[a].length);
-    const max = Math.max(1, ...teams.map(t => byTeam[t].length));
+    const rows = Math.max(1, laneRight.length);
+
+    const ticks = [];
+    const d = new Date(start);
+    d.setDate(1); d.setHours(0, 0, 0, 0);
+    while (d.getTime() <= end) { ticks.push(d.getTime()); d.setMonth(d.getMonth() + 1); }
+
     return (
-        <Card
-            kicker="Decision queue"
-            title={waiting.length ? `${plural(waiting.length, 'approval')} waiting` : 'No approvals outstanding'}
-            lede={waiting.length ? 'Who owes a decision, and on what.' : 'Nothing is sitting in review.'}
-            accent="#fbbf24"
-            footnote={waiting.length ? 'Every one of these is a team that can unblock the next stage today.' : undefined}
-        >
-            {teams.map(t => (
-                <div className="ex-group" key={t}>
-                    <BarRow label={t} value={byTeam[t].length} max={max} color="#fbbf24" />
-                    <div className="ex-group-items">
-                        {byTeam[t].map(a => (
-                            <span className="ex-tag" key={a.id}>
-                                {a.attributeId} · {a.featureName} · {a.currentStageName}
-                            </span>
+        <div className="fp-timeline" ref={ref} style={{minHeight: 92 + rows * TL_ROW}}>
+            {/* month grid â€” quarter starts drawn stronger so start dates read easily */}
+            <div className="fp-tl-grid" aria-hidden>
+                {ticks.map(t => {
+                    const dt = new Date(t);
+                    const q = dt.getUTCMonth() % 3 === 0;
+                    return <span key={t} className={q ? 'q' : ''} style={{left: `${pct(t)}%`}} />;
+                })}
+            </div>
+            <div className="fp-timeline-track">
+                {ticks.map(t => {
+                    const dt = new Date(t);
+                    const q = dt.getUTCMonth() % 3 === 0;
+                    return (
+                        <div key={t} className={`fp-tl-tick${q ? ' q' : ''}`} style={{left: `${pct(t)}%`}}>
+                            <span>{dt.toLocaleDateString('en-GB', {month: 'short', year: '2-digit', timeZone: 'UTC'})}</span>
+                        </div>
+                    );
+                })}
+                <div className="fp-tl-today" style={{left: `${pct(now)}%`, bottom: -(rows * TL_ROW + 14)}}><span>Today</span></div>
+                {placed.map(({f, lane}) => (
+                    <div
+                        key={f.id}
+                        className="fp-tl-flag"
+                        style={{left: `${pct(f.goLiveMs)}%`, zIndex: 40 - lane}}
+                        title={`${f.name} Â· ${f.initiative} Â· go-live ${fmtDate(f.goLiveMs)} Â· ${f.pct}%${onDrill ? '\n(click to drill in)' : ''}`}
+                        onClick={() => onFlag(f)}
+                    >
+                        <span className="fp-tl-marker" style={{borderColor: colorOf(f.initiative)}} />
+                        <span className="fp-tl-connector" style={{height: lane * TL_ROW + 10}} />
+                        <span className="fp-tl-label">
+                            <span className="fp-tl-feat">{f.name}</span>
+                            <span className="fp-tl-meta">due {fmtShort(f.goLiveMs)} Â· {f.pct}%</span>
+                            <span className="fp-tl-bar"><i style={{width: `${f.pct}%`, background: colorOf(f.initiative)}} /></span>
+                        </span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+// â”€â”€ Feature swimlane â€” one lane per Milestone; feature cards placed on a shared
+// time axis by the feature's Due Date. Each card shows the feature name, its
+// attribute count and maturity; clicking a card opens the side panel. Each lane
+// shows the milestone span: earliest feature date â†’ the milestone's Due Date.
+const SL_GUTTER = 180; // milestone label column width
+const SL_CARD_W = 208; // feature card width (for horizontal packing)
+const SL_ROW = 80;     // vertical pitch of packed cards inside a lane
+const SL_PAD = 18;     // lane padding
+function FeatureSwimlane({items, onPick}) {
+    const ref = useRef(null);
+    const [w, setW] = useState(0);
+    useEffect(() => {
+        const el = ref.current;
+        if (!el) return undefined;
+        const ro = new ResizeObserver(entries => setW(entries[0].contentRect.width));
+        ro.observe(el);
+        setW(el.clientWidth);
+        return () => ro.disconnect();
+    }, []);
+
+    if (!items.length) return <div className="fp-muted">No features here.</div>;
+    const dated = items.filter(f => f.goLiveMs != null);
+    if (dated.length === 0) return <div className="fp-muted">No due dates set on these features.</div>;
+
+    // Group features into milestone lanes; order lanes by earliest feature date.
+    const groups = {};
+    items.forEach(f => { const k = f.milestone || 'No milestone'; (groups[k] = groups[k] || []).push(f); });
+    const laneColor = i => INITIATIVE_COLORS[i % INITIATIVE_COLORS.length];
+    const laneNames = Object.keys(groups).sort((a, b) => {
+        if (a === 'No milestone') return 1;
+        if (b === 'No milestone') return -1;
+        const da = Math.min(...groups[a].map(f => (f.goLiveMs == null ? Infinity : f.goLiveMs)));
+        const db = Math.min(...groups[b].map(f => (f.goLiveMs == null ? Infinity : f.goLiveMs)));
+        return da - db;
+    });
+
+    const now = Date.now();
+    const allMs = dated.map(f => f.goLiveMs);
+    // Include milestone due dates in the axis so their span bars stay in bounds.
+    const dueAll = items.map(f => f.milestoneDueMs).filter(x => x != null);
+    const min = Math.min(now, ...allMs, ...dueAll);
+    const max = Math.max(now, ...allMs, ...dueAll);
+    const pad = (max - min) * 0.07 || 86400000 * 20;
+    const start = min - pad, end = max + pad, span = end - start || 1;
+    const W = w || 900;
+    const trackW = Math.max(240, W - SL_GUTTER);
+    const RIGHT = SL_GUTTER + trackW;
+    const xOf = ms => SL_GUTTER + ((ms - start) / span) * trackW;
+    const clampX = ms => Math.max(SL_GUTTER, Math.min(xOf(ms), RIGHT));
+
+    const ticks = [];
+    const d = new Date(start);
+    d.setUTCDate(1); d.setUTCHours(0, 0, 0, 0);
+    while (d.getTime() <= end) { ticks.push(d.getTime()); d.setUTCMonth(d.getUTCMonth() + 1); }
+
+    const lanes = laneNames.map((name, li) => {
+        const feats = groups[name].filter(f => f.goLiveMs != null).sort((a, b) => a.goLiveMs - b.goLiveMs);
+        const subRight = [];
+        const placed = feats.map(f => {
+            let x = xOf(f.goLiveMs);
+            if (x + SL_CARD_W > SL_GUTTER + trackW) x = SL_GUTTER + trackW - SL_CARD_W;
+            if (x < SL_GUTTER) x = SL_GUTTER;
+            let row = 0;
+            while (row < subRight.length && x < subRight[row] + 8) row++;
+            subRight[row] = x + SL_CARD_W;
+            return {f, x, row};
+        });
+        const rows = Math.max(1, subRight.length);
+        const startMs = feats.length ? feats[0].goLiveMs : null; // milestone starts at the earliest feature
+        const dueList = groups[name].map(f => f.milestoneDueMs).filter(x => x != null);
+        const dueMs = dueList.length ? Math.max(...dueList) : null;
+        return {name, color: laneColor(li), placed, rows, height: rows * SL_ROW + SL_PAD, count: groups[name].length, startMs, dueMs};
+    });
+    let yy = 0;
+    const tops = lanes.map(l => { const t = yy; yy += l.height; return t; });
+    const totalH = yy;
+
+    return (
+        <div className="fp-swim" ref={ref}>
+            <div className="fp-swim-axis" style={{marginLeft: SL_GUTTER}}>
+                {ticks.map(t => {
+                    const q = new Date(t).getUTCMonth() % 3 === 0;
+                    return (
+                        <span key={t} className={`fp-swim-tick${q ? ' q' : ''}`} style={{left: `${((t - start) / span) * 100}%`}}>
+                            {new Date(t).toLocaleDateString('en-GB', {month: 'short', year: '2-digit', timeZone: 'UTC'})}
+                        </span>
+                    );
+                })}
+            </div>
+            <div className="fp-swim-body" style={{height: totalH}}>
+                {/* month grid spanning all lanes (quarter starts stronger) */}
+                {ticks.map(t => {
+                    const q = new Date(t).getUTCMonth() % 3 === 0;
+                    return <div key={`g-${t}`} className={`fp-swim-grid${q ? ' q' : ''}`} style={{left: xOf(t)}} />;
+                })}
+                <div className="fp-swim-today" style={{left: xOf(now)}} title="Today"><span>Today</span></div>
+                {lanes.map((l, i) => (
+                    <div key={l.name} className={`fp-swim-lane${i % 2 ? ' alt' : ''}`} style={{top: tops[i], height: l.height}}>
+                        <div className="fp-swim-label" style={{width: SL_GUTTER}}>
+                            <span className="fp-swim-mname" title={l.name} style={{color: l.color}}>{l.name}</span>
+                            <span className="fp-swim-mcount">{l.count} feature{l.count === 1 ? '' : 's'}{l.dueMs != null ? ` Â· due ${fmtShort(l.dueMs)}` : ''}</span>
+                        </div>
+                        {/* milestone span bar: earliest feature date â†’ milestone due date */}
+                        {l.startMs != null && l.dueMs != null && l.dueMs > l.startMs && (
+                            <div className="fp-swim-span" style={{left: clampX(l.startMs), width: Math.max(2, clampX(l.dueMs) - clampX(l.startMs)), background: l.color}} />
+                        )}
+                        {l.placed.map(({f, x, row}) => (
+                            <div
+                                key={f.id}
+                                className="fp-swim-card clickable"
+                                style={{left: x, top: row * SL_ROW + 5, width: SL_CARD_W - 10}}
+                                title={`${f.name} Â· ${f.total} attributes Â· ${f.pct}% mature Â· due ${fmtDate(f.goLiveMs)}`}
+                                onClick={() => onPick(f)}
+                            >
+                                <span className="fp-swim-fname">{f.name}</span>
+                                <span className="fp-swim-fmeta">due {fmtShort(f.goLiveMs)} Â· {f.pct}%</span>
+                                <span className="fp-swim-fbar"><i style={{width: `${f.pct}%`, background: l.color}} /></span>
+                            </div>
                         ))}
                     </div>
-                </div>
-            ))}
-            {waiting.length === 0 && <div className="ex-empty">Queue empty.</div>}
-        </Card>
-    );
-}
-
-function ReworkCard({model}) {
-    const returns = model.handshakes.filter(h => h.action === 'Rejected / Returned');
-    const recycled = model.attrs.filter(a => (a.cycleNumber || 1) > 1);
-    const totalHandshakes = model.handshakes.length || 1;
-    const rate = Math.round((returns.length / totalHandshakes) * 100);
-    const byTeam = {};
-    returns.forEach(h => (byTeam[h.toTeam || '—'] = (byTeam[h.toTeam || '—'] || 0) + 1));
-    const teams = Object.keys(byTeam).sort((a, b) => byTeam[b] - byTeam[a]);
-    const max = Math.max(1, ...teams.map(t => byTeam[t]));
-    return (
-        <Card
-            kicker="Rework"
-            title={`${rate}% of handshakes came back`}
-            lede={`${plural(returns.length, 'return')} out of ${plural(model.handshakes.length, 'handshake')} · ${plural(recycled.length, 'attribute')} now past cycle 1.`}
-            accent="#fb7185"
-            footnote="Returns are the honest quality signal: they cost a full stage cycle each."
-        >
-            {teams.length > 0 && <div className="ex-subhead">Returned to</div>}
-            {teams.map(t => (
-                <BarRow key={t} label={t} value={byTeam[t]} max={max} color="#fb7185" />
-            ))}
-            {recycled.length > 0 && <div className="ex-subhead">Attributes past cycle 1</div>}
-            <div className="ex-group-items">
-                {recycled.map(a => (
-                    <span className="ex-tag" key={a.id}>
-                        {a.attributeId} · {a.featureName} · cycle {a.cycleNumber}
-                    </span>
                 ))}
             </div>
-            {returns.length === 0 && recycled.length === 0 && (
-                <div className="ex-empty">No returns recorded — every handshake went through first time.</div>
-            )}
-        </Card>
+        </div>
     );
 }
 
-function MomentumCard({model}) {
-    // Bucket the handshake log by calendar month so the card works on any date
-    // range in the base (not just "the last 30 days").
-    const months = {};
-    model.handshakes.forEach(h => {
-        const m = (h.timestamp || '').slice(0, 7);
-        if (!m) return;
-        const b = (months[m] = months[m] || {approved: 0, returned: 0, submitted: 0, total: 0});
-        if (h.action === 'Approved') b.approved += 1;
-        else if (h.action === 'Rejected / Returned') b.returned += 1;
-        else b.submitted += 1;
-        b.total += 1;
+// Entity card â€” aggregates across the entity; lists its initiatives (capped).
+const CARD_CAP = 10;
+function EntityCard({e, colorOf, mounted, model, openInitiatives, openFeatures}) {
+    const [showAll, setShowAll] = useState(false);
+    const feats = e.initiatives.flatMap(i => i.features);
+    const phase = {};
+    PHASE_GROUPS.forEach(p => (phase[p] = 0));
+    feats.forEach(f => {
+        const bf = model.byFeature[f.name];
+        if (bf) PHASE_GROUPS.forEach(p => (phase[p] += bf.phase[p] || 0));
     });
-    const keys = Object.keys(months).sort().slice(-6);
-    const max = Math.max(1, ...keys.map(k => months[k].total));
-    const totals = keys.reduce(
-        (s, k) => ({
-            approved: s.approved + months[k].approved,
-            returned: s.returned + months[k].returned,
-            submitted: s.submitted + months[k].submitted,
-        }),
-        {approved: 0, returned: 0, submitted: 0},
-    );
+    const onTrack = feats.filter(f => f.health === 'on-track');
+    const atRisk = feats.filter(f => f.health === 'at-risk' || f.health === 'blocked');
+    const delivered = feats.filter(f => f.health === 'delivered');
+    const goLives = feats.map(f => f.goLiveMs).filter(x => x != null);
+    const c = colorOf(e.name);
+    const shown = showAll ? e.initiatives : e.initiatives.slice(0, CARD_CAP);
+
     return (
-        <Card
-            kicker="Momentum"
-            title={`${plural(model.handshakes.length, 'handshake')} on the record`}
-            lede={keys.length ? `Stage hand-offs by month, most recent ${plural(keys.length, 'month')}.` : 'No handshakes logged yet.'}
-            accent="#4ade80"
-            footnote="A handshake is a stage crossing a team boundary — the only movement the base actually records."
-        >
-            {keys.map(k => (
-                <div className="ex-month" key={k}>
-                    <div className="ex-bar-label">{k}</div>
-                    <div className="ex-bar-track ex-stack">
-                        <div
-                            className="ex-bar-fill"
-                            style={{width: `${(months[k].approved / max) * 100}%`, backgroundColor: '#22c55e'}}
-                            title={`Approved: ${months[k].approved}`}
-                        />
-                        <div
-                            className="ex-bar-fill"
-                            style={{width: `${(months[k].submitted / max) * 100}%`, backgroundColor: STATUS_COLORS['Submitted for Review']}}
-                            title={`Submitted: ${months[k].submitted}`}
-                        />
-                        <div
-                            className="ex-bar-fill"
-                            style={{width: `${(months[k].returned / max) * 100}%`, backgroundColor: '#fb7185'}}
-                            title={`Returned: ${months[k].returned}`}
-                        />
-                    </div>
-                    <div className="ex-bar-value">{months[k].total}</div>
+        <div className="fp-initcard" style={{background: `linear-gradient(180deg, color-mix(in srgb, ${c} 18%, #fff) 0%, var(--fp-card) 76px)`}}>
+            <div className="fp-initcard-head">
+                <div className="clickable" onClick={() => openInitiatives(e.name, e.initiatives)}>
+                    <div className="fp-initcard-kicker">Entity</div>
+                    <div className="fp-initcard-name">{e.name}</div>
+                    <div className="fp-initcard-meta">{e.initiatives.length} initiative{e.initiatives.length === 1 ? '' : 's'} Â· {e.featureCount} features Â· {e.attrCount} attributes</div>
                 </div>
-            ))}
-            <StatRow
-                items={[
-                    {label: 'Approved', value: totals.approved, color: '#4ade80'},
-                    {label: 'Submitted', value: totals.submitted, color: '#fbbf24'},
-                    {label: 'Returned', value: totals.returned, color: '#fb7185'},
-                ]}
-            />
-        </Card>
-    );
-}
-
-function AsksCard({model, now}) {
-    const blocked = model.attrs.filter(a => a.isBlocked);
-    const waiting = model.attrs.filter(a => a.isAwaitingReview);
-    const risky = model.features
-        .map(f => ({f, risk: featureRisk((model.byFeature[f.name] || {}).pct || 0, f.goLive, now)}))
-        .filter(r => r.risk.level === 'High risk' || r.risk.level === 'Past date')
-        .sort(byRisk);
-    const blockedTeams = Array.from(new Set(blocked.map(a => a.assignedTeamName).filter(Boolean)));
-    const waitingTeams = Array.from(new Set(waiting.map(a => a.approverTeamName).filter(Boolean)));
-
-    const asks = [
-        blocked.length && {
-            n: 1,
-            head: `Unblock ${plural(blocked.length, 'attribute')}`,
-            body: `Held by ${blockedTeams.join(', ') || 'unassigned owners'}. Each needs an owner and a date, or an explicit decision to descope.`,
-            color: '#f87171',
-        },
-        waiting.length && {
-            n: 2,
-            head: `Clear ${plural(waiting.length, 'approval')}`,
-            body: `${waitingTeams.join(', ') || 'No approver team set'} — each approval releases the next stage immediately.`,
-            color: '#fbbf24',
-        },
-        risky.length && {
-            n: 3,
-            head: `Re-plan or confirm ${plural(risky.length, 'go-live date')}`,
-            body: risky.map(r => `${r.f.name} — ${r.f.goLive}, ${paceLabel(r.risk)}`).join(' · '),
-            color: '#f97316',
-        },
-    ].filter(Boolean);
-
-    return (
-        <Card
-            kicker="The ask"
-            title={
-                asks.length
-                    ? `${plural(asks.length, 'decision')} move${asks.length === 1 ? 's' : ''} the portfolio`
-                    : 'Nothing is waiting on this forum'
-            }
-            lede={asks.length ? 'Everything below is actionable this week.' : 'No blockers, no pending approvals, no date at risk.'}
-            accent="#38bdf8"
-            footnote={`Generated from the live base — ${model.attrs.length} attributes, ${model.handshakes.length} handshakes.`}
-        >
-            <div className="ex-asks">
-                {asks.map((a, i) => (
-                    <div className="ex-ask" key={a.head} style={{borderLeftColor: a.color}}>
-                        <div className="ex-ask-n">{i + 1}</div>
-                        <div>
-                            <div className="ex-ask-head">{a.head}</div>
-                            <div className="ex-ask-body">{a.body}</div>
-                        </div>
-                    </div>
-                ))}
-                {asks.length === 0 && <div className="ex-empty">Board is clean.</div>}
+                <Donut pct={e.pct} size={84} stroke={10} color={c} onClick={() => openInitiatives(e.name, e.initiatives)}>
+                    <div className="fp-donut-pct sm"><CountUp value={e.pct} suffix="%" /></div>
+                </Donut>
             </div>
-        </Card>
+
+            <div className="fp-initcard-rag">
+                <span className="clickable" onClick={() => openFeatures(`${e.name} Â· on track`, onTrack)}><HealthDot health="on-track" /> {onTrack.length} on track</span>
+                <span className="clickable" onClick={() => openFeatures(`${e.name} Â· at risk`, atRisk)}><HealthDot health="at-risk" /> {atRisk.length} at risk</span>
+                <span className="clickable" onClick={() => openFeatures(`${e.name} Â· delivered`, delivered)}><HealthDot health="delivered" /> {delivered.length} done</span>
+            </div>
+
+            <PhaseStrip phase={phase} mounted={mounted} />
+            <div className="fp-initcard-next">Next go-live: <b>{fmtDate(goLives.length ? Math.min(...goLives) : null)}</b></div>
+
+            <ul className="fp-initcard-feats">
+                {shown.map(it => (
+                    <li key={it.name} className="clickable" onClick={() => openFeatures(it.name, it.features)} title="See features">
+                        <span className="fp-feat-dot" style={{background: c}} />
+                        <span className="fp-feat-name">{it.name}</span>
+                        <span className="fp-feat-bar"><i style={{width: mounted ? `${it.pct}%` : 0, background: c}} /></span>
+                        <span className="fp-feat-pct">{it.pct}%</span>
+                    </li>
+                ))}
+            </ul>
+            {e.initiatives.length > CARD_CAP && (
+                <button type="button" className="fp-showmore" onClick={() => setShowAll(s => !s)}>
+                    {showAll ? 'Show less' : `Show ${e.initiatives.length - CARD_CAP} more`}
+                </button>
+            )}
+        </div>
     );
 }
 
-// ─── The reel ────────────────────────────────────────────────────────────────
 export default function Executive({model}) {
-    const now = useMemo(() => Date.now(), []);
-    const asOf = useMemo(() => new Date(now).toISOString().slice(0, 10), [now]);
-
-    const deck = useMemo(() => {
-        const initiativeNames = Object.keys(model.initiatives).sort((a, b) =>
-            a === 'Ungrouped' ? 1 : b === 'Ungrouped' ? -1 : a.localeCompare(b),
-        );
-        return [
-            {key: 'cover', label: 'Overview', node: <CoverCard model={model} asOf={asOf} />},
-            {key: 'pipeline', label: 'Pipeline', node: <PipelineCard model={model} />},
-            ...initiativeNames.map(name => ({
-                key: `init:${name}`,
-                label: name,
-                node: <InitiativeCard model={model} name={name} features={model.initiatives[name]} now={now} />,
-            })),
-            {key: 'risk', label: 'Delivery risk', node: <RiskCard model={model} now={now} />},
-            {key: 'blocked', label: 'Blocked', node: <BlockedCard model={model} />},
-            {key: 'decisions', label: 'Decisions', node: <DecisionCard model={model} />},
-            {key: 'rework', label: 'Rework', node: <ReworkCard model={model} />},
-            {key: 'momentum', label: 'Momentum', node: <MomentumCard model={model} />},
-            {key: 'asks', label: 'The ask', node: <AsksCard model={model} now={now} />},
-        ];
-    }, [model, asOf, now]);
-
-    const reduceMotion =
-        typeof window !== 'undefined' &&
-        typeof window.matchMedia === 'function' &&
-        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    const [idx, setIdx] = useState(0);
-    const [playing, setPlaying] = useState(!reduceMotion);
-    const [progress, setProgress] = useState(0);
-    const stageRef = useRef(null);
-
-    const go = useCallback(
-        delta => {
-            setIdx(i => {
-                const next = i + delta;
-                if (next < 0) return 0;
-                if (next >= deck.length) {
-                    setPlaying(false);
-                    return deck.length - 1;
-                }
-                return next;
-            });
-            setProgress(0);
-        },
-        [deck.length],
-    );
-
-    // Auto-advance. One interval, reset whenever the card or play state changes.
+    const {byInitiative, byEntity, features, kpis, phaseCounts, attrs} = model;
+    const [mounted, setMounted] = useState(false);
+    const [tlLevel, setTlLevel] = useState('entity'); // starting level: 'entity' | 'initiative' | 'milestone' | 'feature'
+    const [tlPath, setTlPath] = useState([]); // drill stack: [{kind, name, items}]
+    const [tlFilter, setTlFilter] = useState(EMPTY_FILTER); // timeline-only Entity/Initiative/Milestone/Feature filter
+    const drill = useDrill();
+    // A model filtered to the timeline selection â€” drives ONLY the timeline
+    // (the rest of the page keeps the full model). Clearing the filter is a
+    // no-op that returns the same model.
+    const tlModel = useMemo(() => filterModel(model, tlFilter), [model, tlFilter]);
     useEffect(() => {
-        if (!playing) return undefined;
-        const step = (STORY.tickMs / STORY.slideMs) * 100;
-        const t = setInterval(() => {
-            setProgress(p => {
-                if (p + step < 100) return p + step;
-                setIdx(i => {
-                    if (i + 1 >= deck.length) {
-                        setPlaying(false);
-                        return i;
-                    }
-                    return i + 1;
-                });
-                return 0;
-            });
-        }, STORY.tickMs);
-        return () => clearInterval(t);
-    }, [playing, idx, deck.length]);
+        const id = requestAnimationFrame(() => setMounted(true));
+        return () => cancelAnimationFrame(id);
+    }, []);
 
-    // Deck can shrink when the base changes underneath us.
-    useEffect(() => {
-        if (idx > deck.length - 1) setIdx(Math.max(0, deck.length - 1));
-    }, [deck.length, idx]);
+    const colorIndex = {};
+    byEntity.forEach((e, i) => (colorIndex[e.name] = INITIATIVE_COLORS[i % INITIATIVE_COLORS.length]));
+    byInitiative.forEach((it, i) => { if (!(it.name in colorIndex)) colorIndex[it.name] = INITIATIVE_COLORS[i % INITIATIVE_COLORS.length]; });
+    Array.from(new Set(features.map(f => f.milestone || 'No milestone'))).forEach((m, i) => { if (!(m in colorIndex)) colorIndex[m] = INITIATIVE_COLORS[i % INITIATIVE_COLORS.length]; });
+    const colorOf = name => colorIndex[name] || '#64748B';
 
-    const onKey = e => {
-        if (e.key === 'ArrowRight') {
-            e.preventDefault();
-            go(1);
-        } else if (e.key === 'ArrowLeft') {
-            e.preventDefault();
-            go(-1);
-        } else if (e.key === ' ' || e.key === 'Spacebar') {
-            e.preventDefault();
-            setPlaying(p => !p);
-        }
+    const attrsOf = useMemo(() => name => attrs.filter(a => a.featureName === name), [attrs]);
+
+    // Drill helpers (shared drawer)
+    const openInitiatives = (title, list) => drill.openInitiatives(title, list);
+    const openFeatures = (title, list) => drill.openFeatures(title, list);
+    const openAttrs = (title, list) => drill.openAttrs(title, list);
+    const pushFeatureAttrs = f => drill.pushAttrs(`${f.name} Â· attributes`, attrsOf(f.name));
+
+    // â”€â”€ Hierarchical timeline: Entity â†’ Initiative â†’ Milestone â†’ Feature â†’
+    // Attribute. Every level is the SAME timeline widget, so one click always
+    // drills one level down. Entity/initiative/milestone boxes sit on the axis
+    // by a representative date; the attribute level places each attribute by its
+    // Due Date and opens the record on click.
+    const boxDate = feats => {
+        const g = feats.map(f => f.goLiveMs).filter(x => x != null);
+        return g.length ? Math.max(...g) : null;
+    };
+    const healthOf = feats => {
+        const anyRisk = feats.some(f => f.health === 'at-risk' || f.health === 'blocked');
+        const allDone = feats.length > 0 && feats.every(f => f.health === 'delivered');
+        return allDone ? 'delivered' : anyRisk ? 'at-risk' : 'on-track';
+    };
+    // Turn an initiative ({name, features, pct}) into a timeline box.
+    const toInitBox = it => ({
+        id: `i-${it.name}`, name: it.name, initiative: it.name,
+        features: it.features, pct: it.pct, goLiveMs: boxDate(it.features), health: healthOf(it.features),
+    });
+    // Entity boxes (top level), built from the FILTERED timeline model so the
+    // Entity/Initiative/Milestone/Feature filter narrows every level.
+    const entityTimeline = tlModel.byEntity.map(e => ({
+        id: `e-${e.name}`, name: e.name, initiative: e.name,
+        features: e.features, pct: e.pct, goLiveMs: boxDate(e.features), health: healthOf(e.features),
+        initiatives: e.initiatives,
+    }));
+    const initTimeline = tlModel.byInitiative.map(toInitBox);
+
+    // Drill actions: Entity â†’ Initiative â†’ Feature swimlane (lanes = milestones).
+    // The feature card opens the side panel (attributes) â€” it is the leaf.
+    const drillEntity = e => setTlPath(p => [...p, {kind: 'initiatives', name: e.name, items: e.initiatives.map(toInitBox)}]);
+    const drillInitiative = it => setTlPath(p => [...p, {kind: 'swimlane', name: it.name, items: it.features}]);
+    const tlFrame = tlPath.length ? tlPath[tlPath.length - 1] : null;
+
+    const onTrack = features.filter(f => f.health === 'on-track');
+    const needAttn = features.filter(f => f.health === 'at-risk' || f.health === 'blocked');
+    const delivered = features.filter(f => f.health === 'delivered');
+    const now = Date.now();
+    const horizon = now + 1000 * 60 * 60 * 24 * 90;
+    const goLiveSoon = features.filter(f => f.goLiveMs != null && f.goLiveMs >= now && f.goLiveMs <= horizon && f.pct < 100);
+
+    const blockedAttrs = attrs.filter(a => a.isBlocked);
+    const overdueAttrs = attrs.filter(a => !a.isBlocked && a.dueDate && Date.parse(a.dueDate) < now && !a.isDelivered);
+    const returnedHandshakes = model.handshakes.filter(h => /return/i.test(h.action));
+
+    // â”€â”€ Requires attention â€” typed across features, attributes & handshakes â”€â”€
+    const attentionItems = [];
+    needAttn.forEach(f => attentionItems.push({
+        key: `f-${f.id}`, type: 'Feature', health: f.health,
+        title: f.name,
+        sub: `${f.blocked ? `${f.blocked} blocked Â· ` : ''}${f.pct}% mature Â· ${f.initiative}${f.goLiveMs != null && f.goLiveMs < now && f.pct < 100 ? ' Â· past go-live' : ''}`,
+        onClick: () => pushFeatureAttrs(f),
+    }));
+    blockedAttrs.forEach(a => attentionItems.push({
+        key: `a-${a.id}`, type: 'Attribute', health: 'blocked',
+        title: a.businessName || a.attributeId,
+        sub: `${a.blockedReason || 'Blocked'} Â· ${a.currentStageName} Â· ${a.featureName}`,
+        onClick: () => expandRecord(a.record),
+    }));
+    overdueAttrs.forEach(a => attentionItems.push({
+        key: `o-${a.id}`, type: 'Attribute', health: 'at-risk',
+        title: a.businessName || a.attributeId,
+        sub: `Overdue â€” due ${a.dueDate} Â· ${a.currentStageName} Â· ${a.featureName}`,
+        onClick: () => expandRecord(a.record),
+    }));
+    returnedHandshakes.slice(0, 4).forEach(h => attentionItems.push({
+        key: `h-${h.id}`, type: 'Handshake', health: 'at-risk',
+        title: `${h.feature} â€” returned for rework`,
+        sub: `${h.stage} Â· ${h.fromTeam} â†’ ${h.toTeam} Â· ${h.timestamp}`,
+        onClick: () => expandRecord(h.record),
+    }));
+    const attnCounts = {
+        Feature: attentionItems.filter(i => i.type === 'Feature').length,
+        Attribute: attentionItems.filter(i => i.type === 'Attribute').length,
+        Handshake: attentionItems.filter(i => i.type === 'Handshake').length,
     };
 
-    const current = deck[Math.min(idx, deck.length - 1)];
-
     return (
-        <div className="fp-mode ex-mode">
-            <div
-                className="ex-stage"
-                ref={stageRef}
-                tabIndex={0}
-                role="group"
-                aria-roledescription="carousel"
-                aria-label={`${BRAND.review}: card ${idx + 1} of ${deck.length}, ${current.label}`}
-                onKeyDown={onKey}
-            >
-                <div className="ex-pips" role="tablist" aria-label="Story cards">
-                    {deck.map((c, i) => (
-                        <button
-                            key={c.key}
-                            type="button"
-                            role="tab"
-                            className="ex-pip"
-                            aria-selected={i === idx}
-                            aria-label={c.label}
-                            title={c.label}
-                            onClick={() => {
-                                setIdx(i);
-                                setProgress(0);
-                            }}
-                        >
-                            <span
-                                className="ex-pip-fill"
-                                style={{width: i < idx ? '100%' : i === idx ? `${progress}%` : '0%'}}
-                            />
-                        </button>
-                    ))}
+        <div className="fp-exec">
+            {/* Hero */}
+            <section className="fp-hero">
+                <div className="fp-hero-headline">
+                    <div className="fp-hero-brand">
+                        <Logo className="fp-hero-logo" />
+                        <span className="fp-hero-brand-div" aria-hidden />
+                        <span className="fp-hero-brand-txt">Feature Management</span>
+                    </div>
+                    <h1>Program Overview</h1>
+                    <p className="fp-hero-sub">Executive view across initiatives, features and data attributes.</p>
+                    <div className="fp-hero-stats">
+                        <button type="button" onClick={() => openFeatures('On track', onTrack)}><b><CountUp value={onTrack.length} /></b><span>On track</span></button>
+                        <button type="button" onClick={() => openFeatures('Need attention', needAttn)}><b style={{color: '#c2410c'}}><CountUp value={needAttn.length} /></b><span>Need attention</span></button>
+                        <button type="button" onClick={() => openFeatures('Delivered', delivered)}><b style={{color: '#0369a1'}}><CountUp value={delivered.length} /></b><span>Delivered</span></button>
+                        <button type="button" onClick={() => openFeatures('Go-live â‰¤ 90 days', goLiveSoon)}><b><CountUp value={goLiveSoon.length} /></b><span>Go-live â‰¤ 90 days</span></button>
+                    </div>
                 </div>
-
-                <div className="ex-viewport" key={current.key}>
-                    {current.node}
+                <div className="fp-hero-gauge">
+                    <Donut pct={kpis.overallPct} size={156} stroke={16} color="#EC0016" onClick={() => openFeatures('All features', features)}>
+                        <div className="fp-donut-pct"><CountUp value={kpis.overallPct} suffix="%" /></div>
+                        <div className="fp-donut-cap">Portfolio<br />maturity</div>
+                    </Donut>
                 </div>
+            </section>
 
-                <button
-                    type="button"
-                    className="ex-zone left"
-                    aria-label="Previous card"
-                    onClick={() => go(-1)}
-                    disabled={idx === 0}
-                />
-                <button
-                    type="button"
-                    className="ex-zone right"
-                    aria-label="Next card"
-                    onClick={() => go(1)}
-                    disabled={idx === deck.length - 1}
-                />
-
-                <div className="ex-controls">
-                    <button type="button" onClick={() => go(-1)} disabled={idx === 0} aria-label="Previous card">
-                        ‹
-                    </button>
-                    <button type="button" onClick={() => setPlaying(p => !p)} aria-label={playing ? 'Pause' : 'Play'}>
-                        {playing ? '❚❚' : '▶'}
-                    </button>
-                    <button type="button" onClick={() => go(1)} disabled={idx === deck.length - 1} aria-label="Next card">
-                        ›
-                    </button>
-                    <span className="ex-counter">
-                        {idx + 1} / {deck.length}
-                    </span>
-                </div>
-            </div>
-
-            <div className="ex-strip" aria-hidden>
-                {deck.map((c, i) => (
-                    <button
-                        key={c.key}
-                        type="button"
-                        className={i === idx ? 'active' : ''}
-                        onClick={() => {
-                            setIdx(i);
-                            setProgress(0);
-                        }}
-                        tabIndex={-1}
-                    >
-                        {c.label}
-                    </button>
+            {/* Entity cards */}
+            <div className="fp-section-title">By entity</div>
+            <div className="fp-initgrid">
+                {byEntity.map(e => (
+                    <EntityCard key={e.name} e={e} colorOf={colorOf} mounted={mounted} model={model} openInitiatives={openInitiatives} openFeatures={openFeatures} />
                 ))}
             </div>
+
+            {/* Timeline */}
+            <div className="fp-section-title">
+                Delivery timeline â€” target go-lives
+                {tlPath.length ? (
+                    <>
+                        <button type="button" className="fp-tl-back" onClick={() => setTlPath(p => p.slice(0, -1))}>â† Back</button>
+                        {tlPath.map((fr, i) => (
+                            <span key={`${fr.name}-${i}`} className="fp-tl-crumb"><i style={{background: colorOf(fr.name)}} />{fr.name}</span>
+                        ))}
+                    </>
+                ) : (
+                    <span className="fp-seg">
+                        <button type="button" className={tlLevel === 'entity' ? 'on' : ''} onClick={() => { setTlLevel('entity'); setTlPath([]); }}>By entity</button>
+                        <button type="button" className={tlLevel === 'initiative' ? 'on' : ''} onClick={() => { setTlLevel('initiative'); setTlPath([]); }}>By initiative</button>
+                        <button type="button" className={tlLevel === 'feature' ? 'on' : ''} onClick={() => { setTlLevel('feature'); setTlPath([]); }}>By feature</button>
+                    </span>
+                )}
+            </div>
+            <div className="fp-panel fp-tl-panel">
+                <div className="fp-tl-filter">
+                    <FilterBar
+                        model={model}
+                        sel={tlFilter}
+                        onChange={sel => { setTlFilter(sel); setTlPath([]); }}
+                        matchCount={tlModel.features.length}
+                    />
+                </div>
+                <div className="fp-tl-hint">
+                    {tlFrame
+                        ? (tlFrame.kind === 'initiatives'
+                            ? 'Click an initiative to open its features, grouped into milestone lanes Â· â† Back'
+                            : 'Features grouped into milestone lanes â€” click a feature card to open its attributes Â· â† Back')
+                        : tlLevel === 'entity'
+                            ? 'Click an entity to drill into its initiatives'
+                            : tlLevel === 'initiative'
+                                ? 'Click an initiative to open its features, grouped into milestone lanes'
+                                : 'Features grouped into milestone lanes â€” click a feature card to open its attributes'}
+                </div>
+                {tlFrame ? (
+                    tlFrame.kind === 'initiatives' ? (
+                        <Timeline features={tlFrame.items} colorOf={colorOf} onDrill={drillInitiative} onPick={it => openFeatures(`${it.name} Â· features`, it.features)} />
+                    ) : (
+                        <FeatureSwimlane items={tlFrame.items} onPick={pushFeatureAttrs} />
+                    )
+                ) : tlLevel === 'entity' ? (
+                    <Timeline features={entityTimeline} colorOf={colorOf} onDrill={drillEntity} onPick={e => openInitiatives(e.name, e.initiatives)} />
+                ) : tlLevel === 'initiative' ? (
+                    <Timeline features={initTimeline} colorOf={colorOf} onDrill={drillInitiative} onPick={it => openFeatures(`${it.name} Â· features`, it.features)} />
+                ) : (
+                    <FeatureSwimlane items={tlModel.features} onPick={pushFeatureAttrs} />
+                )}
+                <div className="fp-legend">
+                    {(tlPath.length ? [] : tlLevel === 'entity' ? entityTimeline : tlLevel === 'initiative' ? tlModel.byInitiative : []).map(x => (
+                        <span key={x.name} className="clickable" onClick={() => openFeatures(x.name, x.features)}><i style={{background: colorOf(x.name)}} />{x.name}</span>
+                    ))}
+                </div>
+            </div>
+
+            {/* Attention + phase distribution */}
+            <div className="fp-exec-2col">
+                <div className="fp-panel fp-panel-roomy">
+                    <div className="fp-panel-title">Requires attention</div>
+                    {attentionItems.length === 0 ? (
+                        <div className="fp-muted">Nothing blocked, overdue or returned. ðŸŽ‰</div>
+                    ) : (
+                        <>
+                            <div className="fp-attn-summary">
+                                {attnCounts.Feature > 0 && <span><b>{attnCounts.Feature}</b> feature{attnCounts.Feature === 1 ? '' : 's'}</span>}
+                                {attnCounts.Attribute > 0 && <span><b>{attnCounts.Attribute}</b> attribute{attnCounts.Attribute === 1 ? '' : 's'}</span>}
+                                {attnCounts.Handshake > 0 && <span><b>{attnCounts.Handshake}</b> handoff{attnCounts.Handshake === 1 ? '' : 's'}</span>}
+                            </div>
+                            <ul className="fp-attention">
+                                {attentionItems.slice(0, 8).map(item => (
+                                    <li key={item.key} className="clickable" onClick={item.onClick} title="Open">
+                                        <HealthDot health={item.health} />
+                                        <div className="fp-att-main">
+                                            <div className="fp-att-title">{item.title}</div>
+                                            <div className="fp-att-sub">{item.sub}</div>
+                                        </div>
+                                        <span className={`fp-att-type t-${item.type.toLowerCase()}`}>{item.type}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </>
+                    )}
+                </div>
+
+                <div className="fp-panel fp-panel-roomy">
+                    <div className="fp-panel-title">Where the work sits</div>
+                    <ul className="fp-phasebars">
+                        {PHASE_GROUPS.map(p => {
+                            const max = Math.max(1, ...PHASE_GROUPS.map(q => phaseCounts[q] || 0));
+                            return (
+                                <li key={p} className="clickable" onClick={() => openAttrs(`${p} phase`, attrs.filter(a => a.phase === p))} title="See attributes">
+                                    <span className="fp-pb-label">{p}</span>
+                                    <span className="fp-pb-track"><i style={{width: mounted ? `${((phaseCounts[p] || 0) / max) * 100}%` : 0, background: PHASE_COLORS[p]}} /></span>
+                                    <span className="fp-pb-val">{phaseCounts[p] || 0}</span>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </div>
+            </div>
+
+            <DrillDrawer drill={drill} attrsOf={attrsOf} colorOf={colorOf} />
         </div>
     );
 }

@@ -1,5 +1,18 @@
 import {PHASE_COLORS, STATUS_COLORS} from './constants';
 
+// RAG palette shared across views.
+export const RAG = {delivered: '#0EA5E9', 'on-track': '#16A34A', 'at-risk': '#F59E0B', blocked: '#E11D48'};
+export const RAG_LABEL = {delivered: 'Delivered', 'on-track': 'On track', 'at-risk': 'At risk', blocked: 'Blocked'};
+
+// Health classification for a single attribute (work item).
+export function attrHealth(a) {
+    return a.isBlocked ? 'blocked' : a.isDelivered ? 'delivered' : a.isAwaitingReview ? 'at-risk' : 'on-track';
+}
+
+export function HealthDot({health}) {
+    return <span className="fp-rag-dot" style={{background: RAG[health] || '#94A3B8'}} title={RAG_LABEL[health] || health} />;
+}
+
 // Small colored chip for a status value.
 export function StatusChip({status}) {
     const bg = STATUS_COLORS[status] || '#cbd5e1';
@@ -29,9 +42,9 @@ export function Tag({children, title}) {
     );
 }
 
-export function KpiCard({label, value, accent}) {
+export function KpiCard({label, value, accent, onClick}) {
     return (
-        <div className="fp-kpi">
+        <div className={`fp-kpi${onClick ? ' clickable' : ''}`} onClick={onClick} title={onClick ? 'View list' : undefined}>
             <div className="fp-kpi-value" style={accent ? {color: accent} : undefined}>
                 {value}
             </div>

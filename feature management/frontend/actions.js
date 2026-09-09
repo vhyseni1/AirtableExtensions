@@ -15,6 +15,27 @@ function cellFor(field, {linkId, name, text, dateISO, number}) {
     return v != null && v !== '' ? String(v) : undefined;
 }
 
+// Read a cell from `record` and return a value shaped to WRITE the same field
+// on another record — works whether the field is a link, select, or text.
+function copyCellValue(record, field) {
+    if (!record || !field) return undefined;
+    let v;
+    try {
+        v = record.getCellValue(field.id);
+    } catch {
+        return undefined;
+    }
+    if (v == null || v === '') return undefined;
+    const t = field.type || '';
+    if (t === 'multipleRecordLinks' || t === 'singleRecordLink' || t === 'multipleSelects' || t === 'multipleCollaborators') {
+        return Array.isArray(v) ? v.map(x => ({id: x.id})) : undefined;
+    }
+    if (t === 'singleSelect' || t === 'singleCollaborator') {
+        return v.id ? {id: v.id} : (v.name ? {name: v.name} : undefined);
+    }
+    return v; // text / number / etc — write back verbatim
+}
+
 function writeObject(pairs) {
     const out = {};
     for (const [field, spec] of pairs) {
@@ -64,6 +85,82 @@ async function updateAttribute(model, attr, obj) {
         throw new Error('You do not have permission to update this attribute.');
     }
     await table.updateRecordsAsync([{id: attr.id, fields: obj}]);
+}
+
+// ── Plain status change (drag to To do / In progress / Blocked) ───────────────
+// Internal lifecycle move — no handshake (those are reserved for handoffs).
+export async function setStatus(model, attr, status, reason) {
+    const af = model.fieldsRaw.attributes;
+    const pairs = [[af.status, {name: status}]];
+    if (status === STATUS.blocked) pairs.push([af.blockedReason, {text: reason || ''}]);
+    await updateAttribute(model, attr, writeObject(pairs));
+}
+
+// ── Relationships: address-by (link existing) / fork-out (create new) ─────────
+export async function linkAddressedBy(model, attr, targetIds) {
+    const af = model.fieldsRaw.attributes;
+    if (!af.addressedBy) throw new Error('Add an "Addressed By" link field (Link → Attributes) to the base first.');
+    const merged = [...new Set([...attr.addressedBy.map(x => x.id), ...targetIds])];
+    await updateAttribute(model, attr, {[af.addressedBy.id]: merged.map(id => ({id}))});
+}
+
+export async function forkOutCreate(model, attr, names) {
+    const table = model.tablesRaw.attributes;
+    const af = model.fieldsRaw.attributes;
+    if (!af.forksInto) throw new Error('Add a "Forks Into" link field (Link → Attributes) to the base first.');
+    const stage1 = model.stagesByCode['1'] || null;
+    const base = attr.attributeId || 'ATTR';
+    const stamp = Date.now().toString(36).slice(-4).toUpperCase();
+
+    // Copy the parent's Feature cell in its NATIVE shape (link / select / text);
+    // fall back to a Features name-match if the cell can't be read (e.g. lookup).
+    let featureVal = copyCellValue(attr.record, af.feature);
+    if (featureVal === undefined && attr.featureName && Array.isArray(model.features)) {
+        const fr = model.features.find(f => f.name === attr.featureName);
+        if (fr) featureVal = [{id: fr.id}];
+    }
+    if (af.feature && featureVal === undefined) {
+        throw new Error(`Couldn't read a Feature to copy from "${attr.businessName || attr.attributeId}" — set the parent's Feature, then fork.`);
+    }
+
+    // Duplicate the parent's catalogue AND position fields, each in its own
+    // cell shape — a fork continues from the parent's stage, not from scratch.
+    const copied = {};
+    [af.sourcingType, af.isReferenceData, af.requiresGateway, af.fsdm, af.technicalName,
+     af.currentStage, af.assignedTeam, af.approverTeam].forEach(f => {
+        if (!f) return;
+        const v = copyCellValue(attr.record, f);
+        if (v !== undefined) copied[f.id] = v;
+    });
+    if (af.feature && featureVal !== undefined) copied[af.feature.id] = featureVal;
+
+    // ONE atomic create with every field. If any cell shape is invalid the call
+    // fails as a whole and the error surfaces — no half-made "Unassigned"
+    // orphans. Stage/team fallbacks pass BOTH linkId and name so they write
+    // whether those fields are links or single-selects; the parent's native
+    // cell values (copied above) win when readable.
+    const parentStage = attr.stage || stage1 || null;
+    const payload = names.map((nm, i) => {
+        const fields = writeObject([
+            [af.attributeId, {text: `${base}-F${stamp}${i + 1}`}],
+            [af.businessName, {text: (nm && nm.trim()) || `${attr.businessName || base} — fork ${i + 1}`}],
+            [af.currentStage, {linkId: parentStage ? parentStage.id : null, name: parentStage ? parentStage.name : null}],
+            [af.status, {name: STATUS.notStarted}],
+            [af.assignedTeam, {linkId: parentStage ? parentStage.responsibleTeamId : null, name: parentStage ? parentStage.responsibleTeamName : null}],
+            [af.approverTeam, {linkId: parentStage ? parentStage.approverTeamId : null, name: parentStage ? parentStage.approverTeamName : null}],
+        ]);
+        Object.assign(fields, copied);
+        return {fields};
+    });
+    if (typeof table.hasPermissionToCreateRecords === 'function' && !table.hasPermissionToCreateRecords(payload)) {
+        throw new Error('You do not have permission to create attribute records.');
+    }
+    const newIds = await table.createRecordsAsync(payload);
+
+    // 3) link the parent → children
+    const merged = [...attr.forksInto.map(x => x.id), ...newIds];
+    await updateAttribute(model, attr, {[af.forksInto.id]: merged.map(id => ({id}))});
+    return newIds;
 }
 
 // ── Promote: submit current stage for review (does not advance yet) ───────────
