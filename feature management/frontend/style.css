@@ -905,3 +905,187 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
     /* Render harvey balls, rules and chart at full ink. */
     .fp-ss-print, .fp-ss-print * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* ════════════════════════ NARRATIVE — STORY DECK ════════════════════════ */
+/* Dark, full-bleed cards with per-card entrance animation. Scoped under
+   .fp-st so the light report styles above are untouched. */
+
+.fp-st { background: #05070d; color: #f8fafc; }
+
+/* pip rail — one segment per card, filling while the reel plays */
+.fp-st-pips { display: flex; gap: 5px; padding: 10px 22px 0; background: #05070d; }
+.fp-st-pip {
+    flex: 1; height: 3px; padding: 0; border: none; border-radius: 999px;
+    background: rgba(248,250,252,.18); cursor: pointer; overflow: hidden; min-width: 8px;
+}
+.fp-st-pip span { display: block; height: 100%; background: #f8fafc; border-radius: 999px; transition: width .1s linear; }
+
+.fp-st .fp-ss-top { background: transparent; border-bottom: 1px solid rgba(248,250,252,.10); }
+.fp-st .fp-ss-brand { color: #f8fafc; }
+.fp-st .fp-ss-count { color: #94a3b8; }
+.fp-st .fp-ss-play,
+.fp-st .fp-ss-close { background: rgba(248,250,252,.10); border-color: rgba(248,250,252,.18); color: #f8fafc; }
+.fp-st .fp-ss-play:hover,
+.fp-st .fp-ss-close:hover { background: rgba(248,250,252,.20); }
+.fp-st .fp-ss-pdf { background: rgba(248,250,252,.08); border-color: rgba(248,250,252,.18); color: #f8fafc; }
+.fp-st .fp-ss-pdf:hover { background: rgba(248,250,252,.18); border-color: rgba(248,250,252,.34); }
+.fp-st .fp-ss-arrow {
+    background: rgba(248,250,252,.08); border-color: rgba(248,250,252,.16); color: #f8fafc;
+}
+.fp-st .fp-ss-arrow:hover { background: rgba(248,250,252,.18); }
+
+.fp-st-slide {
+    flex: 1; max-width: 1340px; height: 100%; min-height: 0; box-sizing: border-box;
+    display: flex; animation: fp-st-slide-in .45s cubic-bezier(.22,.61,.36,1);
+}
+@keyframes fp-st-slide-in { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: none; } }
+
+.fp-st-caption {
+    text-align: center; padding: 8px 0 16px; font-size: 11px; letter-spacing: .14em;
+    text-transform: uppercase; color: #64748b;
+}
+
+/* ── card shell ── */
+.fp-st-card {
+    flex: 1; min-width: 0; display: flex; flex-direction: column;
+    border-radius: 18px; padding: 30px 40px 18px; overflow: hidden;
+    background:
+        radial-gradient(1200px 480px at 82% -18%, color-mix(in srgb, var(--st-accent) 30%, transparent), transparent 68%),
+        radial-gradient(900px 420px at 8% 108%, color-mix(in srgb, var(--st-accent) 14%, transparent), transparent 70%),
+        linear-gradient(158deg, #101a2e 0%, #070b15 60%);
+    border: 1px solid rgba(248,250,252,.09);
+    box-shadow: 0 24px 70px rgba(0,0,0,.55);
+}
+.fp-st-head { flex: 0 0 auto; }
+.fp-st-kicker {
+    font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--st-accent); animation: fp-st-rise .5s both;
+}
+.fp-st-title {
+    margin: 8px 0 0; font-size: 34px; line-height: 1.12; font-weight: 800; letter-spacing: -.02em;
+    animation: fp-st-rise .5s .06s both;
+}
+.fp-st-title em { font-style: normal; color: var(--st-accent); }
+.fp-st-lede {
+    margin: 10px 0 0; font-size: 14px; color: #94a3b8; max-width: 940px;
+    animation: fp-st-rise .5s .12s both;
+}
+.fp-st-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin-top: 22px; padding-right: 6px; display: flex; flex-direction: column; }
+.fp-st-body > * { margin: auto 0; width: 100%; }
+.fp-st-foot-note {
+    flex: 0 0 auto; font-size: 10.5px; color: #64748b; padding: 12px 0 2px;
+    border-top: 1px solid rgba(248,250,252,.08); margin-top: 12px;
+}
+
+@keyframes fp-st-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+/* ── cover ── */
+.fp-st-cover { display: flex; gap: 46px; align-items: center; flex-wrap: wrap; }
+.fp-st-donut { position: relative; flex: 0 0 auto; animation: fp-st-rise .55s .1s both; }
+.fp-st-donut svg { transform: rotate(0deg); }
+.fp-st-donut-mid { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.fp-st-donut-val { font-size: 48px; font-weight: 800; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.fp-st-donut-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .13em; color: #94a3b8; margin-top: 6px; }
+.fp-st-donut-sub { font-size: 11px; color: #64748b; margin-top: 4px; text-align: center; max-width: 150px; }
+
+.fp-st-statgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 150px)); gap: 22px 34px; }
+.fp-st-stat { animation: fp-st-rise .5s both; }
+.fp-st-stat-val { font-size: 36px; font-weight: 800; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.fp-st-stat-lbl { font-size: 11.5px; color: #94a3b8; margin-top: 5px; }
+
+/* ── ranked bars ── */
+.fp-st-rows { display: flex; flex-direction: column; gap: 13px; }
+.fp-st-bar, .fp-st-podrow {
+    display: grid; grid-template-columns: 210px 1fr 62px; gap: 14px; align-items: center;
+    animation: fp-st-rise .5s both;
+}
+.fp-st-bar-label {
+    font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.fp-st-bar-track { background: rgba(248,250,252,.09); border-radius: 999px; height: 15px; overflow: hidden; }
+.fp-st-bar-fill { height: 100%; border-radius: 999px; transition: width 1s cubic-bezier(.22,.61,.36,1); }
+.fp-st-bar-val { font-size: 15px; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
+.fp-st-bar-note { grid-column: 2 / 4; font-size: 11px; color: #64748b; margin-top: -5px; }
+
+.fp-st-stack { display: flex; background: rgba(248,250,252,.07); border-radius: 999px; height: 15px; overflow: hidden; }
+.fp-st-stack span { height: 100%; transition: width .95s cubic-bezier(.22,.61,.36,1); }
+
+.fp-st-legend { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+.fp-st-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.fp-st-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+
+/* ── funnel ── */
+.fp-st-funnel { display: flex; flex-direction: column; gap: 16px; }
+.fp-st-fn-row { display: grid; grid-template-columns: 1fr 250px; gap: 20px; align-items: center; animation: fp-st-rise .55s both; }
+.fp-st-fn-bar-wrap { display: flex; justify-content: center; }
+.fp-st-fn-bar {
+    height: 46px; border-radius: 11px; display: flex; align-items: center; justify-content: flex-end;
+    padding-right: 14px; transition: width 1.05s cubic-bezier(.22,.61,.36,1); min-width: 62px;
+}
+.fp-st-fn-pct { font-size: 19px; font-weight: 800; color: #05070d; font-variant-numeric: tabular-nums; }
+.fp-st-fn-name { font-size: 14px; font-weight: 700; }
+.fp-st-fn-count { font-size: 11.5px; color: #64748b; margin-top: 3px; }
+
+/* ── entity rings ── */
+.fp-st-ringrow { display: flex; gap: 34px; flex-wrap: wrap; justify-content: center; }
+.fp-st-ring { text-align: center; animation: fp-st-rise .55s both; }
+.fp-st-ring .fp-st-donut-val { font-size: 27px; }
+.fp-st-ring-name { font-size: 13.5px; font-weight: 700; margin-top: 10px; }
+.fp-st-ring-sub { font-size: 11px; color: #64748b; margin-top: 3px; }
+
+/* ── risk tiles ── */
+.fp-st-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); gap: 13px; }
+.fp-st-tile {
+    background: rgba(248,250,252,.05); border: 1px solid rgba(248,250,252,.09);
+    border-radius: 12px; padding: 14px 16px; animation: fp-st-rise .5s both;
+}
+.fp-st-tile.risk { border-left: 3px solid #FB7185; }
+.fp-st-tile-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.fp-st-tile-pct { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.fp-st-tile-name { font-size: 14.5px; font-weight: 700; margin-top: 9px; }
+.fp-st-tile-sub { font-size: 11.5px; color: #64748b; margin-top: 4px; }
+.fp-st-pill { font-size: 10px; font-weight: 800; border-radius: 999px; padding: 2px 9px; color: #05070d; }
+.fp-st-pill.blocked { background: #FB7185; }
+.fp-st-pill.at-risk { background: #FB923C; }
+.fp-st-pill.on-track { background: #38BDF8; }
+.fp-st-more { font-size: 11.5px; color: #64748b; margin-top: 12px; text-align: center; }
+
+/* ── asks ── */
+.fp-st-asks { display: flex; flex-direction: column; gap: 13px; }
+.fp-st-ask {
+    display: flex; gap: 16px; background: rgba(248,250,252,.05); border-left: 4px solid;
+    border-radius: 12px; padding: 15px 18px; animation: fp-st-rise .5s both;
+}
+.fp-st-ask-n { font-size: 27px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.fp-st-ask-head { font-size: 16px; font-weight: 800; }
+.fp-st-ask-body { font-size: 12.5px; color: #94a3b8; margin-top: 5px; }
+
+.fp-st-empty { color: #64748b; font-size: 13.5px; padding: 20px 0; text-align: center; }
+
+@media (max-width: 1000px) {
+    .fp-st-card { padding: 22px 22px 14px; }
+    .fp-st-title { font-size: 25px; }
+    .fp-st-cover { gap: 26px; justify-content: center; }
+    .fp-st-statgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 22px; }
+    .fp-st-bar, .fp-st-podrow { grid-template-columns: 120px 1fr 48px; }
+    .fp-st-fn-row { grid-template-columns: 1fr 160px; }
+}
+
+/* Motion off: land on the final state, keep the layout identical. */
+@media (prefers-reduced-motion: reduce) {
+    .fp-st *, .fp-st *::before, .fp-st *::after {
+        animation: none !important; transition: none !important;
+    }
+}
+
+/* Printing a dark deck wastes toner and reads badly — invert to paper. */
+@media print {
+    .fp-st .fp-st-card {
+        background: #fff; color: #0f172a; border: 1px solid #e2e5ea; box-shadow: none;
+    }
+    .fp-st .fp-st-lede, .fp-st .fp-st-bar-note, .fp-st .fp-st-tile-sub,
+    .fp-st .fp-st-ask-body, .fp-st .fp-st-fn-count, .fp-st .fp-st-stat-lbl { color: #475569; }
+    .fp-st .fp-st-bar-track, .fp-st .fp-st-stack { background: #e8ecf1; }
+    .fp-st .fp-st-tile, .fp-st .fp-st-ask { background: #f6f8fa; border-color: #e2e5ea; }
+    .fp-st-pips, .fp-st-caption { display: none; }
+}

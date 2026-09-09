@@ -1,69 +1,184 @@
-import {Fragment, useEffect, useMemo, useState} from 'react';
-import {PHASE_GROUPS, STATUS} from './constants';
+import {useEffect, useMemo, useRef, useState} from 'react';
+import {PHASE_GROUPS, PHASE_COLORS, STATUS} from './constants';
 import Logo from './Logo';
 
+// ─── Narrative ────────────────────────────────────────────────────────────────
+// The executive story deck: one full-bleed card per message, each animating in
+// on arrival. Every number is derived live from the model — nothing is authored.
+// Slides remount on change (key={i} on the stage), so the entrance animations
+// replay every time a card is reached.
+
 const asOf = new Date().toLocaleDateString('en-GB', {day: 'numeric', month: 'long', year: 'numeric'});
+const fmtShort = ms => (ms == null ? '—' : new Date(ms).toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: '2-digit', timeZone: 'UTC'}));
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many || one + 's'}`;
 
-// ── Harvey ball — the report's 5-state completion glyph (per the deck Key:
-// ○ <10% · ◔ 11–39% · ◑ 40–69% · ◕ 70–99% · ● 100%). Rendered as a proportional
-// pie so it reads at any value, not just the five stops. ──
-function HarveyBall({pct, size = 15}) {
-    const p = Math.max(0, Math.min(100, pct || 0)) / 100;
-    const r = size / 2;
-    const rr = r - 0.75;
-    let fill = null;
-    if (p >= 0.999) {
-        fill = <circle cx={r} cy={r} r={rr} fill="#111" />;
-    } else if (p > 0.001) {
-        const ang = p * 2 * Math.PI - Math.PI / 2;
-        const x = r + rr * Math.cos(ang);
-        const y = r + rr * Math.sin(ang);
-        const large = p > 0.5 ? 1 : 0;
-        fill = <path d={`M ${r} ${r} L ${r} ${r - rr} A ${rr} ${rr} 0 ${large} 1 ${x} ${y} Z`} fill="#111" />;
-    }
+// ─── Motion primitives ────────────────────────────────────────────────────────
+
+// Honour the OS setting: no count-ups, no growth, just the final value.
+function useReducedMotion() {
+    const [reduced, setReduced] = useState(false);
+    useEffect(() => {
+        if (typeof window === 'undefined' || !window.matchMedia) return undefined;
+        const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+        setReduced(mq.matches);
+        const on = e => setReduced(e.matches);
+        if (mq.addEventListener) { mq.addEventListener('change', on); return () => mq.removeEventListener('change', on); }
+        mq.addListener(on);
+        return () => mq.removeListener(on);
+    }, []);
+    return reduced;
+}
+
+function useCountUp(target, ms = 900) {
+    const reduced = useReducedMotion();
+    const [v, setV] = useState(reduced ? target : 0);
+    useEffect(() => {
+        if (reduced) { setV(target); return undefined; }
+        let raf;
+        const start = performance.now();
+        const tick = now => {
+            const t = Math.min(1, (now - start) / ms);
+            setV(Math.round(target * (t * (2 - t))));   // easeOutQuad
+            if (t < 1) raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(raf);
+    }, [target, ms, reduced]);
+    return v;
+}
+function CountUp({value, suffix}) {
+    return <>{useCountUp(value)}{suffix || ''}</>;
+}
+
+// Flips false → true one frame after mount, so CSS transitions have a "from".
+function useEnter() {
+    const [on, setOn] = useState(false);
+    useEffect(() => {
+        const id = requestAnimationFrame(() => setOn(true));
+        return () => cancelAnimationFrame(id);
+    }, []);
+    return on;
+}
+
+// ─── Chart primitives ─────────────────────────────────────────────────────────
+
+function Donut({pct, size = 260, stroke = 22, color = '#38BDF8', label, sub}) {
+    const on = useEnter();
+    const r = (size - stroke) / 2;
+    const c = 2 * Math.PI * r;
+    const off = c * (1 - Math.max(0, Math.min(100, on ? pct : 0)) / 100);
+    const gid = `fp-st-grad-${String(color).replace('#', '')}`;
     return (
-        <svg className="fp-hb" width={size} height={size} aria-hidden>
-            <circle cx={r} cy={r} r={rr} fill="#fff" stroke="#111" strokeWidth="1" />
-            {fill}
-        </svg>
+        <div className="fp-st-donut" style={{width: size, height: size}}>
+            <svg width={size} height={size} aria-hidden>
+                <defs>
+                    <linearGradient id={gid} x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stopColor={color} />
+                        <stop offset="100%" stopColor={color} stopOpacity="0.45" />
+                    </linearGradient>
+                </defs>
+                <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,.10)" strokeWidth={stroke} />
+                <circle
+                    cx={size / 2} cy={size / 2} r={r} fill="none" stroke={`url(#${gid})`} strokeWidth={stroke}
+                    strokeLinecap="round" strokeDasharray={c} strokeDashoffset={off}
+                    transform={`rotate(-90 ${size / 2} ${size / 2})`}
+                    style={{transition: 'stroke-dashoffset 1.15s cubic-bezier(.22,.61,.36,1)'}}
+                />
+            </svg>
+            <div className="fp-st-donut-mid">
+                <div className="fp-st-donut-val"><CountUp value={pct} suffix="%" /></div>
+                {label && <div className="fp-st-donut-lbl">{label}</div>}
+                {sub && <div className="fp-st-donut-sub">{sub}</div>}
+            </div>
+        </div>
     );
 }
 
-// Onboarding funnel — % of attributes reaching each lifecycle gate. Self-labelled
-// (value above each point, stage name below) so it reads as part of the numbers.
-const FUNNEL_STAGES = ['Req', 'Model', 'VEST', 'UAT', 'Done'];
-function FunnelCurve({points, compact, wide}) {
-    const w = wide ? 640 : 320, h = compact ? 128 : wide ? 150 : 148;
-    const padX = wide ? 8 : 20, padTop = 24, padBottom = 22;
-    const n = points.length;
-    const xs = points.map((_, i) => padX + (i / (n - 1)) * (w - padX * 2));
-    const base = h - padBottom;
-    const yOf = v => base - (Math.max(0, Math.min(100, v)) / 100) * (base - padTop);
-    const line = points.map((v, i) => `${i ? 'L' : 'M'} ${xs[i].toFixed(1)} ${yOf(v).toFixed(1)}`).join(' ');
+// A ranked row: label, growing bar, value. Stagger via `i`.
+function BarRow({label, pct, value, color, i = 0, note}) {
+    const on = useEnter();
     return (
-        <svg className="fp-rp-chart" viewBox={`0 0 ${w} ${h}`} width="100%" preserveAspectRatio="xMidYMid meet" aria-hidden>
-            <defs>
-                <linearGradient id="fp-funnel-grad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#0F172A" stopOpacity="0.26" />
-                    <stop offset="100%" stopColor="#0F172A" stopOpacity="0" />
-                </linearGradient>
-            </defs>
-            <line x1={padX} y1={yOf(100)} x2={w - padX} y2={yOf(100)} stroke="#eef1f5" strokeDasharray="3 3" />
-            <line x1={padX} y1={base} x2={w - padX} y2={base} stroke="#e7eaef" />
-            <path d={`${line} L ${xs[n - 1].toFixed(1)} ${base} L ${xs[0].toFixed(1)} ${base} Z`} fill="url(#fp-funnel-grad)" />
-            <path d={line} fill="none" stroke="#0F172A" strokeWidth={wide ? 2 : 2.6} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-            {points.map((v, i) => (
-                <g key={i}>
-                    <circle cx={xs[i]} cy={yOf(v)} r={3.1} fill="#fff" stroke="#0F172A" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-                    <text x={xs[i]} y={yOf(v) - 7} textAnchor="middle" className="fp-rp-chart-val">{v}%</text>
-                    <text x={xs[i]} y={h - 6} textAnchor="middle" className="fp-rp-chart-lbl">{FUNNEL_STAGES[i]}</text>
-                </g>
+        <div className="fp-st-bar" style={{animationDelay: `${60 + i * 55}ms`}}>
+            <div className="fp-st-bar-label" title={label}>{label}</div>
+            <div className="fp-st-bar-track">
+                <div
+                    className="fp-st-bar-fill"
+                    style={{
+                        width: on ? `${Math.max(0, Math.min(100, pct))}%` : 0,
+                        background: `linear-gradient(90deg, ${color}, ${color}99)`,
+                        transitionDelay: `${120 + i * 55}ms`,
+                    }}
+                />
+            </div>
+            <div className="fp-st-bar-val">{value}</div>
+            {note && <div className="fp-st-bar-note">{note}</div>}
+        </div>
+    );
+}
+
+// Proportional stacked bar — the pod status mix.
+function StackBar({segments, total, i = 0}) {
+    const on = useEnter();
+    return (
+        <div className="fp-st-stack" style={{animationDelay: `${60 + i * 55}ms`}}>
+            {segments.map((s, k) =>
+                s.n > 0 ? (
+                    <span
+                        key={s.key}
+                        title={`${s.label}: ${s.n}`}
+                        style={{
+                            width: on ? `${(s.n / (total || 1)) * 100}%` : 0,
+                            background: s.color,
+                            transitionDelay: `${140 + i * 55 + k * 40}ms`,
+                        }}
+                    />
+                ) : null,
+            )}
+        </div>
+    );
+}
+
+// The onboarding funnel, drawn as centred bars that narrow gate by gate.
+function Funnel({gates}) {
+    const on = useEnter();
+    return (
+        <div className="fp-st-funnel">
+            {gates.map((g, i) => (
+                <div className="fp-st-fn-row" key={g.key} style={{animationDelay: `${80 + i * 90}ms`}}>
+                    <div className="fp-st-fn-bar-wrap">
+                        <div
+                            className="fp-st-fn-bar"
+                            style={{
+                                width: on ? `${Math.max(4, g.pct)}%` : '4%',
+                                background: `linear-gradient(90deg, ${g.color}, ${g.color}66)`,
+                                transitionDelay: `${140 + i * 90}ms`,
+                            }}
+                        >
+                            <span className="fp-st-fn-pct"><CountUp value={g.pct} suffix="%" /></span>
+                        </div>
+                    </div>
+                    <div className="fp-st-fn-meta">
+                        <div className="fp-st-fn-name">{g.label}</div>
+                        <div className="fp-st-fn-count">{g.c} of {g.t}</div>
+                    </div>
+                </div>
             ))}
-        </svg>
+        </div>
     );
 }
 
-// ── Live model → the exact numbers each report page needs ──
+function Stat({value, label, suffix, color, i = 0}) {
+    return (
+        <div className="fp-st-stat" style={{animationDelay: `${100 + i * 70}ms`}}>
+            <div className="fp-st-stat-val" style={color ? {color} : undefined}>
+                <CountUp value={value} suffix={suffix} />
+            </div>
+            <div className="fp-st-stat-lbl">{label}</div>
+        </div>
+    );
+}
+
+// ─── Live model → the numbers each card needs ─────────────────────────────────
 function buildData(model) {
     const attrs = model.attrs;
     const inProg = [STATUS.inProgress, STATUS.blocked, STATUS.returned];
@@ -74,7 +189,7 @@ function buildData(model) {
     const isSigned = a => a.status === STATUS.done || a.isDelivered;
     const isNA = a => a.status === STATUS.cancelled;
 
-    // Funnel gates (cumulative "reached at least this stage").
+    // Funnel gates — cumulative "reached at least this gate".
     const gReq = a => !isNS(a) && !isNA(a);
     const gModel = a => PHASE_GROUPS.indexOf(a.phase) >= 1;
     const gVest = a => isDev(a) || isUat(a) || isSigned(a);
@@ -88,14 +203,13 @@ function buildData(model) {
     };
     const attrsOf = feats => { const s = new Set(feats.map(f => f.name)); return attrs.filter(a => s.has(a.featureName)); };
 
+    const totalF = funnel(attrs);
     const initRows = model.byInitiative
         .filter(it => it.attrCount > 0)
-        .map(it => ({name: it.name, f: funnel(attrsOf(it.features))}))
-        .sort((a, b) => b.f.t - a.f.t);
-    const entityRows = model.byEntity
-        .filter(e => e.features.length > 0)
-        .map(e => ({name: e.name, f: funnel(attrsOf(e.features))}));
-    const totalF = funnel(attrs);
+        .map(it => ({name: it.name, pct: it.pct, attrCount: it.attrCount, featureCount: it.featureCount,
+                     atRisk: it.atRisk, delivered: it.delivered, nextGoLiveMs: it.nextGoLiveMs, f: funnel(attrsOf(it.features))}))
+        .sort((a, b) => b.pct - a.pct);
+    const entityRows = model.byEntity.filter(e => e.features.length > 0);
 
     // Pods = the team currently holding each attribute.
     const podMap = {};
@@ -106,279 +220,328 @@ function buildData(model) {
         const na = c(isNA);
         const base = t - na;
         const dev = c(isDev), uat = c(isUat), signed = c(isSigned);
-        return {
-            t, ns: c(isNS), ip: c(isIP), dev, uat, signed, na, base,
-            vestPct: base ? Math.round(((dev + uat + signed) / base) * 100) : 0,
-            uatPct: base ? Math.round(((uat + signed) / base) * 100) : 0,
-            signPct: base ? Math.round((signed / base) * 100) : 0,
-        };
+        return {t, ns: c(isNS), ip: c(isIP), dev, uat, signed, na, base,
+                signPct: base ? Math.round((signed / base) * 100) : 0};
     };
-    const pods = Object.keys(podMap)
-        .map(name => ({name, r: podRow(podMap[name])}))
-        .sort((a, b) => b.r.t - a.r.t);
+    const pods = Object.keys(podMap).map(name => ({name, r: podRow(podMap[name])})).sort((a, b) => b.r.t - a.r.t);
     const podTotal = podRow(attrs);
 
-    // Auto-comments — one crisp line per initiative, the way the deck reads.
-    const comments = initRows.slice(0, 8).map(r => ({
-        name: r.name,
-        text: `${r.f.model.c} of ${r.f.t} modelled · ${r.f.vest.c} DEV-complete · ${r.f.uat.c} in UAT · ${r.f.done.c} signed-off.`,
-    }));
+    // Delivery risk, straight off the feature health the model already derives.
+    const atRisk = model.features
+        .filter(f => f.health === 'at-risk' || f.health === 'blocked')
+        .sort((a, b) => (a.goLiveMs == null ? 1 : b.goLiveMs == null ? -1 : a.goLiveMs - b.goLiveMs));
+    const now = Date.now();
+    const upcoming = model.features
+        .filter(f => f.goLiveMs != null && f.goLiveMs >= now && f.health !== 'delivered')
+        .sort((a, b) => a.goLiveMs - b.goLiveMs)
+        .slice(0, 6);
 
     const teamsEngaged = pods.filter(p => p.name !== 'Unassigned').length;
     const totalTeams = model.teamNames.length || teamsEngaged;
     const deliveredFeat = model.features.filter(f => f.health === 'delivered').length;
-    const featTotal = model.features.length;
 
-    return {initRows, entityRows, totalF, pods, podTotal, comments, teamsEngaged, totalTeams, deliveredFeat, featTotal};
+    return {totalF, initRows, entityRows, pods, podTotal, atRisk, upcoming,
+            teamsEngaged, totalTeams, deliveredFeat, featTotal: model.features.length};
 }
 
-// ── Report pages ──────────────────────────────────────────────────────────────
-function CoverPage({model, d}) {
+// ─── Cards ────────────────────────────────────────────────────────────────────
+
+function Card({accent, kicker, title, lede, children, footnote}) {
     return (
-        <div className="fp-rp-cover">
-            <div className="fp-rp-eyebrow">Feature Management</div>
-            <h1 className="fp-rp-title">Feature Management | Product to ledger onboarding — data</h1>
-            <div className="fp-rp-asof">as of {asOf}</div>
-            <p className="fp-rp-lede">
-                <b>{d.totalF.uat.pct}%</b> of data attributes deployed &amp; tested in UAT · <b>{d.totalF.done.pct}%</b> signed-off
-            </p>
-            <div className="fp-rp-coverstats">
-                <div><b>{model.byInitiative.length}</b><span>Initiatives</span></div>
-                <div><b>{model.features.length}</b><span>Features</span></div>
-                <div><b>{model.attrs.length}</b><span>Attributes</span></div>
-                <div><b>{model.kpis.overallPct}%</b><span>Overall maturity</span></div>
+        <div className="fp-st-card" style={{'--st-accent': accent}}>
+            <div className="fp-st-head">
+                <div className="fp-st-kicker">{kicker}</div>
+                <h2 className="fp-st-title">{title}</h2>
+                {lede && <p className="fp-st-lede">{lede}</p>}
             </div>
-            <div className="fp-rp-coverchart">
-                <div className="fp-rp-coverchart-label">Onboarding funnel — % of attributes reaching each gate</div>
-                <FunnelCurve wide points={[d.totalF.req.pct, d.totalF.model.pct, d.totalF.vest.pct, d.totalF.uat.pct, d.totalF.done.pct]} />
-            </div>
+            <div className="fp-st-body">{children}</div>
+            {footnote && <div className="fp-st-foot-note">{footnote}</div>}
         </div>
     );
 }
 
-const GATES = [
-    {key: 'req', label: 'Req.'},
-    {key: 'model', label: 'Model'},
-    {key: 'vest', label: 'VEST (DEV completed)'},
-    {key: 'uat', label: 'UAT deployed & tested'},
-    {key: 'done', label: 'UAT complete'},
+function CoverCard({model, d}) {
+    return (
+        <Card
+            accent="#38BDF8"
+            kicker="Executive narrative"
+            title={<>Portfolio at <em><CountUp value={model.kpis.overallPct} suffix="%" /></em> maturity</>}
+            lede={`Every initiative, feature and attribute in the base, as of ${asOf}.`}
+            footnote="Maturity is how far each attribute has travelled its own stage path, weighted by attribute count."
+        >
+            <div className="fp-st-cover">
+                <Donut pct={model.kpis.overallPct} label="overall" sub={`${d.totalF.done.c} of ${d.totalF.t} signed off`} />
+                <div className="fp-st-statgrid">
+                    <Stat i={0} value={model.byInitiative.length} label="Initiatives" />
+                    <Stat i={1} value={model.features.length} label="Features" />
+                    <Stat i={2} value={model.attrs.length} label="Attributes" />
+                    <Stat i={3} value={d.deliveredFeat} label="Delivered" color="#4ADE80" />
+                    <Stat i={4} value={model.kpis.blocked} label="Blocked" color="#FB7185" />
+                    <Stat i={5} value={model.kpis.awaitingReview} label="Awaiting review" color="#FBBF24" />
+                </div>
+            </div>
+        </Card>
+    );
+}
+
+function FunnelCard({d}) {
+    const gates = [
+        {key: 'req', label: 'Requirements begun', color: '#38BDF8', ...d.totalF.req, t: d.totalF.t},
+        {key: 'model', label: 'Modelled', color: '#818CF8', ...d.totalF.model, t: d.totalF.t},
+        {key: 'vest', label: 'VESTed — DEV complete', color: '#A78BFA', ...d.totalF.vest, t: d.totalF.t},
+        {key: 'uat', label: 'Deployed & tested in UAT', color: '#F472B6', ...d.totalF.uat, t: d.totalF.t},
+        {key: 'done', label: 'Signed off', color: '#4ADE80', ...d.totalF.done, t: d.totalF.t},
+    ];
+    return (
+        <Card
+            accent="#A78BFA"
+            kicker="Onboarding funnel"
+            title={<>{d.totalF.uat.pct}% reach UAT, <em>{d.totalF.done.pct}%</em> are signed off</>}
+            lede={`Share of all ${d.totalF.t} attributes that have reached each gate. Each gate is cumulative.`}
+            footnote="Drop between two bars is where attributes are queuing — the widest gap is the constraint."
+        >
+            <Funnel gates={gates} />
+        </Card>
+    );
+}
+
+function InitiativesCard({d}) {
+    return (
+        <Card
+            accent="#2DD4BF"
+            kicker="By initiative"
+            title={`${plural(d.initRows.length, 'initiative')} in flight`}
+            lede="Ranked by maturity. Bar length is progress; the count on the right is attributes carried."
+            footnote="An initiative's maturity is the attribute-weighted mean of its features, so big features count for more."
+        >
+            <div className="fp-st-rows">
+                {d.initRows.map((r, i) => (
+                    <BarRow
+                        key={r.name}
+                        i={i}
+                        label={r.name}
+                        pct={r.pct}
+                        color={r.atRisk > 0 ? '#FB923C' : '#2DD4BF'}
+                        value={`${r.pct}%`}
+                        note={`${r.attrCount} attr · ${plural(r.featureCount, 'feature')}${r.atRisk ? ` · ${r.atRisk} at risk` : ''}${r.nextGoLiveMs != null ? ` · next ${fmtShort(r.nextGoLiveMs)}` : ''}`}
+                    />
+                ))}
+                {d.initRows.length === 0 && <div className="fp-st-empty">No initiatives carry attributes yet.</div>}
+            </div>
+        </Card>
+    );
+}
+
+function EntitiesCard({d}) {
+    return (
+        <Card
+            accent="#FBBF24"
+            kicker="By entity"
+            title={`${plural(d.entityRows.length, 'entity', 'entities')} onboarding`}
+            lede="Each ring is one entity's attribute-weighted maturity."
+        >
+            <div className="fp-st-ringrow">
+                {d.entityRows.map((e, i) => (
+                    <div className="fp-st-ring" key={e.name} style={{animationDelay: `${80 + i * 90}ms`}}>
+                        <Donut pct={e.pct} size={132} stroke={12} color="#FBBF24" />
+                        <div className="fp-st-ring-name">{e.name}</div>
+                        <div className="fp-st-ring-sub">{e.attrCount} attr · {plural(e.featureCount, 'feature')}</div>
+                    </div>
+                ))}
+            </div>
+        </Card>
+    );
+}
+
+const POD_SEGMENTS = [
+    {key: 'ns', label: 'Not started', color: 'rgba(255,255,255,.16)'},
+    {key: 'ip', label: 'In progress', color: '#38BDF8'},
+    {key: 'dev', label: 'DEV complete', color: '#A78BFA'},
+    {key: 'uat', label: 'UAT tested', color: '#FBBF24'},
+    {key: 'signed', label: 'Signed off', color: '#4ADE80'},
 ];
 
-// Shared column widths so the Initiatives and Entity tables line up exactly
-// (Req under Req, Model under Model, …).
-function FunnelCols() {
+function PodsCard({d}) {
     return (
-        <colgroup>
-            <col style={{width: '13%'}} />
-            {GATES.map(g => (
-                <Fragment key={g.key}>
-                    <col style={{width: '3.4%'}} />
-                    <col style={{width: '7.8%'}} />
-                    <col style={{width: '3.7%'}} />
-                    <col style={{width: '3.5%'}} />
-                </Fragment>
-            ))}
-        </colgroup>
-    );
-}
-
-function FunnelHead() {
-    return (
-        <thead>
-            <tr>
-                <th rowSpan={2} className="fp-rp-rowname">Products / Initiatives</th>
-                {GATES.map(g => <th key={g.key} colSpan={4} className="fp-rp-grouphead">{g.label}</th>)}
-            </tr>
-            <tr>
-                {GATES.map(g => (
-                    <Fragment key={g.key}>
-                        <th className="fp-rp-sub">#</th>
-                        <th className="fp-rp-sub">% compl</th>
-                        <th className="fp-rp-sub">Δ w-o-w</th>
-                        <th className="fp-rp-sub">Δ m-o-m</th>
-                    </Fragment>
+        <Card
+            accent="#34D399"
+            kicker="By pod"
+            title={<>{d.teamsEngaged} of {d.totalTeams} pods are carrying work</>}
+            lede="Where every attribute sits right now, by the team currently holding it."
+            footnote={
+                <span className="fp-st-legend">
+                    {POD_SEGMENTS.map(s => (
+                        <span key={s.key}><i style={{background: s.color}} />{s.label}</span>
+                    ))}
+                </span>
+            }
+        >
+            <div className="fp-st-rows">
+                {d.pods.map((p, i) => (
+                    <div className="fp-st-podrow" key={p.name}>
+                        <div className="fp-st-bar-label" title={p.name}>{p.name}</div>
+                        <StackBar i={i} total={p.r.t} segments={POD_SEGMENTS.map(s => ({...s, n: p.r[s.key]}))} />
+                        <div className="fp-st-bar-val">{p.r.t}</div>
+                    </div>
                 ))}
-            </tr>
-        </thead>
-    );
-}
-
-function FunnelRow({name, f, strong}) {
-    return (
-        <tr className={strong ? 'fp-rp-total' : ''}>
-            <td className="fp-rp-rowname">{name}</td>
-            {GATES.map(g => (
-                <Fragment key={g.key}>
-                    <td className="fp-rp-num">{f[g.key].c}</td>
-                    <td className="fp-rp-pct"><HarveyBall pct={f[g.key].pct} /><span>{f[g.key].pct}%</span></td>
-                    <td className="fp-rp-delta">—</td>
-                    <td className="fp-rp-delta">—</td>
-                </Fragment>
-            ))}
-        </tr>
-    );
-}
-
-function OnboardingPage({d}) {
-    return (
-        <div className="fp-rp-page">
-            <div className="fp-rp-head">
-                <div>
-                    <div className="fp-rp-eyebrow">Feature Management · Product to ledger onboarding</div>
-                    <h2 className="fp-rp-h2">Product attributes onboarded and tested</h2>
-                    <div className="fp-rp-subline">{d.totalF.uat.pct}% of attributes deployed &amp; tested in UAT · {d.totalF.done.pct}% signed-off</div>
-                </div>
+                {d.pods.length === 0 && <div className="fp-st-empty">No attributes are assigned to a team.</div>}
             </div>
+        </Card>
+    );
+}
 
-            <div className="fp-rp-cols">
-                <aside className="fp-rp-rail">
-                    <div className="fp-rp-rail-title">Onboarding at a glance</div>
-                    <div className="fp-rp-railstat"><b>{d.totalF.done.c}</b> of {d.totalF.t}<span>attributes signed-off ({d.totalF.done.pct}%)</span></div>
-                    <div className="fp-rp-railstat"><b>{d.totalF.uat.c}</b> of {d.totalF.t}<span>deployed &amp; tested in UAT ({d.totalF.uat.pct}%)</span></div>
-                    <div className="fp-rp-railstat"><b>{d.teamsEngaged}</b> of {d.totalTeams}<span>pods engaged</span></div>
-                    <div className="fp-rp-railstat"><b>{d.deliveredFeat}</b> of {d.featTotal}<span>features delivered</span></div>
-                    <div className="fp-rp-chartcard">
-                        <div className="fp-rp-chartcard-title">Onboarding funnel</div>
-                        <FunnelCurve points={[d.totalF.req.pct, d.totalF.model.pct, d.totalF.vest.pct, d.totalF.uat.pct, d.totalF.done.pct]} compact />
+function RiskCard({d}) {
+    return (
+        <Card
+            accent="#FB7185"
+            kicker="Delivery risk"
+            title={d.atRisk.length ? <><em>{d.atRisk.length}</em> {d.atRisk.length === 1 ? 'feature needs' : 'features need'} a decision</> : 'Nothing is off track'}
+            lede={d.atRisk.length ? 'Blocked, or past a go-live date that has not been met.' : 'No feature is blocked or past its go-live date.'}
+            footnote="Health is derived: blocked if any attribute is blocked, at risk if the go-live date has passed and it is under 100%."
+        >
+            <div className="fp-st-tiles">
+                {d.atRisk.slice(0, 8).map((f, i) => (
+                    <div className="fp-st-tile risk" key={f.name} style={{animationDelay: `${70 + i * 60}ms`}}>
+                        <div className="fp-st-tile-top">
+                            <span className={`fp-st-pill ${f.health}`}>{f.health === 'blocked' ? 'Blocked' : 'At risk'}</span>
+                            <span className="fp-st-tile-pct">{f.pct}%</span>
+                        </div>
+                        <div className="fp-st-tile-name">{f.name}</div>
+                        <div className="fp-st-tile-sub">{f.initiative} · go-live {fmtShort(f.goLiveMs)}</div>
                     </div>
-                </aside>
-
-                <div className="fp-rp-tablewrap">
-                    <table className="fp-rp-table">
-                        <FunnelCols />
-                        <FunnelHead />
-                        <tbody>
-                            {d.initRows.map(r => <FunnelRow key={r.name} name={r.name} f={r.f} />)}
-                            <FunnelRow name="Total" f={d.totalF} strong />
-                        </tbody>
-                    </table>
-
-                    {d.entityRows.length > 0 && (
-                        <table className="fp-rp-table fp-rp-table-entity">
-                            <FunnelCols />
-                            <thead>
-                                <tr>
-                                    <th className="fp-rp-rowname">Entity</th>
-                                    {GATES.map(g => <th key={g.key} colSpan={4} className="fp-rp-grouphead">{g.label}</th>)}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {d.entityRows.map(r => <FunnelRow key={r.name} name={r.name} f={r.f} />)}
-                            </tbody>
-                        </table>
-                    )}
-
-                    <div className="fp-rp-comments">
-                        <div className="fp-rp-comments-title">Comments</div>
-                        <ul>
-                            {d.comments.map(c => <li key={c.name}><b>{c.name}:</b> {c.text}</li>)}
-                        </ul>
+                ))}
+                {d.atRisk.length === 0 && d.upcoming.map((f, i) => (
+                    <div className="fp-st-tile" key={f.name} style={{animationDelay: `${70 + i * 60}ms`}}>
+                        <div className="fp-st-tile-top">
+                            <span className="fp-st-pill on-track">Next up</span>
+                            <span className="fp-st-tile-pct">{f.pct}%</span>
+                        </div>
+                        <div className="fp-st-tile-name">{f.name}</div>
+                        <div className="fp-st-tile-sub">{f.initiative} · go-live {fmtShort(f.goLiveMs)}</div>
                     </div>
-                </div>
+                ))}
             </div>
-
-            <div className="fp-rp-key">
-                <b>Key:</b> Req. = requirement work begun · Model = modelled (past Requirements phase) · VEST = validated/enriched/transformed in DEV · UAT deployed &amp; tested = approved in UAT · UAT complete = signed-off / delivered. Harvey ball: ○ &lt;10% · ◔ 11–39% · ◑ 40–69% · ◕ 70–99% · ● 100%. Δ w-o-w / m-o-m not yet tracked (—).
-            </div>
-        </div>
+            {d.atRisk.length > 8 && <div className="fp-st-more">+ {d.atRisk.length - 8} more</div>}
+        </Card>
     );
 }
 
-function PodPage({d}) {
-    const Row = ({name, r, strong}) => (
-        <tr className={strong ? 'fp-rp-total' : ''}>
-            <td className="fp-rp-rowname">{name}</td>
-            <td className="fp-rp-num">{r.t}</td>
-            <td className="fp-rp-num">{r.ns}</td>
-            <td className="fp-rp-num">{r.ip}</td>
-            <td className="fp-rp-num">{r.dev}</td>
-            <td className="fp-rp-num">{r.uat}</td>
-            <td className="fp-rp-num">{r.signed}</td>
-            <td className="fp-rp-num fp-rp-muted">{r.na}</td>
-            <td className="fp-rp-num fp-rp-strongcol">{r.base}</td>
-            <td className="fp-rp-pct"><HarveyBall pct={r.vestPct} /><span>{r.vestPct}%</span></td>
-            <td className="fp-rp-pct"><HarveyBall pct={r.uatPct} /><span>{r.uatPct}%</span></td>
-            <td className="fp-rp-pct"><HarveyBall pct={r.signPct} /><span>{r.signPct}%</span></td>
-        </tr>
-    );
+function PhaseCard({model}) {
+    const total = model.attrs.length || 1;
     return (
-        <div className="fp-rp-page">
-            <div className="fp-rp-head">
-                <div>
-                    <div className="fp-rp-eyebrow">Feature Management · Sourcing &amp; VESTing</div>
-                    <h2 className="fp-rp-h2">Sourcing &amp; VESTing status by pod</h2>
-                    <div className="fp-rp-subline">{d.podTotal.vestPct}% VESTed · {d.podTotal.uatPct}% deployed &amp; tested · {d.podTotal.signPct}% signed off by Finance</div>
-                </div>
+        <Card
+            accent="#818CF8"
+            kicker="Where the work sits"
+            title="Attributes by phase"
+            lede={`All ${model.attrs.length} attributes, each counted once at its current stage.`}
+            footnote="Weight at the front of the pipeline means the downstream stages have not been exercised yet."
+        >
+            <div className="fp-st-rows">
+                {PHASE_GROUPS.map((p, i) => (
+                    <BarRow
+                        key={p}
+                        i={i}
+                        label={p}
+                        pct={Math.round(((model.phaseCounts[p] || 0) / total) * 100)}
+                        color={PHASE_COLORS[p] || '#818CF8'}
+                        value={model.phaseCounts[p] || 0}
+                        note={`${Math.round(((model.phaseCounts[p] || 0) / total) * 100)}% of the portfolio`}
+                    />
+                ))}
             </div>
-
-            <div className="fp-rp-tablewrap">
-                <table className="fp-rp-table fp-rp-table-pod">
-                    <colgroup>
-                        <col style={{width: '16%'}} />
-                        <col style={{width: '6%'}} />
-                        <col style={{width: '7.5%'}} />
-                        <col style={{width: '7.5%'}} />
-                        <col style={{width: '9%'}} />
-                        <col style={{width: '7.5%'}} />
-                        <col style={{width: '8%'}} />
-                        <col style={{width: '5.5%'}} />
-                        <col style={{width: '7.5%'}} />
-                        <col style={{width: '6%'}} />
-                        <col style={{width: '6%'}} />
-                        <col style={{width: '6%'}} />
-                    </colgroup>
-                    <thead>
-                        <tr>
-                            <th className="fp-rp-rowname">Crew / Pod</th>
-                            <th className="fp-rp-sub">Total</th>
-                            <th className="fp-rp-sub">Not started</th>
-                            <th className="fp-rp-sub">In progress</th>
-                            <th className="fp-rp-sub">DEV complete — awaiting UAT</th>
-                            <th className="fp-rp-sub">UAT — tested</th>
-                            <th className="fp-rp-sub">UAT — business sign-off</th>
-                            <th className="fp-rp-sub">n/a</th>
-                            <th className="fp-rp-sub">Total (excl. n/a)</th>
-                            <th className="fp-rp-sub">VESTed</th>
-                            <th className="fp-rp-sub">UAT deployed &amp; tested</th>
-                            <th className="fp-rp-sub">Signed off by Finance</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {d.pods.map(p => <Row key={p.name} name={p.name} r={p.r} />)}
-                        <Row name="Total" r={d.podTotal} strong />
-                    </tbody>
-                </table>
-            </div>
-
-            <div className="fp-rp-key">
-                <b>Key:</b> a pod is the team currently holding an attribute. Status columns map to the attribute workflow: DEV complete — awaiting UAT = submitted for review · UAT — tested = approved · UAT — business sign-off = done. VESTed / UAT deployed &amp; tested / Signed off by Finance are % of each pod&rsquo;s in-scope attributes (excl. n/a). Harvey ball: ○ &lt;10% · ◔ 11–39% · ◑ 40–69% · ◕ 70–99% · ● 100%.
-            </div>
-        </div>
+        </Card>
     );
 }
 
+function AsksCard({model, d}) {
+    const asks = [
+        model.kpis.blocked > 0 && {
+            head: `Unblock ${plural(model.kpis.blocked, 'attribute')}`,
+            body: 'Each is stopped and will not advance without an owner and a date.',
+            color: '#FB7185',
+        },
+        model.kpis.awaitingReview > 0 && {
+            head: `Clear ${plural(model.kpis.awaitingReview, 'review')}`,
+            body: 'Sitting with an approver — each approval releases the next stage immediately.',
+            color: '#FBBF24',
+        },
+        d.atRisk.length > 0 && {
+            head: `Re-plan or confirm ${plural(d.atRisk.length, 'go-live date')}`,
+            body: d.atRisk.slice(0, 4).map(f => f.name).join(' · '),
+            color: '#FB923C',
+        },
+        model.kpis.readyToPush > 0 && {
+            head: `Push ${plural(model.kpis.readyToPush, 'attribute')} that are ready`,
+            body: 'Acceptance met and a next stage waiting — these move today.',
+            color: '#4ADE80',
+        },
+    ].filter(Boolean);
+
+    return (
+        <Card
+            accent="#38BDF8"
+            kicker="The ask"
+            title={asks.length ? <>{plural(asks.length, 'decision')} move the portfolio</> : 'Nothing is waiting on this forum'}
+            lede={asks.length ? 'Everything below is actionable this week.' : 'No blockers, no pending reviews, no date at risk.'}
+            footnote={`Generated live from ${model.attrs.length} attributes across ${plural(model.features.length, 'feature')}.`}
+        >
+            <div className="fp-st-asks">
+                {asks.map((a, i) => (
+                    <div className="fp-st-ask" key={a.head} style={{borderLeftColor: a.color, animationDelay: `${90 + i * 80}ms`}}>
+                        <div className="fp-st-ask-n" style={{color: a.color}}>{i + 1}</div>
+                        <div>
+                            <div className="fp-st-ask-head">{a.head}</div>
+                            <div className="fp-st-ask-body">{a.body}</div>
+                        </div>
+                    </div>
+                ))}
+                {asks.length === 0 && <div className="fp-st-empty">Board is clean.</div>}
+            </div>
+        </Card>
+    );
+}
+
+// ─── Deck ─────────────────────────────────────────────────────────────────────
 function buildDeck(model, d) {
     return [
-        {topic: 'Cover', node: <CoverPage model={model} d={d} />},
-        {topic: 'Product attributes onboarded and tested', node: <OnboardingPage d={d} />},
-        {topic: 'Sourcing & VESTing status by pod', node: <PodPage d={d} />},
-    ];
+        {topic: 'Overview', node: <CoverCard model={model} d={d} />},
+        {topic: 'Onboarding funnel', node: <FunnelCard d={d} />},
+        {topic: 'By initiative', node: <InitiativesCard d={d} />},
+        d.entityRows.length > 1 && {topic: 'By entity', node: <EntitiesCard d={d} />},
+        {topic: 'Where the work sits', node: <PhaseCard model={model} />},
+        {topic: 'By pod', node: <PodsCard d={d} />},
+        {topic: 'Delivery risk', node: <RiskCard d={d} />},
+        {topic: 'The ask', node: <AsksCard model={model} d={d} />},
+    ].filter(Boolean);
 }
 
-const SLIDE_MS = 16000;
+const SLIDE_MS = 11000;
 
 export default function Narrative({model, onClose}) {
     const d = useMemo(() => buildData(model), [model]);
     const slides = useMemo(() => buildDeck(model, d), [model, d]);
+    const n = slides.length;
+
     const [i, setI] = useState(0);
     const [playing, setPlaying] = useState(false);
-    const n = slides.length;
-    const go = delta => { setPlaying(false); setI(x => Math.max(0, Math.min(n - 1, x + delta))); };
+    const [progress, setProgress] = useState(0);
+    const stageRef = useRef(null);
 
+    const go = delta => { setPlaying(false); setProgress(0); setI(x => Math.max(0, Math.min(n - 1, x + delta))); };
+    const jump = idx => { setPlaying(false); setProgress(0); setI(idx); };
+
+    // Auto-advance with a visible progress rail, like a stories reel.
     useEffect(() => {
         if (!playing) return undefined;
-        const t = setTimeout(() => setI(x => (x + 1) % n), SLIDE_MS);
-        return () => clearTimeout(t);
+        const step = 100 / (SLIDE_MS / 100);
+        const t = setInterval(() => {
+            setProgress(p => {
+                if (p + step < 100) return p + step;
+                setI(x => (x + 1) % n);
+                return 0;
+            });
+        }, 100);
+        return () => clearInterval(t);
     }, [playing, i, n]);
 
     useEffect(() => {
@@ -386,21 +549,38 @@ export default function Narrative({model, onClose}) {
             if (e.key === 'Escape') onClose();
             else if (e.key === 'ArrowRight') go(1);
             else if (e.key === 'ArrowLeft') go(-1);
-            else if (e.key === ' ') { e.preventDefault(); setPlaying(p => !p); }
+            else if (e.key === ' ') { e.preventDefault(); setPlaying(p => !p); setProgress(0); }
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [n, onClose]);
 
-    const slide = slides[i];
+    const slide = slides[Math.min(i, n - 1)];
+
     return (
-        <div className="fp-ss fp-rp">
+        <div className="fp-ss fp-st">
+            {/* pip rail — one segment per card, filling while playing */}
+            <div className="fp-st-pips">
+                {slides.map((s, idx) => (
+                    <button
+                        type="button"
+                        key={s.topic}
+                        className="fp-st-pip"
+                        onClick={() => jump(idx)}
+                        aria-label={s.topic}
+                        title={s.topic}
+                    >
+                        <span style={{width: idx < i ? '100%' : idx === i ? `${playing ? progress : 100}%` : '0%'}} />
+                    </button>
+                ))}
+            </div>
+
             <div className="fp-ss-top">
-                <div className="fp-ss-brand"><Logo /> Feature Management · Narrative</div>
+                <div className="fp-ss-brand"><Logo /> Narrative</div>
                 <div className="fp-ss-topright">
-                    <button type="button" className="fp-ss-pdf" onClick={() => window.print()} title="Export to PDF (A4 landscape)">⤓ PDF</button>
-                    <button type="button" className="fp-ss-play" onClick={() => setPlaying(p => !p)} aria-label={playing ? 'Pause' : 'Play'} title={playing ? 'Pause' : 'Play'}>
+                    <button type="button" className="fp-ss-pdf" onClick={() => window.print()} title="Export to PDF">⤓ PDF</button>
+                    <button type="button" className="fp-ss-play" onClick={() => { setPlaying(p => !p); setProgress(0); }} aria-label={playing ? 'Pause' : 'Play'} title={playing ? 'Pause' : 'Play'}>
                         {playing ? '❚❚' : '▶'}
                     </button>
                     <span className="fp-ss-count">{i + 1} / {n}</span>
@@ -408,28 +588,19 @@ export default function Narrative({model, onClose}) {
                 </div>
             </div>
 
-            <div className="fp-ss-stage">
+            <div className="fp-ss-stage" ref={stageRef}>
                 <button type="button" className="fp-ss-arrow left" onClick={() => go(-1)} disabled={i === 0} aria-label="Previous">‹</button>
-                <div className="fp-ss-slide" key={i}>
-                    {slide.node}
-                    <div className="fp-rp-foot"><Logo /></div>
-                </div>
+                {/* key={i} remounts the card, so every entrance animation replays */}
+                <div className="fp-st-slide" key={i}>{slide.node}</div>
                 <button type="button" className="fp-ss-arrow right" onClick={() => go(1)} disabled={i === n - 1} aria-label="Next">›</button>
             </div>
 
-            <div className="fp-ss-dots">
-                {slides.map((s, idx) => (
-                    <button type="button" key={idx} className={`fp-ss-dot${idx === i ? ' active' : ''}`} onClick={() => { setPlaying(false); setI(idx); }} aria-label={`Slide ${idx + 1}`} title={s.topic} />
-                ))}
-            </div>
+            <div className="fp-st-caption">{slide.topic}</div>
 
-            {/* Print-only: the full deck, one A4-landscape page per slide. */}
+            {/* Print-only: every card, one page each. */}
             <div className="fp-ss-print" aria-hidden>
-                {slides.map((s, idx) => (
-                    <div className="fp-ss-printpage" key={idx}>
-                        {s.node}
-                        <div className="fp-rp-foot"><Logo /></div>
-                    </div>
+                {slides.map(s => (
+                    <div className="fp-ss-printpage" key={s.topic}>{s.node}</div>
                 ))}
             </div>
         </div>
