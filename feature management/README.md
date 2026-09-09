@@ -98,6 +98,27 @@ quoted directory; Node tooling handles it.)
 Node, unpaired remote, missing token, dirty tree, failing lint — and uploads nothing until they all
 pass. It operates on its own directory, so the space in the folder name is not an issue.
 
+The script is deliberately **pure ASCII and BOM-free**: Windows PowerShell 5.1 reads a BOM-less
+UTF-8 script as ANSI, which mangles any non-ASCII character in it, and the legacy console cannot
+render box-drawing or check-mark glyphs anyway. Keep it that way.
+
+First time on a machine:
+
+```powershell
+# 1. Get the code (skip if you already have a clone). Replace the path with
+#    wherever you keep repos — there is no default location.
+cd $HOME
+git clone https://github.com/vhyseni1/AirtableExtensions.git
+cd "$HOME\AirtableExtensions\feature management"
+
+# 2. Clear the "downloaded from the internet" mark and allow unsigned scripts.
+#    -Scope Process limits the policy change to this window.
+Unblock-File .\release.ps1
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+```
+
+Then, for every release:
+
 ```powershell
 .\release.ps1                                          # default remote, auto comment
 .\release.ps1 -Remote prod -Comment "Executive review"  # named remote (.block\prod.remote.json)
