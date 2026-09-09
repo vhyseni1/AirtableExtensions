@@ -158,9 +158,17 @@ Prerequisites it checks for you, and how to satisfy them:
 - **Remote pairing** — one of `.block\remote.json` (default) or `.block\<name>.remote.json`
   (named). See *Pairing the folder with a base* below.
 - **Personal access token** with the **`block:manage`** scope, from
-  <https://airtable.com/create/tokens>, stored via `block set-api-key` (writes
-  `.airtableblocksrc.json` — home directory by default; the app-scoped copy is git-ignored, keep it
-  that way).
+  <https://airtable.com/create/tokens>, stored via `block set-api-key`. The CLI reads
+  `.airtableblocksrc.json` from two places, in this order:
+
+  | Scope | Windows | macOS / Linux |
+  |---|---|---|
+  | app | `<project>\.airtableblocksrc.json` | same |
+  | user | `%APPDATA%\.airtableblocksrc.json` | `$XDG_CONFIG_HOME` or `~/.config` |
+
+  Note it is **not** `~\.airtableblocksrc.json` on Windows. If the script reports no token, it
+  prints both paths it checked, and says so explicitly when a config exists at `$HOME` that the CLI
+  will never read.
 
 #### Pairing the folder with a base
 

@@ -254,22 +254,80 @@ if (($baseId -ne 'NONE' -and $baseId.Length -ne 17) -or $blockId.Length -ne 17) 
 Write-Ok "Remote: $(Join-Path '.block' $remoteFile) [$baseId / $blockId]"
 
 # --- 4. Credentials ---------------------------------------------------------
-# The CLI reads a personal access token from .airtableblocksrc.json - in the
-# release folder (app scope) or your home directory (user scope).
+# Resolve the token exactly as the CLI does (helpers/system_config.js):
+#   app scope    - <app root>\.airtableblocksrc.json  (app root = folder with block.json)
+#   user scope   - Windows: %APPDATA%\.airtableblocksrc.json
+#                            (fallback ~\AppData\Roaming)
+#                  otherwise: $XDG_CONFIG_HOME or ~/.config, + the same filename
+# NOT ~\.airtableblocksrc.json on Windows - that is a different folder and the
+# CLI never looks there.
+# Shape: {"airtableApiKey": "pat..."} or {"airtableApiKey": {"default": "pat..."}}
 
 Write-Step 'Checking credentials'
 
-$appToken  = Join-Path $releaseRoot '.airtableblocksrc.json'
-$userToken = Join-Path $HOME '.airtableblocksrc.json'
-if (-not (Test-Path -LiteralPath $appToken) -and -not (Test-Path -LiteralPath $userToken)) {
-    Stop-WithError 'No Airtable personal access token configured.' @"
+# $IsWindows exists only in PowerShell 6+; Windows PowerShell 5.1 is Windows.
+$onWindows = if (Get-Variable -Name IsWindows -ErrorAction SilentlyContinue) { $IsWindows } else { $true }
+$globalConfigDir =
+    if ($onWindows) {
+        if ($env:APPDATA) { $env:APPDATA } else { Join-Path $HOME (Join-Path 'AppData' 'Roaming') }
+    } else {
+        if ($env:XDG_CONFIG_HOME) { $env:XDG_CONFIG_HOME } else { Join-Path $HOME '.config' }
+    }
+
+$tokenCandidates = @(
+    [pscustomobject]@{ Scope = 'app';  Path = (Join-Path $releaseRoot '.airtableblocksrc.json') },
+    [pscustomobject]@{ Scope = 'user'; Path = (Join-Path $globalConfigDir '.airtableblocksrc.json') }
+)
+
+# Returns the token stored under the 'default' name, or '' - never logged.
+function Get-StoredToken {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return '' }
+    try {
+        $cfg = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+    } catch {
+        Write-Warn "$Path is not valid JSON - ignoring it."
+        return ''
+    }
+    if (-not $cfg.PSObject.Properties['airtableApiKey']) { return '' }
+    $keyValue = $cfg.airtableApiKey
+    if ($keyValue -is [string]) { return $keyValue }
+    if ($keyValue -and $keyValue.PSObject.Properties['default']) { return [string]$keyValue.default }
+    return ''
+}
+
+$tokenScope = ''
+$tokenPath = ''
+$token = ''
+foreach ($candidate in $tokenCandidates) {
+    $found = Get-StoredToken -Path $candidate.Path
+    if ($found) { $token = $found; $tokenScope = $candidate.Scope; $tokenPath = $candidate.Path; break }
+}
+
+if (-not $token) {
+    $looked = ($tokenCandidates | ForEach-Object { "  $($_.Scope.PadRight(5)) $($_.Path)" }) -join "`n"
+    $strayHint = ''
+    $strayPath = Join-Path $HOME '.airtableblocksrc.json'
+    if ((Test-Path -LiteralPath $strayPath) -and ($tokenCandidates.Path -notcontains $strayPath)) {
+        $strayHint = "`n`nThere IS a config at $strayPath, but the CLI does not read that path.`nRe-run set-api-key so it lands in the right place."
+    }
+    Stop-WithError 'No Airtable personal access token found where the CLI looks.' @"
+Looked in:
+$looked$strayHint
+
 Create a token with the block:manage scope at https://airtable.com/create/tokens
-(grant it on the base you are deploying to), then run:
+(grant it on the base you deploy to), then run:
     npx --yes --package @airtable/blocks-cli@$CliVersion block set-api-key
-and paste the token when prompted. It is stored in your home directory.
+and paste it when prompted.
 "@
 }
-Write-Ok ('Token found in {0} scope' -f $(if (Test-Path -LiteralPath $appToken) { 'app' } else { 'user' }))
+
+# Format check only - the value itself is never printed.
+# key + 14 alnum is the deprecated API key; pat + 14 alnum + . + 64 hex is a PAT.
+if ($token -notmatch '^key[a-zA-Z0-9]{14}$' -and $token -notmatch '^pat[a-zA-Z0-9]{14}\.[0-9a-f]{64}$') {
+    Write-Warn "The stored credential in $tokenPath does not look like a personal access token (pat...) or an API key (key...). The upload may be rejected."
+} 
+Write-Ok "Token: $tokenScope scope, $tokenPath ($($token.Substring(0, [Math]::Min(3, $token.Length)))...)"
 
 # --- 5. Source control state (source repo, not the release folder) ----------
 
