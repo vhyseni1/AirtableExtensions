@@ -137,12 +137,39 @@ Prerequisites it checks for you, and how to satisfy them:
 
 - **Node 18.18+** — ESLint 9 in this repo is the binding constraint, not the CLI (which declares
   `>=10`).
-- **Remote pairing** — `.block\remote.json`, created once with
-  `npx --yes --package @airtable/blocks-cli block add-remote <blockIdentifier> <remoteName>`.
+- **Remote pairing** — one of `.block\remote.json` (default) or `.block\<name>.remote.json`
+  (named). See *Pairing the folder with a base* below.
 - **Personal access token** with the **`block:manage`** scope, from
   <https://airtable.com/create/tokens>, stored via `block set-api-key` (writes
   `.airtableblocksrc.json` — home directory by default; the app-scoped copy is git-ignored, keep it
   that way).
+
+#### Pairing the folder with a base
+
+A checkout has no `.block/` directory — that pairing is per machine and is not committed. Do this
+once, then never again on that machine.
+
+Get the **block identifier** (`<baseId>/<blockId>`, e.g. `app12345678/blk12345678`) from the base:
+**Extensions → Add an extension → Build a custom extension**. Airtable shows a
+`block init app…/blk… ` command; the `app…/blk…` part is the identifier.
+
+Then pick one:
+
+```powershell
+# A. Named remote — the supported command. The name is REQUIRED
+#    (letters, digits, hyphen, underscore) and it writes .block\prod.remote.json.
+npx --yes --package @airtable/blocks-cli@3.0.3 block add-remote app.../blk... prod
+.\release.ps1 -Remote prod          # -Remote needed on every release
+
+# B. Default remote — write the file yourself, then no flag is ever needed.
+New-Item -ItemType Directory -Force .block | Out-Null
+'{"baseId": "app...", "blockId": "blk..."}' | Set-Content .block\remote.json -Encoding ascii
+.\release.ps1
+```
+
+`block add-remote` cannot produce the default `.block\remote.json` — only `block init` does, and
+`init` refuses to write into a directory that already exists (and would pull a template over your
+code). So in an existing checkout it is A or B, never `init`.
 
 ## Workflow & limits
 

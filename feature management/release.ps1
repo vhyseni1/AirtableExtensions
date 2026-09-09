@@ -152,12 +152,26 @@ if (-not (Test-Path -LiteralPath $remotePath)) {
                       Select-Object -ExpandProperty Name)
     }
     if ($existing.Count -gt 0) { Write-Warn "Remotes present in .block: $($existing -join ', ')" }
-    Stop-WithError "No remote config at $(Join-Path '.block' $remoteFile)." @'
-Pair this folder with the base once:
-    In the base: Extensions -> Build a custom extension -> copy the block identifier
-    Then run:   npx --yes --package @airtable/blocks-cli block add-remote <blockIdentifier> <remoteName>
-                (omit <remoteName> for the default remote)
-'@
+    Stop-WithError "No remote config at $(Join-Path '.block' $remoteFile)." @"
+Pair this folder with the base once. Two ways - pick one.
+
+A. Supported command (creates a NAMED remote):
+     1. In the base: Extensions -> Add an extension -> Build a custom extension.
+        Airtable shows a 'block init app.../blk... ' command. Copy the
+        app.../blk... part - that is the block identifier (baseId/blockId).
+     2. npx --yes --package @airtable/blocks-cli@$CliVersion block add-remote app.../blk... prod
+        The remote name is REQUIRED and this writes .block\prod.remote.json.
+        Valid names: letters, digits, hyphen, underscore.
+     3. Release with:  .\release.ps1 -Remote prod
+
+B. Default remote (no name to pass on every release):
+     Create .block\remote.json yourself containing:
+       {"baseId": "app...", "blockId": "blk..."}
+     Then:  .\release.ps1
+
+Do NOT run 'block init' in this folder - it refuses to write into a directory
+that already exists, and it would pull down a template over your code.
+"@
 }
 Write-Ok "Remote config: $(Join-Path '.block' $remoteFile)"
 
