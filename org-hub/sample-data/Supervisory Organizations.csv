@@ -1,0 +1,25 @@
+Supervisory Organization,Parent Supervisory Organization,SO Status,Scoping,Short Code,SO ID,Manager,Org Level,[C] SupOrgAssignement % Rollup (from Employees & Positions / FUTURE)
+Executive Office (Isabelle Bello) (SO-0010),,No Changes SO,In Scope,EX,SO-0010,Isabelle Bello,0,4.0
+Digital Solutions Group (Sanne Fontaine) (SO-0020),Executive Office (Isabelle Bello) (SO-0010),Updated SO,In Scope,DSG,SO-0020,Sanne Fontaine,1,5.0
+Data & Analytics (Katarina Marchetti) (SO-0030),Digital Solutions Group (Sanne Fontaine) (SO-0020),Updated SO,In Scope,DSGA,SO-0030,Katarina Marchetti,2,4.0
+Data Engineering (Tomas Kowalski) (SO-0040),Data & Analytics (Katarina Marchetti) (SO-0030),New SO,In Scope,DSGAE,SO-0040,Tomas Kowalski,3,8.8
+Analytics & Insights (Vacant) (SO-0050),Data & Analytics (Katarina Marchetti) (SO-0030),New SO,In Scope,DSGAI,SO-0050,Vacant,3,7.6
+Platform Engineering (Marta Alvarez) (SO-0060),Digital Solutions Group (Sanne Fontaine) (SO-0020),No Changes SO,In Scope,DSGP,SO-0060,Marta Alvarez,2,4.0
+Cloud Infrastructure (Leon Fontaine) (SO-0070),Platform Engineering (Marta Alvarez) (SO-0060),No Changes SO,In Scope,DSGPC,SO-0070,Leon Fontaine,3,6.8
+Application Services (Adrian Lindholm) (SO-0080),Platform Engineering (Marta Alvarez) (SO-0060),Updated SO,In Scope,DSGPA,SO-0080,Adrian Lindholm,3,9.5
+Digital Product (Bruno Weber) (SO-0090),Digital Solutions Group (Sanne Fontaine) (SO-0020),New SO - Draft,In Scope,DSGD,SO-0090,Bruno Weber,2,7.0
+Finance (Ida Sokolov) (SO-0100),Executive Office (Isabelle Bello) (SO-0010),No Changes SO,Out of Scope,FIN,SO-0100,Ida Sokolov,1,4.0
+Controlling (Agnes Conti) (SO-0110),Finance (Ida Sokolov) (SO-0100),No Changes SO,Out of Scope,FINC,SO-0110,Agnes Conti,2,6.5
+Treasury & Tax (Tomas Vogel) (SO-0120),Finance (Ida Sokolov) (SO-0100),Decommissioned SO,Out of Scope,FINT,SO-0120,Tomas Vogel,2,4.0
+People & Culture (Selma Mancini) (SO-0130),Executive Office (Isabelle Bello) (SO-0010),Updated SO,In Scope,HR,SO-0130,Selma Mancini,1,4.0
+Talent Acquisition (Aleksander Sokolov) (SO-0140),People & Culture (Selma Mancini) (SO-0130),New SO - Draft,In Scope,HRTA,SO-0140,Aleksander Sokolov,2,5.8
+HR Operations (Bianca Horvath) (SO-0150),People & Culture (Selma Mancini) (SO-0130),No Changes SO,In Scope,HROP,SO-0150,Bianca Horvath,2,7.0
+Commercial (Leon Berger) (SO-0160),Executive Office (Isabelle Bello) (SO-0010),No Changes SO,Out of Scope,COM,SO-0160,Leon Berger,1,3.0
+Sales EMEA (Roxana Conti) (SO-0170),Commercial (Leon Berger) (SO-0160),No Changes SO,Out of Scope,COMSE,SO-0170,Roxana Conti,2,10.0
+Marketing (Beatrice Klein) (SO-0180),Commercial (Leon Berger) (SO-0160),Updated SO,Out of Scope,COMMK,SO-0180,Beatrice Klein,2,6.0
+Operations (Nils Graf) (SO-0190),Executive Office (Isabelle Bello) (SO-0010),No Changes SO,In Scope,OPS,SO-0190,Nils Graf,1,3.0
+Supply Chain (Pierre Serrano) (SO-0200),Operations (Nils Graf) (SO-0190),No Changes SO,In Scope,OPSSC,SO-0200,Pierre Serrano,2,8.5
+Quality & Compliance (Dalia Falk) (SO-0210),Operations (Nils Graf) (SO-0190),New SO,In Scope,OPSQC,SO-0210,Dalia Falk,2,7.0
+Research & Development (Elsa Aubert) (SO-0220),Executive Office (Isabelle Bello) (SO-0010),No Changes SO,In Scope,RND,SO-0220,Elsa Aubert,1,3.0
+Clinical Development (Priya Haddad) (SO-0230),Research & Development (Elsa Aubert) (SO-0220),Updated SO,In Scope,RNDCD,SO-0230,Priya Haddad,2,8.2
+Preclinical Research (Stefan Keller) (SO-0240),Research & Development (Elsa Aubert) (SO-0220),No Changes SO,In Scope,RNDPR,SO-0240,Stefan Keller,2,8.0
