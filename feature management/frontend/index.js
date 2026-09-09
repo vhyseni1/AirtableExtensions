@@ -41,7 +41,7 @@ function Dashboard() {
             <header className="fp-nav">
                 <div className="fp-nav-left">
                     <Logo />
-                    <span className="fp-nav-title">ampliFI</span>
+                    <span className="fp-nav-title">Feature Management</span>
                 </div>
                 <nav className="fp-nav-tabs" role="tablist" aria-label="View">
                     {MODES.map(m => (

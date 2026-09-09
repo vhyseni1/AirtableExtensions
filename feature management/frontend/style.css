@@ -4,7 +4,7 @@
     --fp-card: #ffffff;
     --fp-text: #14274e;
     --fp-muted: #647088;
-    --fp-accent: #0f172a;   /* UBS red */
+    --fp-accent: #0f172a;   /* accent - change here to re-brand */
     --fp-ink: #14274e;      /* deep navy */
     --fp-radius: 10px;
     --fp-shadow: 0 1px 2px rgba(20,39,78,.06), 0 6px 18px rgba(20,39,78,.05);
@@ -23,7 +23,7 @@
     -webkit-font-smoothing: antialiased;
 }
 
-/* â”€â”€ Top app bar â”€â”€ */
+/* ── Top app bar ── */
 .fp-nav {
     display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
     margin: -20px -24px 24px; padding: 12px 24px;
@@ -65,7 +65,7 @@
 }
 .fp-nav-narrative:hover { background: rgba(230,0,0,.08); }
 
-/* â”€â”€ Pipeline rail â”€â”€ */
+/* ── Pipeline rail ── */
 .fp-rail { display: flex; align-items: stretch; gap: 8px; margin-bottom: 22px; overflow-x: auto; }
 .fp-rail-seg { display: flex; align-items: center; flex: 1 1 0; min-width: 104px; }
 .fp-rail-card {
@@ -77,13 +77,13 @@
 .fp-rail-name { font-size: 12px; color: var(--fp-muted); margin-top: 6px; }
 .fp-rail-arrow { color: #cbd5e1; padding: 0 4px; font-size: 16px; }
 
-/* â”€â”€ KPI strip â”€â”€ */
+/* ── KPI strip ── */
 .fp-kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 24px; }
 .fp-kpi { background: var(--fp-card); border: 1px solid var(--fp-border); border-radius: var(--fp-radius); padding: 16px 18px; box-shadow: var(--fp-shadow); }
 .fp-kpi-value { font-size: 32px; font-weight: 800; line-height: 1.05; letter-spacing: -.01em; }
 .fp-kpi-label { font-size: 12px; color: var(--fp-muted); margin-top: 6px; }
 
-/* â”€â”€ Filters / bars â”€â”€ */
+/* ── Filters / bars ── */
 .fp-filters, .fp-teambar { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
 .fp-filters label, .fp-teambar label { display: flex; flex-direction: column; font-size: 11px; color: var(--fp-muted); gap: 3px; }
 .fp-filters select, .fp-teambar select { font-size: 13px; padding: 5px 8px; border: 1px solid var(--fp-border); border-radius: 6px; background: #fff; min-width: 160px; }
@@ -99,7 +99,7 @@
 .fp-tl-crumb i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 .fp-tl-hint { font-size: 12px; color: var(--fp-muted, #64748B); margin: 0 0 10px; }
 
-/* â”€â”€ Top-bar filter (Entity / Initiative / Feature / Milestone) â”€â”€ */
+/* ── Top-bar filter (Entity / Initiative / Feature / Milestone) ── */
 .fp-filterbar {
     display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px;
     padding: 10px 14px; margin: 0 0 18px;
@@ -121,7 +121,7 @@
 }
 .fp-filterbar-clear:hover { background: #fff6f6; border-color: var(--fp-accent, #0f172a); }
 
-/* â”€â”€ Swimlane timeline (features grouped by milestone) â”€â”€ */
+/* ── Swimlane timeline (features grouped by milestone) ── */
 .fp-swim { position: relative; width: 100%; overflow-x: hidden; }
 .fp-swim-axis { position: relative; height: 20px; margin-bottom: 4px; }
 .fp-swim-tick { position: absolute; top: 0; transform: translateX(-50%); font-size: 11px; color: var(--fp-muted, #64748B); white-space: nowrap; }
@@ -152,7 +152,7 @@
 .fp-showmore { margin-top: 8px; width: 100%; border: 1px dashed var(--fp-border); background: #fff; color: var(--fp-accent); border-radius: 8px; padding: 6px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
 .fp-showmore:hover { background: #fff6f6; border-style: solid; }
 
-/* â”€â”€ Flow board â”€â”€ */
+/* ── Flow board ── */
 .fp-board { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; margin-bottom: 24px; }
 .fp-board-kanban { grid-template-columns: repeat(7, minmax(168px, 1fr)); overflow-x: auto; padding-bottom: 6px; }
 .fp-col { background: #eef1f6; border-radius: var(--fp-radius); display: flex; flex-direction: column; min-height: 96px; border: 2px solid transparent; transition: border-color .15s, background .15s; }
@@ -176,22 +176,22 @@
 .fp-card-sub { font-size: 11.5px; color: var(--fp-muted); margin-top: 6px; }
 .fp-warn { color: #b45309; font-size: 11.5px; font-weight: 600; }
 
-/* â”€â”€ Chips / tags â”€â”€ */
+/* ── Chips / tags ── */
 .fp-chip { color: #fff; border-radius: 999px; padding: 2px 10px; font-size: 11px; font-weight: 600; white-space: nowrap; }
 .fp-phase-tag { border: 1px solid; border-radius: 4px; padding: 1px 6px; font-size: 11px; }
 .fp-tag { background: #eef2f7; border-radius: 5px; padding: 2px 8px; font-size: 11px; color: #334155; white-space: nowrap; }
 
-/* â”€â”€ Two column (heatmap + feed) â”€â”€ */
+/* ── Two column (heatmap + feed) ── */
 .fp-two-col { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; }
 
-/* â”€â”€ Heatmap â”€â”€ */
+/* ── Heatmap ── */
 .fp-heat { width: 100%; border-collapse: collapse; background: var(--fp-card); border: 1px solid var(--fp-border); border-radius: var(--fp-radius); overflow: hidden; }
 .fp-heat th, .fp-heat td { padding: 6px 8px; text-align: center; font-size: 11px; border: 1px solid var(--fp-border); }
 .fp-heat th { background: #f1f5f9; }
 .fp-heat-corner, .fp-heat-feature { text-align: left; font-weight: 600; }
 .fp-heat-pct { font-weight: 700; }
 
-/* â”€â”€ Feed â”€â”€ */
+/* ── Feed ── */
 .fp-feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .fp-feed li { background: var(--fp-card); border: 1px solid var(--fp-border); border-radius: 6px; padding: 8px; }
 .fp-feed-top { display: flex; justify-content: space-between; align-items: center; }
@@ -199,7 +199,7 @@
 .fp-feed-route { font-size: 12px; font-weight: 600; margin-top: 4px; }
 .fp-feed-sub { font-size: 11px; color: var(--fp-muted); margin-top: 2px; }
 
-/* â”€â”€ Team lanes (Mode B) â”€â”€ */
+/* ── Team lanes (Mode B) ── */
 .fp-lanes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 .fp-lane { background: #f1f5f9; border-radius: var(--fp-radius); display: flex; flex-direction: column; }
 .fp-lane-head { display: flex; justify-content: space-between; padding: 9px 10px; font-weight: 700; font-size: 12px; border-bottom: 2px solid #ccc; }
@@ -212,7 +212,7 @@
 .fp-assignee { margin-bottom: 6px; }
 .fp-assignee-head { font-size: 11px; font-weight: 700; color: #334155; display: flex; gap: 6px; align-items: center; margin: 2px 0 4px; }
 
-/* â”€â”€ Actions / buttons â”€â”€ */
+/* ── Actions / buttons ── */
 .fp-actions { display: flex; gap: 6px; margin-top: 8px; }
 .fp-actions button { border: 1px solid var(--fp-border); border-radius: 6px; padding: 5px 12px; font-size: 12px; cursor: pointer; background: #fff; font-weight: 600; }
 .fp-actions button.push, .fp-actions button.accept { background: #16a34a; color: #fff; border-color: #16a34a; }
@@ -220,7 +220,7 @@
 .fp-actions button:disabled { opacity: .55; cursor: progress; }
 .fp-return textarea { width: 100%; min-height: 54px; border: 1px solid var(--fp-border); border-radius: 6px; padding: 6px; font: inherit; font-size: 12px; }
 
-/* â”€â”€ Toast / banners â”€â”€ */
+/* ── Toast / banners ── */
 .fp-toast { padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; font-size: 12px; }
 .fp-toast.ok { background: #dcfce7; color: #166534; }
 .fp-toast.err { background: #fee2e2; color: #991b1b; }
@@ -232,19 +232,19 @@
 .fp-empty { text-align: center; padding: 6px 0; }
 .fp-loading { padding: 40px; text-align: center; color: var(--fp-muted); }
 
-/* â”€â”€ Setup banner â”€â”€ */
+/* ── Setup banner ── */
 .fp-setup { background: #fff; border: 1px solid var(--fp-border); border-radius: var(--fp-radius); padding: 20px; max-width: 720px; }
 .fp-setup h2 { margin-top: 0; color: #b91c1c; }
 .fp-setup code { background: #f1f5f9; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
 .fp-setup ul { columns: 2; }
 
-/* â”€â”€ Accept list â”€â”€ */
+/* ── Accept list ── */
 .fp-accept { list-style: none; margin: 6px 0; padding: 0; }
 .fp-accept li { display: flex; gap: 6px; font-size: 11px; padding: 1px 0; color: #475569; }
 .fp-accept li.done { color: #166534; }
 .fp-accept-box { font-weight: 700; }
 
-/* â”€â”€ Accessibility â”€â”€ */
+/* ── Accessibility ── */
 button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:focus-visible {
     outline: 2px solid #2563eb; outline-offset: 2px;
 }
@@ -252,7 +252,7 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
     * { transition: none !important; animation: none !important; }
 }
 
-/* â”€â”€ Responsive â”€â”€ */
+/* ── Responsive ── */
 @media (max-width: 1100px) {
     .fp-kpis { grid-template-columns: repeat(3, 1fr); }
     .fp-board { grid-template-columns: repeat(4, 1fr); }
@@ -264,7 +264,7 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
     .fp-board, .fp-lanes { grid-template-columns: 1fr; }
 }
 
-/* â”€â”€ Roadmap â”€â”€ */
+/* ── Roadmap ── */
 .fp-rm-head, .fp-rm-row {
     display: grid;
     grid-template-columns: 220px 1fr 200px;
@@ -294,7 +294,7 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
     color: #475569; background: #eef2f7; border-radius: 6px; padding: 5px 10px; margin-bottom: 6px;
 }
 
-/* â”€â”€ Team view extras â”€â”€ */
+/* ── Team view extras ── */
 .fp-roster { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
 .fp-people { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
 .fp-kpis-sm { grid-template-columns: repeat(4, 1fr); }
@@ -308,7 +308,7 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
     .fp-kpis-sm { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• EXECUTIVE OVERVIEW â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ════════════════════════ EXECUTIVE OVERVIEW ════════════════════════ */
 .fp-exec { padding-top: 4px; }
 
 /* Hero */
@@ -378,13 +378,13 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-panel-title { font-weight: 700; font-size: 14px; margin-bottom: 14px; }
 .fp-exec-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 
-/* Delivery timeline â€” markers on a baseline; labels stacked in clean lanes */
-/* Timeline panel â€” filter sits inside, as an inset toolbar; nothing overflows. */
+/* Delivery timeline — markers on a baseline; labels stacked in clean lanes */
+/* Timeline panel — filter sits inside, as an inset toolbar; nothing overflows. */
 .fp-tl-panel { overflow: hidden; }
 .fp-tl-filter { margin-bottom: 14px; }
 .fp-tl-filter .fp-filterbar { border: 1px solid var(--fp-border); border-radius: 10px; background: linear-gradient(180deg, color-mix(in srgb, var(--fp-border) 16%, #fff), #fff); padding: 9px 14px; margin: 0; }
 .fp-timeline { position: relative; width: 100%; padding: 44px 6px 14px; }
-/* Month grid behind the flags â€” quarter starts stronger so start dates read. */
+/* Month grid behind the flags — quarter starts stronger so start dates read. */
 .fp-tl-grid { position: absolute; top: 34px; bottom: 12px; left: 6px; right: 6px; pointer-events: none; z-index: 0; }
 .fp-tl-grid span { position: absolute; top: 0; bottom: 0; width: 1px; background: #eef1f5; transform: translateX(-50%); }
 .fp-tl-grid span.q { background: #d7dfea; }
@@ -394,8 +394,8 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-tl-tick::after { content: ''; position: absolute; left: 50%; top: 16px; width: 1px; height: 8px; background: #cbd5e3; }
 .fp-tl-today { position: absolute; top: -22px; width: 2px; background: var(--fp-accent); transform: translateX(-50%); border-radius: 2px; }
 .fp-tl-today span { position: absolute; top: -4px; left: 6px; font-size: 10px; font-weight: 800; color: var(--fp-accent); white-space: nowrap; }
-/* The flag column is transparent to clicks in its empty band â€” only the marker
-   and label are clickable â€” so an adjacent flag's box never swallows the one
+/* The flag column is transparent to clicks in its empty band — only the marker
+   and label are clickable — so an adjacent flag's box never swallows the one
    beneath it. */
 .fp-tl-flag { position: absolute; top: -7px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; pointer-events: none; }
 .fp-tl-flag:hover { z-index: 60; }
@@ -415,7 +415,7 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 /* Roomier panels for the attention / distribution row */
 .fp-panel-roomy { padding: 22px 24px; }
 
-/* Attention list â€” typed across features / attributes / handshakes */
+/* Attention list — typed across features / attributes / handshakes */
 .fp-attn-summary { display: flex; gap: 20px; font-size: 12px; color: var(--fp-muted); margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--fp-border); }
 .fp-attn-summary b { color: var(--fp-ink); font-size: 16px; margin-right: 4px; }
 .fp-attention { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
@@ -438,7 +438,7 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-pb-track i { display: block; height: 100%; border-radius: 5px; }
 .fp-pb-val { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• WORKFLOW KANBAN (drag & drop) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ════════════════════════ WORKFLOW KANBAN (drag & drop) ════════════════════════ */
 .fp-wf-hint { font-size: 11.5px; color: var(--fp-muted); }
 .fp-wf-hint b { color: var(--fp-ink); }
 .fp-kanban { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 20px; align-items: start; }
@@ -471,7 +471,7 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
     .fp-hero { flex-direction: column; align-items: flex-start; }
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• INTERACTIVITY + ANIMATION â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ════════════════════════ INTERACTIVITY + ANIMATION ════════════════════════ */
 .clickable { cursor: pointer; transition: transform .12s ease, background .12s ease, box-shadow .12s ease, color .12s ease, border-color .12s ease; }
 .clickable:hover { transform: translateY(-1px); }
 
@@ -508,7 +508,7 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
     .fp-donut circle, .clickable { transition: none !important; }
 }
 
-/* â”€â”€ Drill-down drawer (lists â†’ records) â”€â”€ */
+/* ── Drill-down drawer (lists → records) ── */
 .fp-drawer-backdrop { position: fixed; inset: 0; background: rgba(20,39,78,.4); z-index: 60; display: flex; justify-content: flex-end; }
 .fp-drawer { width: min(520px, 96vw); height: 100%; background: #fff; box-shadow: -16px 0 40px rgba(20,39,78,.25); display: flex; flex-direction: column; animation: fp-slidein .22s ease; }
 @keyframes fp-slidein { from { transform: translateX(28px); opacity: .4; } to { transform: translateX(0); opacity: 1; } }
@@ -531,7 +531,7 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-dr-open { border: 1px solid var(--fp-border); background: #fff; border-radius: 6px; width: 26px; height: 26px; cursor: pointer; color: var(--fp-ink); font-size: 13px; }
 .fp-dr-open:hover { border-color: var(--fp-accent); color: var(--fp-accent); }
 
-/* â”€â”€ Narrative â”€â”€ */
+/* ── Narrative ── */
 .fp-narrative-btn {
     margin-top: 16px; display: inline-flex; align-items: center; gap: 8px;
     background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.34);
@@ -566,7 +566,7 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .b-focus { background: #f5f3ff; color: #6d28d9; }
 .b-flow { background: #ecfeff; color: #0e7490; }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• TRACEABILITY â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ════════════════════════ TRACEABILITY ════════════════════════ */
 .fp-panel-hint { font-size: 12px; color: var(--fp-muted); margin-bottom: 14px; }
 
 /* Attribute flow (one line per attribute; features on y, teams on x) */
@@ -632,7 +632,7 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-legend-top { margin: 0 0 12px; }
 .fp-legend .fp-dim { opacity: .35; }
 
-/* Feature CARDS â€” the container; attributes nest inside */
+/* Feature CARDS — the container; attributes nest inside */
 .fp-featcard {
     border: 1px solid var(--fp-border);
     border-radius: 12px; background: #fff; box-shadow: var(--fp-shadow);
@@ -651,7 +651,7 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-featcard-meta { display: flex; gap: 18px; font-size: 12px; color: var(--fp-muted); flex-wrap: wrap; }
 .fp-featcard-meta b { color: var(--fp-ink); font-size: 14px; }
 
-/* Attribute rows â€” lean single lines nested inside a feature card */
+/* Attribute rows — lean single lines nested inside a feature card */
 .fp-featcard .fp-arows { padding: 4px 8px 8px; }
 .fp-arows { list-style: none; margin: 0; padding: 0; }
 .fp-arow { border-bottom: 1px solid var(--fp-border); }
@@ -724,7 +724,7 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-rel-count input { width: 72px; border: 1px solid var(--fp-border); border-radius: 8px; padding: 8px; font: inherit; text-align: center; }
 .fp-rel-names { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
 
-/* The pointy strip â€” process arrows (expanded only) */
+/* The pointy strip — process arrows (expanded only) */
 .fp-chevs { display: flex; width: 100%; margin-bottom: 4px; }
 .fp-chevron {
     flex: 1 1 0; min-width: 0; height: 30px; margin-left: -10px;
@@ -760,8 +760,8 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-jlog-who { font-size: 12px; color: var(--fp-muted); margin-top: 5px; }
 .fp-jlog-note { font-size: 12px; color: var(--fp-ink); margin-top: 6px; font-style: italic; }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• NARRATIVE SLIDESHOW (full screen) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
-/* â”€â”€ Narrative â€” UBS light report deck â”€â”€ */
+/* ════════════════════════ NARRATIVE SLIDESHOW (full screen) ════════════════════════ */
+/* ── Narrative — light report deck ── */
 .fp-ss {
     position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column;
     background: #eef0f3; color: #111;
@@ -812,12 +812,12 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
 .fp-rp-coverstats div { display: flex; flex-direction: column; }
 .fp-rp-coverstats b { font-size: 46px; font-weight: 800; line-height: 1; color: #1a1a1a; }
 .fp-rp-coverstats span { font-size: 13px; color: #6b7280; margin-top: 6px; }
-/* Onboarding funnel â€” sits UNDER the numbers, borderless with a gradient fill,
+/* Onboarding funnel — sits UNDER the numbers, borderless with a gradient fill,
    so the numbers and the graph read as one composition. */
 .fp-rp-coverchart { margin-top: 22px; max-width: 720px; }
 .fp-rp-coverchart-label { font-size: 11px; font-weight: 600; color: #6b7280; margin-bottom: 2px; text-transform: uppercase; letter-spacing: .04em; }
 .fp-rp-cover-side { flex: 0 0 auto; }
-/* Onboarding funnel chart card â€” used only on the page-2 rail now. */
+/* Onboarding funnel chart card — used only on the page-2 rail now. */
 .fp-rp-chartcard { width: 100%; background: #fff; border: 1px solid #e2e5ea; border-radius: 12px; padding: 14px 16px 8px; box-shadow: 0 4px 16px rgba(15,23,42,.06); }
 .fp-rp-chartcard-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
 .fp-rp-chartcard-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #1a1a1a; }
@@ -877,7 +877,7 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, .fp-card:foc
     .fp-rp-title { font-size: 26px; }
 }
 
-/* â”€â”€ PDF export â€” exactly one A4-landscape page per on-screen slide â”€â”€ */
+/* ── PDF export — exactly one A4-landscape page per on-screen slide ── */
 @media print {
     @page { size: A4 landscape; margin: 8mm; }
     html, body { background: #fff !important; height: auto !important; }

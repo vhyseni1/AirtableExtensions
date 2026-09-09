@@ -26,7 +26,7 @@ export function DrillDrawer({drill, attrsOf, colorOf}) {
     const {stack, back, close, pushAttrs, pushFeatures} = drill;
     if (!stack.length) return null;
     const frame = stack[stack.length - 1];
-    const tint = colorOf || (() => '#E60000');
+    const tint = colorOf || (() => '#0F172A');
     const onFeature = f => pushAttrs(`${f.name} · attributes`, attrsOf ? attrsOf(f.name) : []);
     const onInitiative = it => pushFeatures(`${it.name} · features`, it.features || []);
 

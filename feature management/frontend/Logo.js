@@ -1,10 +1,10 @@
-import {UBS_LOGO} from './branding';
+import {BRAND_LOGO} from './branding';
 
-// Renders the bundled UBS logo (data URI or URL) if configured in logo.js,
-// otherwise falls back to the red "UBS" text mark.
+// Renders a brand logo (data URI or URL) when one is set in branding.js,
+// otherwise falls back to a neutral text mark. No vendor logo ships here.
 export default function Logo({className = ''}) {
-    if (UBS_LOGO) {
-        return <img src={UBS_LOGO} alt="" className={`fp-logo-img ${className}`.trim()} />;
+    if (BRAND_LOGO) {
+        return <img src={BRAND_LOGO} alt="" className={`fp-logo-img ${className}`.trim()} />;
     }
     return <span className={`fp-logo ${className}`.trim()}>FM</span>;
 }

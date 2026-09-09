@@ -4,9 +4,9 @@ import Logo from './Logo';
 
 const asOf = new Date().toLocaleDateString('en-GB', {day: 'numeric', month: 'long', year: 'numeric'});
 
-// â”€â”€ Harvey ball â€” the report's 5-state completion glyph (per the deck Key:
-// â—‹ <10% Â· â—” 11â€“39% Â· â—‘ 40â€“69% Â· â—• 70â€“99% Â· â— 100%). Rendered as a proportional
-// pie so it reads at any value, not just the five stops. â”€â”€
+// ── Harvey ball — the report's 5-state completion glyph (per the deck Key:
+// ○ <10% · ◔ 11–39% · ◑ 40–69% · ◕ 70–99% · ● 100%). Rendered as a proportional
+// pie so it reads at any value, not just the five stops. ──
 function HarveyBall({pct, size = 15}) {
     const p = Math.max(0, Math.min(100, pct || 0)) / 100;
     const r = size / 2;
@@ -29,7 +29,7 @@ function HarveyBall({pct, size = 15}) {
     );
 }
 
-// Onboarding funnel â€” % of attributes reaching each lifecycle gate. Self-labelled
+// Onboarding funnel — % of attributes reaching each lifecycle gate. Self-labelled
 // (value above each point, stage name below) so it reads as part of the numbers.
 const FUNNEL_STAGES = ['Req', 'Model', 'VEST', 'UAT', 'Done'];
 function FunnelCurve({points, compact, wide}) {
@@ -44,17 +44,17 @@ function FunnelCurve({points, compact, wide}) {
         <svg className="fp-rp-chart" viewBox={`0 0 ${w} ${h}`} width="100%" preserveAspectRatio="xMidYMid meet" aria-hidden>
             <defs>
                 <linearGradient id="fp-funnel-grad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#E60000" stopOpacity="0.26" />
-                    <stop offset="100%" stopColor="#E60000" stopOpacity="0" />
+                    <stop offset="0%" stopColor="#0F172A" stopOpacity="0.26" />
+                    <stop offset="100%" stopColor="#0F172A" stopOpacity="0" />
                 </linearGradient>
             </defs>
             <line x1={padX} y1={yOf(100)} x2={w - padX} y2={yOf(100)} stroke="#eef1f5" strokeDasharray="3 3" />
             <line x1={padX} y1={base} x2={w - padX} y2={base} stroke="#e7eaef" />
             <path d={`${line} L ${xs[n - 1].toFixed(1)} ${base} L ${xs[0].toFixed(1)} ${base} Z`} fill="url(#fp-funnel-grad)" />
-            <path d={line} fill="none" stroke="#E60000" strokeWidth={wide ? 2 : 2.6} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+            <path d={line} fill="none" stroke="#0F172A" strokeWidth={wide ? 2 : 2.6} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
             {points.map((v, i) => (
                 <g key={i}>
-                    <circle cx={xs[i]} cy={yOf(v)} r={3.1} fill="#fff" stroke="#E60000" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+                    <circle cx={xs[i]} cy={yOf(v)} r={3.1} fill="#fff" stroke="#0F172A" strokeWidth="2" vectorEffect="non-scaling-stroke" />
                     <text x={xs[i]} y={yOf(v) - 7} textAnchor="middle" className="fp-rp-chart-val">{v}%</text>
                     <text x={xs[i]} y={h - 6} textAnchor="middle" className="fp-rp-chart-lbl">{FUNNEL_STAGES[i]}</text>
                 </g>
@@ -63,7 +63,7 @@ function FunnelCurve({points, compact, wide}) {
     );
 }
 
-// â”€â”€ Live model â†’ the exact numbers each report page needs â”€â”€
+// ── Live model → the exact numbers each report page needs ──
 function buildData(model) {
     const attrs = model.attrs;
     const inProg = [STATUS.inProgress, STATUS.blocked, STATUS.returned];
@@ -118,10 +118,10 @@ function buildData(model) {
         .sort((a, b) => b.r.t - a.r.t);
     const podTotal = podRow(attrs);
 
-    // Auto-comments â€” one crisp line per initiative, the way the deck reads.
+    // Auto-comments — one crisp line per initiative, the way the deck reads.
     const comments = initRows.slice(0, 8).map(r => ({
         name: r.name,
-        text: `${r.f.model.c} of ${r.f.t} modelled Â· ${r.f.vest.c} DEV-complete Â· ${r.f.uat.c} in UAT Â· ${r.f.done.c} signed-off.`,
+        text: `${r.f.model.c} of ${r.f.t} modelled · ${r.f.vest.c} DEV-complete · ${r.f.uat.c} in UAT · ${r.f.done.c} signed-off.`,
     }));
 
     const teamsEngaged = pods.filter(p => p.name !== 'Unassigned').length;
@@ -132,15 +132,15 @@ function buildData(model) {
     return {initRows, entityRows, totalF, pods, podTotal, comments, teamsEngaged, totalTeams, deliveredFeat, featTotal};
 }
 
-// â”€â”€ Report pages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Report pages ──────────────────────────────────────────────────────────────
 function CoverPage({model, d}) {
     return (
         <div className="fp-rp-cover">
             <div className="fp-rp-eyebrow">Feature Management</div>
-            <h1 className="fp-rp-title">ampliFI | Product to ledger onboarding â€” data</h1>
+            <h1 className="fp-rp-title">Feature Management | Product to ledger onboarding — data</h1>
             <div className="fp-rp-asof">as of {asOf}</div>
             <p className="fp-rp-lede">
-                <b>{d.totalF.uat.pct}%</b> of data attributes deployed &amp; tested in UAT Â· <b>{d.totalF.done.pct}%</b> signed-off
+                <b>{d.totalF.uat.pct}%</b> of data attributes deployed &amp; tested in UAT · <b>{d.totalF.done.pct}%</b> signed-off
             </p>
             <div className="fp-rp-coverstats">
                 <div><b>{model.byInitiative.length}</b><span>Initiatives</span></div>
@@ -149,7 +149,7 @@ function CoverPage({model, d}) {
                 <div><b>{model.kpis.overallPct}%</b><span>Overall maturity</span></div>
             </div>
             <div className="fp-rp-coverchart">
-                <div className="fp-rp-coverchart-label">Onboarding funnel â€” % of attributes reaching each gate</div>
+                <div className="fp-rp-coverchart-label">Onboarding funnel — % of attributes reaching each gate</div>
                 <FunnelCurve wide points={[d.totalF.req.pct, d.totalF.model.pct, d.totalF.vest.pct, d.totalF.uat.pct, d.totalF.done.pct]} />
             </div>
         </div>
@@ -165,7 +165,7 @@ const GATES = [
 ];
 
 // Shared column widths so the Initiatives and Entity tables line up exactly
-// (Req under Req, Model under Model, â€¦).
+// (Req under Req, Model under Model, …).
 function FunnelCols() {
     return (
         <colgroup>
@@ -194,8 +194,8 @@ function FunnelHead() {
                     <Fragment key={g.key}>
                         <th className="fp-rp-sub">#</th>
                         <th className="fp-rp-sub">% compl</th>
-                        <th className="fp-rp-sub">Î” w-o-w</th>
-                        <th className="fp-rp-sub">Î” m-o-m</th>
+                        <th className="fp-rp-sub">Δ w-o-w</th>
+                        <th className="fp-rp-sub">Δ m-o-m</th>
                     </Fragment>
                 ))}
             </tr>
@@ -211,8 +211,8 @@ function FunnelRow({name, f, strong}) {
                 <Fragment key={g.key}>
                     <td className="fp-rp-num">{f[g.key].c}</td>
                     <td className="fp-rp-pct"><HarveyBall pct={f[g.key].pct} /><span>{f[g.key].pct}%</span></td>
-                    <td className="fp-rp-delta">â€”</td>
-                    <td className="fp-rp-delta">â€”</td>
+                    <td className="fp-rp-delta">—</td>
+                    <td className="fp-rp-delta">—</td>
                 </Fragment>
             ))}
         </tr>
@@ -224,9 +224,9 @@ function OnboardingPage({d}) {
         <div className="fp-rp-page">
             <div className="fp-rp-head">
                 <div>
-                    <div className="fp-rp-eyebrow">ampliFI Â· Product to ledger onboarding</div>
+                    <div className="fp-rp-eyebrow">Feature Management · Product to ledger onboarding</div>
                     <h2 className="fp-rp-h2">Product attributes onboarded and tested</h2>
-                    <div className="fp-rp-subline">{d.totalF.uat.pct}% of attributes deployed &amp; tested in UAT Â· {d.totalF.done.pct}% signed-off</div>
+                    <div className="fp-rp-subline">{d.totalF.uat.pct}% of attributes deployed &amp; tested in UAT · {d.totalF.done.pct}% signed-off</div>
                 </div>
             </div>
 
@@ -278,7 +278,7 @@ function OnboardingPage({d}) {
             </div>
 
             <div className="fp-rp-key">
-                <b>Key:</b> Req. = requirement work begun Â· Model = modelled (past Requirements phase) Â· VEST = validated/enriched/transformed in DEV Â· UAT deployed &amp; tested = approved in UAT Â· UAT complete = signed-off / delivered. Harvey ball: â—‹ &lt;10% Â· â—” 11â€“39% Â· â—‘ 40â€“69% Â· â—• 70â€“99% Â· â— 100%. Î” w-o-w / m-o-m not yet tracked (â€”).
+                <b>Key:</b> Req. = requirement work begun · Model = modelled (past Requirements phase) · VEST = validated/enriched/transformed in DEV · UAT deployed &amp; tested = approved in UAT · UAT complete = signed-off / delivered. Harvey ball: ○ &lt;10% · ◔ 11–39% · ◑ 40–69% · ◕ 70–99% · ● 100%. Δ w-o-w / m-o-m not yet tracked (—).
             </div>
         </div>
     );
@@ -305,9 +305,9 @@ function PodPage({d}) {
         <div className="fp-rp-page">
             <div className="fp-rp-head">
                 <div>
-                    <div className="fp-rp-eyebrow">ampliFI Â· Sourcing &amp; VESTing</div>
+                    <div className="fp-rp-eyebrow">Feature Management · Sourcing &amp; VESTing</div>
                     <h2 className="fp-rp-h2">Sourcing &amp; VESTing status by pod</h2>
-                    <div className="fp-rp-subline">{d.podTotal.vestPct}% VESTed Â· {d.podTotal.uatPct}% deployed &amp; tested Â· {d.podTotal.signPct}% signed off by Finance</div>
+                    <div className="fp-rp-subline">{d.podTotal.vestPct}% VESTed · {d.podTotal.uatPct}% deployed &amp; tested · {d.podTotal.signPct}% signed off by Finance</div>
                 </div>
             </div>
 
@@ -333,9 +333,9 @@ function PodPage({d}) {
                             <th className="fp-rp-sub">Total</th>
                             <th className="fp-rp-sub">Not started</th>
                             <th className="fp-rp-sub">In progress</th>
-                            <th className="fp-rp-sub">DEV complete â€” awaiting UAT</th>
-                            <th className="fp-rp-sub">UAT â€” tested</th>
-                            <th className="fp-rp-sub">UAT â€” business sign-off</th>
+                            <th className="fp-rp-sub">DEV complete — awaiting UAT</th>
+                            <th className="fp-rp-sub">UAT — tested</th>
+                            <th className="fp-rp-sub">UAT — business sign-off</th>
                             <th className="fp-rp-sub">n/a</th>
                             <th className="fp-rp-sub">Total (excl. n/a)</th>
                             <th className="fp-rp-sub">VESTed</th>
@@ -351,7 +351,7 @@ function PodPage({d}) {
             </div>
 
             <div className="fp-rp-key">
-                <b>Key:</b> a pod is the team currently holding an attribute. Status columns map to the attribute workflow: DEV complete â€” awaiting UAT = submitted for review Â· UAT â€” tested = approved Â· UAT â€” business sign-off = done. VESTed / UAT deployed &amp; tested / Signed off by Finance are % of each pod&rsquo;s in-scope attributes (excl. n/a). Harvey ball: â—‹ &lt;10% Â· â—” 11â€“39% Â· â—‘ 40â€“69% Â· â—• 70â€“99% Â· â— 100%.
+                <b>Key:</b> a pod is the team currently holding an attribute. Status columns map to the attribute workflow: DEV complete — awaiting UAT = submitted for review · UAT — tested = approved · UAT — business sign-off = done. VESTed / UAT deployed &amp; tested / Signed off by Finance are % of each pod&rsquo;s in-scope attributes (excl. n/a). Harvey ball: ○ &lt;10% · ◔ 11–39% · ◑ 40–69% · ◕ 70–99% · ● 100%.
             </div>
         </div>
     );
@@ -397,24 +397,24 @@ export default function Narrative({model, onClose}) {
     return (
         <div className="fp-ss fp-rp">
             <div className="fp-ss-top">
-                <div className="fp-ss-brand"><Logo /> ampliFI Â· Narrative</div>
+                <div className="fp-ss-brand"><Logo /> Feature Management · Narrative</div>
                 <div className="fp-ss-topright">
-                    <button type="button" className="fp-ss-pdf" onClick={() => window.print()} title="Export to PDF (A4 landscape)">â¤“ PDF</button>
+                    <button type="button" className="fp-ss-pdf" onClick={() => window.print()} title="Export to PDF (A4 landscape)">⤓ PDF</button>
                     <button type="button" className="fp-ss-play" onClick={() => setPlaying(p => !p)} aria-label={playing ? 'Pause' : 'Play'} title={playing ? 'Pause' : 'Play'}>
-                        {playing ? 'âšâš' : 'â–¶'}
+                        {playing ? '❚❚' : '▶'}
                     </button>
                     <span className="fp-ss-count">{i + 1} / {n}</span>
-                    <button type="button" className="fp-ss-close" onClick={onClose} aria-label="Close">Ã—</button>
+                    <button type="button" className="fp-ss-close" onClick={onClose} aria-label="Close">×</button>
                 </div>
             </div>
 
             <div className="fp-ss-stage">
-                <button type="button" className="fp-ss-arrow left" onClick={() => go(-1)} disabled={i === 0} aria-label="Previous">â€¹</button>
+                <button type="button" className="fp-ss-arrow left" onClick={() => go(-1)} disabled={i === 0} aria-label="Previous">‹</button>
                 <div className="fp-ss-slide" key={i}>
                     {slide.node}
                     <div className="fp-rp-foot"><Logo /></div>
                 </div>
-                <button type="button" className="fp-ss-arrow right" onClick={() => go(1)} disabled={i === n - 1} aria-label="Next">â€º</button>
+                <button type="button" className="fp-ss-arrow right" onClick={() => go(1)} disabled={i === n - 1} aria-label="Next">›</button>
             </div>
 
             <div className="fp-ss-dots">
