@@ -106,11 +106,26 @@ export function useModel() {
     const stages = bindTable(base, TABLES.stages, FIELDS.stages, missing);
     const handshakes = bindTable(base, TABLES.handshakes, FIELDS.handshakes, missing);
 
-    const teamRecords = useRecords(teams.table);
-    const featureRecords = useRecords(features.table);
-    const attributeRecords = useRecords(attributes.table);
-    const stageRecords = useRecords(stages.table);
-    const handshakeRecords = useRecords(handshakes.table);
+    // useRecords must run unconditionally (rules of hooks) and the SDK
+    // dereferences whatever it is given, so a table name that does not match the
+    // base would throw inside the SDK before <SetupBanner> could ever render —
+    // a blank extension and a minified "Cannot read properties of null" instead
+    // of the list of names to fix. Hand it a real table as a stand-in and throw
+    // the result away for tables that are genuinely absent.
+    const standIn = base.tables.length ? base.tables[0] : null;
+    const present = t => t || standIn;
+
+    const teamRecordsRaw = useRecords(present(teams.table));
+    const featureRecordsRaw = useRecords(present(features.table));
+    const attributeRecordsRaw = useRecords(present(attributes.table));
+    const stageRecordsRaw = useRecords(present(stages.table));
+    const handshakeRecordsRaw = useRecords(present(handshakes.table));
+
+    const teamRecords = teams.table ? teamRecordsRaw : null;
+    const featureRecords = features.table ? featureRecordsRaw : null;
+    const attributeRecords = attributes.table ? attributeRecordsRaw : null;
+    const stageRecords = stages.table ? stageRecordsRaw : null;
+    const handshakeRecords = handshakes.table ? handshakeRecordsRaw : null;
 
     return useMemo(() => {
         const coreMissingTables = missing.filter(
@@ -302,7 +317,7 @@ export function useModel() {
             phaseCounts,
             kpis,
             handshakes: handshakeList,
-            loading: ready && attributeRecords === null,
+            loading: !!attributes.table && attributeRecords === null,
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [teamRecords, featureRecords, attributeRecords, stageRecords, handshakeRecords]);
