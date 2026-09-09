@@ -102,6 +102,22 @@ The script is deliberately **pure ASCII and BOM-free**: Windows PowerShell 5.1 r
 UTF-8 script as ANSI, which mangles any non-ASCII character in it, and the legacy console cannot
 render box-drawing or check-mark glyphs anyway. Keep it that way.
 
+Most setups keep the **source** here in the repo and the **paired project**
+somewhere else - the folder you made with `block init`, holding `.block\remote.json`, the SDK and
+`node_modules`. That is the folder `block release` must run in. Point the script at it:
+
+```powershell
+.\release.ps1 -ProjectPath "C:\Users\me\features"          # lint here, copy frontend, release there
+.\release.ps1 -ProjectPath "C:\Users\me\features" -WhatIf  # show what it would do, change nothing
+```
+
+It replaces the manual `Copy-Item … ; cd … ; block release` routine and adds what that routine
+hides: it lints before copying, refuses a dirty source tree, verifies the pairing holds real ids,
+and names any file in the target that no longer exists in the source (a stale module the bundler
+can still pick up - `Copy-Item -Force` never deletes).
+
+If this folder is itself the paired project, omit `-ProjectPath`.
+
 First time on a machine:
 
 ```powershell
@@ -127,6 +143,8 @@ Then, for every release:
 
 | Parameter | Effect |
 |---|---|
+| `-ProjectPath <dir>` | The `block init` project to copy `frontend\*` into and release from. Omit when this folder is the project. |
+| `-WhatIf` | Run every check, report what would be copied and released, then stop without changing or uploading anything. |
 | `-Remote <name>` | Release to `.block\<name>.remote.json` instead of the default `.block\remote.json`. |
 | `-Comment <text>` | Release note (CLI caps it at 1000 chars; the script truncates). Defaults to `<branch>@<sha> — <timestamp>`. |
 | `-SkipLint` | Skip `npm run lint`. |
