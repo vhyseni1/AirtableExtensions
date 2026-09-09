@@ -252,6 +252,56 @@ export function exportVectorPDF(sections, basename = 'org-chart') {
     pdf.save(`${basename}-${timestamp()}.pdf`);
 }
 
+// Every .slide inside `deckEl`, one per PDF page at the slide's own 16:9
+// geometry. Each slide is captured at its natural size rather than the zoomed
+// on-screen size, so the export is resolution-independent of the viewer's zoom.
+export async function exportSlidesPDF(deckEl, slide, basename = 'deck') {
+    if (!deckEl) return;
+    const slides = [...deckEl.querySelectorAll('.slide')];
+    if (!slides.length) throw new Error('No slides to export.');
+
+    const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'px',
+        format: [slide.width, slide.height],
+    });
+
+    // The deck is displayed scaled down; html2canvas would otherwise capture
+    // that scale. Neutralise it for the duration of the export.
+    const prevZoom = deckEl.style.getPropertyValue('--slide-zoom');
+    deckEl.style.setProperty('--slide-zoom', '1');
+    try {
+        for (let i = 0; i < slides.length; i++) {
+            const el = slides[i];
+            el.classList.add('exporting');
+            // Two frames: one for the class to apply, one for layout to settle.
+            await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+            let canvas;
+            try {
+                canvas = await html2canvas(el, {
+                    scale: 2,
+                    backgroundColor: '#ffffff',
+                    useCORS: true,
+                    logging: false,
+                    width: slide.width,
+                    height: slide.height,
+                    windowWidth: slide.width,
+                    windowHeight: slide.height,
+                });
+            } finally {
+                el.classList.remove('exporting');
+            }
+            if (i > 0) pdf.addPage([slide.width, slide.height], 'landscape');
+            pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, slide.width, slide.height);
+        }
+    } finally {
+        if (prevZoom) deckEl.style.setProperty('--slide-zoom', prevZoom);
+        else deckEl.style.removeProperty('--slide-zoom');
+    }
+
+    pdf.save(`${basename}-${timestamp()}.pdf`);
+}
+
 // ─── CSV ─────────────────────────────────────────────────────────────────────
 
 function csvCell(value) {

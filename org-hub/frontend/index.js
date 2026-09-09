@@ -2,33 +2,40 @@
 // picture: a dashboard, two org-chart renderers, and the underlying data.
 //
 //   Dashboard   — headcount, vacancy, span of control, layers, breakdowns
-//   Org charts  — Position view (Workday-style focus + reports)
-//                 Supervisory org (stacked top-down tree, the Apps Script port)
-//                 People tree     (the same stacked renderer over reporting lines)
-//   Data        — Employees & Positions / Supervisory Organizations grids
+//   Org charts  — Stacked org     the Apps Script deck: DLT bands of
+//                                 supervisory-org clusters of position slots,
+//                                 current pass then future pass
+//                 Current vs future  the same bands rendered side by side
+//                 Position view   Workday-style focus + direct reports
+//                 Supervisory org tree / People tree — box hierarchies
+//   Data        — every source table as a grid
 //
-// Everything is read-only. The extension reads two tables, both configured by
-// name in `config.js`; nothing else hardcodes a field or table name.
+// Everything is read-only. Each table is configured by name in `config.js`;
+// nothing else hardcodes a field or table name.
 
 import {
     initializeBlock, useBase, useRecords, useSession, colorUtils,
 } from '@airtable/blocks/interface/ui';
-import {useState, useMemo} from 'react';
+import {useState, useMemo, useCallback} from 'react';
 import './style.css';
 
-import {PEOPLE, SUP_ORG} from './config';
+import {PEOPLE, SUP_ORG, ORG_DESIGN} from './config';
 import {findTable, findFieldByName, normName} from './lib/fields';
 import {
     resolvePeopleConfig, configKey, buildOrg, buildStatusColors,
     computeScope, pruneToScope,
 } from './lib/people';
 import {resolveSupOrgConfig, buildSupOrgTree} from './lib/suporg';
+import {
+    resolveOrgDesignConfig, resolveNotesConfig, buildNotesMap, buildStackedModel,
+} from './lib/stacked';
 
 import Dashboard from './views/Dashboard';
 import PositionChart from './views/PositionChart';
 import SupOrgChart from './views/SupOrgChart';
 import PeopleTree from './views/PeopleTree';
 import DataTable from './views/DataTable';
+import StackedDeck from './views/StackedDeck';
 
 // ─── Navigation model ────────────────────────────────────────────────────────
 //
@@ -41,8 +48,10 @@ const NAV = [
         key: 'charts',
         label: 'Org charts',
         subs: [
+            {key: 'stacked', label: 'Stacked org'},
+            {key: 'comparison', label: 'Current vs future'},
             {key: 'position', label: 'Position view'},
-            {key: 'suporg', label: 'Supervisory org'},
+            {key: 'suporg', label: 'Supervisory org tree'},
             {key: 'people-tree', label: 'People tree'},
         ],
     },
@@ -50,6 +59,7 @@ const NAV = [
         key: 'data',
         label: 'Data',
         subs: [
+            {key: 'design-data', label: 'Org design data'},
             {key: 'people-data', label: 'Employees & positions'},
             {key: 'suporg-data', label: 'Supervisory organizations'},
         ],
@@ -166,21 +176,78 @@ function SupOrgSection({table, view}) {
     );
 }
 
+// ─── Org design data (the stacked deck) ──────────────────────────────────────
+
+const NO_NOTES = {};
+
+// The notes table is optional, and hooks can't be called conditionally — so
+// notes are loaded by a component that only mounts when the table exists.
+function OrgDesignSection({table, notesTable, view}) {
+    return notesTable
+        ? <OrgDesignWithNotes table={table} notesTable={notesTable} view={view} />
+        : <OrgDesignBody table={table} notesMap={NO_NOTES} view={view} />;
+}
+
+function OrgDesignWithNotes({table, notesTable, view}) {
+    const notesRecords = useRecords(notesTable);
+    const notesCfg = useMemo(() => resolveNotesConfig(notesTable, ORG_DESIGN), [notesTable]);
+    const notesMap = useMemo(
+        () => buildNotesMap(notesRecords || [], notesCfg),
+        [notesRecords, notesCfg],
+    );
+    return <OrgDesignBody table={table} notesMap={notesMap} view={view} />;
+}
+
+function OrgDesignBody({table, notesMap, view}) {
+    const records = useRecords(table);
+    const cfg = useMemo(() => resolveOrgDesignConfig(table, ORG_DESIGN), [table]);
+    const key = configKey(cfg);
+    const model = useMemo(
+        () => buildStackedModel(records, cfg, notesMap),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [records, key, notesMap],
+    );
+
+    // The grid wants plain fields; dltFields is an array of {name, field}.
+    const resolvedForGrid = useMemo(() => {
+        const out = {...cfg};
+        delete out.dltFields;
+        cfg.dltFields.forEach(d => { out[d.name] = d.field; });
+        return out;
+    }, [cfg]);
+
+    if (view === 'data') {
+        return (
+            <DataTable
+                table={table}
+                records={records}
+                resolved={resolvedForGrid}
+                groupField={cfg.slideTitleField}
+            />
+        );
+    }
+    return <StackedDeck model={model} variant={view} />;
+}
+
 // ─── App ─────────────────────────────────────────────────────────────────────
 
 function OrgHubApp() {
     const base = useBase();
     const [tab, setTab] = useState('dashboard');
-    const [sub, setSub] = useState('position');
+    const [sub, setSub] = useState('stacked');
 
     const peopleTable = findTable(base, PEOPLE.tableName);
-    const supOrgTable = useMemo(() => {
-        if (!SUP_ORG.tableName) return null;
-        const t = findTable(base, SUP_ORG.tableName);
-        // findTable falls back to the first table; don't mistake the people
-        // table for a supervisory-org table when the latter doesn't exist.
+    // findTable falls back to the first table in the base, so an optional table
+    // that doesn't exist would otherwise masquerade as the people table.
+    const optionalTable = useCallback(name => {
+        if (!name) return null;
+        const t = findTable(base, name);
         return t && peopleTable && t.id === peopleTable.id ? null : t;
     }, [base, peopleTable]);
+
+    const supOrgTable = useMemo(() => optionalTable(SUP_ORG.tableName), [optionalTable]);
+    const designTable = useMemo(() => optionalTable(ORG_DESIGN.tableName), [optionalTable]);
+    const notesTable = useMemo(() => optionalTable(ORG_DESIGN.notesTableName), [optionalTable]);
 
     if (!peopleTable) {
         return (
@@ -194,13 +261,20 @@ function OrgHubApp() {
         );
     }
 
-    return <OrgHub base={base} peopleTable={peopleTable} supOrgTable={supOrgTable}
-        tab={tab} setTab={setTab} sub={sub} setSub={setSub} />;
+    return (
+        <OrgHub
+            peopleTable={peopleTable}
+            supOrgTable={supOrgTable}
+            designTable={designTable}
+            notesTable={notesTable}
+            tab={tab} setTab={setTab} sub={sub} setSub={setSub}
+        />
+    );
 }
 
 // Split from OrgHubApp so the hooks below never run before the table check
 // above has passed (hooks can't be called conditionally).
-function OrgHub({peopleTable, supOrgTable, tab, setTab, sub, setSub}) {
+function OrgHub({peopleTable, supOrgTable, designTable, notesTable, tab, setTab, sub, setSub}) {
     const {org, cfg, records, noView, viewerEmail} = usePeopleOrg(peopleTable);
 
     const dimensionFields = useMemo(
@@ -216,10 +290,22 @@ function OrgHub({peopleTable, supOrgTable, tab, setTab, sub, setSub}) {
         [supOrgTable],
     );
 
-    const supOrgAvailable = !!supOrgTable;
-    const effectiveSub = (!supOrgAvailable && (sub === 'suporg' || sub === 'suporg-data'))
-        ? (tab === 'charts' ? 'position' : 'people-data')
-        : sub;
+    // Sub-views that depend on an optional table. When it is missing the view
+    // is unavailable rather than broken, and the shell falls back to a sibling.
+    const requires = {
+        stacked: designTable,
+        comparison: designTable,
+        'design-data': designTable,
+        suporg: supOrgTable,
+        'suporg-data': supOrgTable,
+    };
+    const fallback = {charts: 'position', data: 'people-data'};
+    const available = !(sub in requires) || !!requires[sub];
+    const effectiveSub = available ? sub : (fallback[tab] || sub);
+
+    const missingTableFor = key => (key === 'stacked' || key === 'comparison' || key === 'design-data'
+        ? ORG_DESIGN.tableName
+        : SUP_ORG.tableName);
 
     const subject = `${Object.keys(org.nodeMap).length} positions`;
 
@@ -259,46 +345,49 @@ function OrgHub({peopleTable, supOrgTable, tab, setTab, sub, setSub}) {
                 supOrgDimensionFields={[]}
             />
         );
-    } else if (tab === 'charts') {
-        if (effectiveSub === 'suporg') {
-            body = supOrgAvailable
-                ? <SupOrgSection table={supOrgTable} view="chart" />
-                : <Notice tone="warn">No supervisory-organization table found.</Notice>;
-        } else if (effectiveSub === 'people-tree') {
-            body = <PeopleTree org={org} />;
-        } else {
-            body = (
-                <PositionChart
-                    org={org}
-                    cfg={cfg}
-                    decisionFieldPresent={!!cfg.employeeDecisionField}
-                />
-            );
-        }
+    } else if (effectiveSub === 'stacked' || effectiveSub === 'comparison') {
+        body = (
+            <OrgDesignSection
+                table={designTable}
+                notesTable={notesTable}
+                view={effectiveSub}
+            />
+        );
+    } else if (effectiveSub === 'design-data') {
+        body = <OrgDesignSection table={designTable} notesTable={notesTable} view="data" />;
+    } else if (effectiveSub === 'suporg') {
+        body = <SupOrgSection table={supOrgTable} view="chart" />;
+    } else if (effectiveSub === 'suporg-data') {
+        body = <SupOrgSection table={supOrgTable} view="data" />;
+    } else if (effectiveSub === 'people-tree') {
+        body = <PeopleTree org={org} />;
+    } else if (effectiveSub === 'people-data') {
+        body = (
+            <DataTable
+                table={peopleTable}
+                records={records}
+                resolved={cfg}
+                groupField={cfg.orgFilterField}
+            />
+        );
     } else {
-        if (effectiveSub === 'suporg-data') {
-            body = supOrgAvailable
-                ? <SupOrgSection table={supOrgTable} view="data" />
-                : <Notice tone="warn">No supervisory-organization table found.</Notice>;
-        } else {
-            body = (
-                <DataTable
-                    table={peopleTable}
-                    records={records}
-                    resolved={cfg}
-                    groupField={cfg.orgFilterField}
-                />
-            );
-        }
+        body = (
+            <PositionChart
+                org={org}
+                cfg={cfg}
+                decisionFieldPresent={!!cfg.employeeDecisionField}
+            />
+        );
     }
 
     return (
         <div className="app-root">
             <Header tab={tab} setTab={setTab} sub={effectiveSub} setSub={setSub} subject={subject} />
-            {!supOrgAvailable && tab === 'charts' && (
+            {!available && (
                 <Notice tone="info">
-                    Supervisory-organization views are hidden: no table named
-                    “{SUP_ORG.tableName}” in this base.
+                    That view needs a table named “{missingTableFor(sub)}”, which this base
+                    doesn’t have — showing “{effectiveSub}” instead. See
+                    <code> sample-data/IMPORT.md </code> to create it.
                 </Notice>
             )}
             {body}

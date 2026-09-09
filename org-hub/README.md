@@ -1,9 +1,14 @@
 # Org Hub (Airtable Interface Extension)
 
-One extension covering the whole org-design picture: a **dashboard**, three
-**org-chart renderers**, and the **underlying data**. It replaces having to
-deploy `Posorgchart` and `org_chart` as two separate blocks — both renderers
-live here, side by side, over the same loaded data.
+One extension covering the whole org-design picture: a **dashboard**, five
+**chart renderers**, and the **underlying data**. It brings together three
+things that used to be separate deployments:
+
+| Source | What came across |
+| --- | --- |
+| [`vhyseni1/orgdesiger`](https://github.com/vhyseni1/orgdesiger) (Apps Script) | the **stacked org deck** — `StackedOrg.html`'s one-side-per-slide renderer and `Index.html`'s side-by-side current/future layout, with their model (`buildStackedOrgModel_`), status buckets, KPI table and slide pagination |
+| `../Posorgchart` | the **position view** — Workday-style focus + direct reports |
+| `../org_chart` | the **supervisory org tree** — the collapsible box hierarchy |
 
 **Everything is read-only.** Cards and rows open the underlying Airtable
 record; nothing writes back. (The standalone `org_chart` block supports
@@ -14,12 +19,28 @@ for visibility.)
 
 ```
 Dashboard
-Org charts ─┬─ Position view        Workday-style: one person in focus, direct reports below
-            ├─ Supervisory org      stacked top-down tree of supervisory organisations
-            └─ People tree          the same stacked renderer, over reporting lines
-Data ───────┬─ Employees & positions
-            └─ Supervisory organizations
+Org charts ─┬─ Stacked org           the deck: DLT bands → org clusters → position slots,
+            │                        current pass then future pass
+            ├─ Current vs future     the same bands, both states side by side
+            ├─ Position view         Workday-style: one person in focus, reports below
+            ├─ Supervisory org tree  collapsible box hierarchy of supervisory orgs
+            └─ People tree           the same box renderer, over reporting lines
+Data ──────┬─ Org design data
+           ├─ Employees & positions
+           └─ Supervisory organizations
 ```
+
+The five chart views read **two different shapes of data**, and that is the
+thing to understand before configuring anything:
+
+- The two **stacked views** read a flat, pre-aggregated table — one row per
+  (slide, level, supervisory org, position, side) with a `Current HC` and a
+  `Future HC`. That shape is what makes a restructuring legible: you can show
+  the same position shrinking on one side and being posted on the other.
+- The three **hierarchy views** read the per-person table and follow the
+  manager link.
+
+Neither can be derived from the other automatically, so both tables exist.
 
 ### Dashboard
 
@@ -28,6 +49,33 @@ average and largest span of control, management layers, managers with ≤2
 reports, and supervisory orgs with no positions. Below the tiles: headcount by
 layer, span-of-control buckets, the ten largest teams, and one breakdown per
 dimension configured in `dashboardDimensions`. Exports a summary CSV or a PNG.
+
+### Stacked org
+
+The deck renderer. Each slide is a fixed 1280×720 canvas: a DLT level band per
+row, supervisory-org clusters inside it, and position slots stacked three to a
+column. Slot colour is the status bucket (at risk, in selection, mapped, newly
+posted); the badge is the headcount, with a red `−N` on the current side and a
+green `+N` on the future side. The head bar carries the four-column KPI table —
+As Is / At Risk / New Pos / Proposed — for both the page and the whole slide.
+
+Every current slide is emitted before every future slide, so the deck reads as
+"here is today" then "here is the target". Slides paginate row by row against
+the real canvas height, so a level band that doesn't fit continues on the next
+page under a repeated label rather than pushing a near-empty page.
+
+Filter by the **DLT ladder** — a hierarchical tree from the top of the house
+down to each slide, with partial selection shown as an indeterminate checkbox.
+Toggle **Headcount / FTE**, show or hide the notes band, cycle the zoom, and
+export the whole deck as a **16:9 PDF, one slide per page**, a PNG, or the KPIs
+as CSV.
+
+### Current vs future
+
+The same level bands rendered twice on one slide — current on the left, future
+on the right — for when a reader needs to compare the two states directly
+rather than page between them. Clusters wrap sooner (half the width) and
+pagination accounts for whichever side is taller.
 
 ### Position view
 
@@ -39,9 +87,9 @@ each gives an unambiguous board). Toggle avatars and the employee-decision
 chip. Export a crisp **vector PDF** (drawn with jsPDF primitives, not a
 screenshot, so it stays sharp at any zoom and paginates per manager) or a PNG.
 
-### Supervisory org
+### Supervisory org tree
 
-The stacked chart: a pannable, zoomable canvas with curved SVG connectors,
+A pannable, zoomable canvas with curved SVG connectors,
 per-level expand/collapse, and a depth selector (1 / 2 / 3 / All). Card
 **border** is `SO Status`, card **fill** is `Scoping`, and the background
 histogram sums the headcount rollup at each level. Self-references and circular
@@ -56,7 +104,7 @@ picked as the root, so a large org can be sliced to one branch.
 
 ### Data
 
-The records as a sortable, searchable, filterable grid (100 rows per page).
+Each source table as a sortable, searchable, filterable grid (100 rows per page).
 Columns are ordered configured-fields-first. Exports the filtered set or the
 whole table as CSV. The **Fields** button opens a diagnostics panel showing how
 each name in `config.js` resolved against the live table, plus every real field
@@ -102,6 +150,40 @@ keeps the chart correct when two people share a name.
 Names of the form `Team name (Manager) (OrgID)` are split into their three
 parts on the card; anything else renders as a plain team name.
 
+### Org design table (`ORG_DESIGN`)
+
+The flat table behind the two stacked views. Optional — without it those views
+hide themselves and the shell falls back to the position view.
+
+| Key | Purpose | Configured value |
+| --- | --- | --- |
+| `tableName` | the deck's source table | `Org Design Data` |
+| `slideTitleField` | groups rows into slides — one deck page per value | `Slide Title` |
+| `sectionNameField` / `sectionLevelField` | the head-bar label and the DLT label above the level column | `Section Name` / `Section Level` |
+| `levelField` | the row's DLT level — one band per value | `Level` |
+| `orgField` | supervisory organization — one cluster per value | `Supervisory Organization` |
+| `positionField` | the position name on the slot | `Position Name` |
+| `currentField` / `futureField` | headcount on each side of the change | `Current HC` / `Future HC` |
+| `stackField` | `Current` / `Future` / blank — which side a row counts on | `Stack` |
+| `statusField` | Mapped / Selection / Posted / At risk → slot colour + KPI columns | `Status` |
+| `dltFields` | the DLT ladder, top-down — powers the hierarchical filter | `DLT`, `DLT-1` … `DLT-6` |
+| `notesTableName` | optional per-slide subtitle and commentary | `Org Design Notes` |
+
+**A blank `Stack` means the row counts on both sides.** That is how the source
+decks encode "unchanged", and dropping those rows would empty the deck.
+
+Status values are bucketed leniently — the same normalisation the Apps Script
+uses, so `Potentially at risk`, `To be posted` and `In selection process` all
+land correctly without having to clean the source data first.
+
+Two differences from the Apps Script, both deliberate:
+
+- **Country flags render as ISO-code chips, not flag images.** The source fetches
+  PNGs from a CDN; an extension iframe can't rely on that, and the code is the
+  unambiguous label anyway.
+- **No client logo on the slide.** Add one in `components/Slide.js` if you want
+  it; it is not baked in.
+
 ### Per-leader scoping
 
 Set `leaderEmailField` **or** `visibleLeadersField` and each signed-in leader
@@ -114,9 +196,11 @@ off by default, so the extension shows the full org until you configure it.
 
 ## Sample data
 
-`sample-data/` holds two importable CSVs describing one consistent fictional
-organisation — 150 positions across 24 supervisory orgs, with vacancies,
-hierarchical short codes, part-time FTE and every status value represented.
+`sample-data/` holds four importable CSVs describing one consistent fictional
+organisation — 150 positions across 24 supervisory orgs, plus a restructuring
+scenario rendered as a 22-slide deck. Vacancies (including a vacant manager),
+hierarchical short codes, part-time FTE and every status value are represented,
+and the deck's current headcount reconciles with the people table org by org.
 See [`sample-data/IMPORT.md`](sample-data/IMPORT.md) for the import order and
 the field types to set afterwards.
 
@@ -147,11 +231,16 @@ frontend/
     fields.js           defensive cell reading + field resolution
     people.js           the people org model (tree, totals, scoping)
     suporg.js           the supervisory-org model (tree, conflict detection)
-    exports.js          PNG / vector PDF / CSV
+    stacked.js          the deck model: slides → levels → orgs → slots,
+                        status buckets, KPI maths, layout + pagination
+    exports.js          PNG / vector PDF / 16:9 slide PDF / CSV
   components/
     Controls.js         filter, search, export menu, toggle
     PersonCard.js       the Workday card + its two section layouts
-    StackedTree.js      the stacked renderer: pan/zoom, connectors, histogram
+    Slide.js            the deck primitives: slot, cluster, level band, slide
+    FilterTree.js       the hierarchical DLT filter
+    StackedTree.js      the box-tree renderer: pan/zoom, connectors, histogram
   views/
-    Dashboard.js  PositionChart.js  SupOrgChart.js  PeopleTree.js  DataTable.js
+    StackedDeck.js  Dashboard.js  PositionChart.js
+    SupOrgChart.js  PeopleTree.js  DataTable.js
 ```

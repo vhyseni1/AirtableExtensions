@@ -100,3 +100,64 @@ export const SCOPING_COLORS = {
     'In Scope': {bg: '#eff6ff', dot: '#3b82f6'},
     'Out of Scope': {bg: '#fef2f2', dot: '#ef4444'},
 };
+
+// ─── Org design data (the stacked slide views) ───────────────────────────────
+//
+// The port of the Apps Script "Slide Deck Studio" model. Its source is a flat,
+// pre-aggregated table — one row per (slide, level, supervisory org, position,
+// country) — carrying a CURRENT and a FUTURE headcount. That shape is what
+// makes a current-vs-future restructuring readable; it is deliberately not the
+// same table as the per-person Employees & Positions.
+//
+//   slideTitleField  : groups rows into slides (one deck page per value).
+//   sectionNameField / sectionLevelField : the slide's section header and the
+//                      DLT label printed above the level column.
+//   levelField       : the row's DLT level (e.g. "DLT-2") — one band per value.
+//   orgField         : supervisory organization → one cluster inside the band.
+//   positionField    : the position name printed on the slot.
+//   currentField / futureField : headcount on each side of the change.
+//   fteField         : FTE weight, used when the count toggle is set to FTE.
+//   countryField     : ISO codes shown as chips on the slot.
+//   stackField       : "Current" / "Future" — which side a row contributes to.
+//                      Blank means the row counts on both sides.
+//   statusField      : Mapped / Selection / Posted / At risk. Drives the slot
+//                      colour and the four KPI columns.
+//   dltFields        : the DLT ladder, top-down. Powers the hierarchical filter.
+//
+export const ORG_DESIGN = {
+    tableName: 'Org Design Data',
+    slideTitleField: 'Slide Title',
+    sectionNameField: 'Section Name',
+    sectionLevelField: 'Section Level',
+    levelField: 'Level',
+    orgField: 'Supervisory Organization',
+    positionField: 'Position Name',
+    currentField: 'Current HC',
+    futureField: 'Future HC',
+    fteField: 'FTE',
+    countryField: 'Country',
+    stackField: 'Stack',
+    statusField: 'Status',
+    positionIdField: 'Position ID',
+    dltFields: ['DLT', 'DLT-1', 'DLT-2', 'DLT-3', 'DLT-4', 'DLT-5', 'DLT-6'],
+
+    // Optional per-slide commentary, keyed by slide title.
+    notesTableName: 'Org Design Notes',
+    notesKeyField: 'Slide',
+    notesSubtitleField: 'Slide Subtitle',
+    notesPeopleImpactField: 'Potential People Impact',
+    notesAmbitionField: 'Organizational Ambition',
+};
+
+// Status → slot appearance. `bucket` is the normalised status; the renderer
+// colours a slot by the bucket that dominates it on the side being shown.
+export const STATUS_COLORS = {
+    risk: {bg: '#b14cff', fg: '#ffffff', label: 'At risk'},
+    posted: {bg: '#0b2a63', fg: '#ffffff', label: 'New position'},
+    selection: {bg: '#cfeaff', fg: '#0b1220', label: 'In selection'},
+    mapped: {bg: '#eeeeee', fg: '#111827', label: 'Mapped / no change'},
+};
+
+// The slide canvas. 1280×720 is the 16:9 geometry the Apps Script decks use,
+// and what the PDF export writes one slide per page at.
+export const SLIDE = {width: 1280, height: 720};

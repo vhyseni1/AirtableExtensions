@@ -6,12 +6,19 @@ Writes two CSVs that mirror the field names the extension reads (see
 
   * ``Employees & Positions.csv``       — one row per position (filled or vacant)
   * ``Supervisory Organizations.csv``   — one row per supervisory organization
+  * ``Org Design Data.csv``             — the flat, pre-aggregated table the
+    stacked deck reads: one row per (slide, level, org, position, side)
+  * ``Org Design Notes.csv``            — per-slide subtitle and commentary
 
 The two files are internally consistent: every person sits in a supervisory
 organization that exists, every manager reference resolves, the headcount
 rollup on each supervisory org equals the FTE of its direct members, and the
 short codes are hierarchical (a ``DSG`` leader's subtree is exactly the rows
 whose Short Code starts with ``DSG``).
+
+The org-design table is derived from the same people, so its CURRENT headcount
+reconciles with the people table position for position; the FUTURE side applies
+the restructuring scenario in ``SCENARIO`` below.
 
 Deterministic — ``random`` is seeded, so re-running produces the same data.
 
@@ -21,6 +28,7 @@ Usage:  python3 generate.py
 import csv
 import os
 import random
+import zlib
 from datetime import date, timedelta
 
 random.seed(20260909)
@@ -188,6 +196,112 @@ LAST_NAMES = [
 ]
 
 COMPANY_DOMAIN = "aurorahealth.example"
+COMPANY_NAME = "Aurora Health Group"
+
+# Location → ISO-3 code, for the country chips on a slot.
+LOCATION_ISO = {
+    "Basel": "CHE", "Zurich": "CHE", "Lausanne": "CHE", "Berlin": "DEU",
+    "Barcelona": "ESP", "Dublin": "IRL", "Warsaw": "POL", "Singapore": "SGP",
+}
+
+# ─── Restructuring scenario (the FUTURE side of the deck) ────────────────────
+#
+# Per supervisory org:
+#   "new"       [(position title, headcount)] — posted roles that don't exist today
+#   "at_risk"   {position title: headcount removed}
+#   "selection" [position titles] — populations going through a selection process
+#
+# Everything not named here is mapped one-to-one and shows as "no change".
+# Vacancies already in the people table are emitted as posted roles automatically.
+
+SCENARIO = {
+    "DSGAE": {"new": [("Streaming Data Engineer", 3), ("Data Reliability Engineer", 2)],
+              "selection": ["Data Engineer"]},
+    "DSGAI": {"new": [("Machine Learning Engineer", 2)],
+              "selection": ["Reporting Analyst"]},
+    "DSGPC": {"new": [("Platform Security Engineer", 2)],
+              "at_risk": {"Network Engineer": 2}},
+    "DSGPA": {"at_risk": {"SAP Specialist": 3, "Integration Engineer": 2},
+              "selection": ["Application Engineer"]},
+    "DSGD":  {"new": [("Design Systems Lead", 1), ("Product Analyst", 2)]},
+    "FINC":  {"at_risk": {"Cost Accountant": 2}},
+    "FINT":  {"at_risk": {"Treasury Analyst": 2, "Tax Specialist": 1, "Cash Manager": 1,
+                          "Compliance Accountant": 1, "Head of Treasury & Tax": 1}},
+    "HRTA":  {"at_risk": {"Sourcing Specialist": 2}, "new": [("Talent Intelligence Analyst", 1)]},
+    "HROP":  {"new": [("People Analytics Engineer", 2)],
+              "at_risk": {"Payroll Specialist": 2}},
+    "COMSE": {"selection": ["Account Manager", "Inside Sales Representative"]},
+    "COMMK": {"new": [("Marketing Automation Specialist", 1)]},
+    "OPSSC": {"new": [("Supply Chain Data Analyst", 2)],
+              "at_risk": {"Logistics Coordinator": 2}},
+    "OPSQC": {"new": [("Computer System Validation Engineer", 2)]},
+    "RNDCD": {"new": [("Decentralised Trials Manager", 2)],
+              "selection": ["Clinical Research Associate"]},
+    "RNDPR": {"at_risk": {"Laboratory Technician": 3}},
+}
+
+# Per-slide commentary shown in the notes band.
+SLIDE_NOTES = {
+    "Digital Solutions Group": (
+        "Consolidating data and platform engineering into two centres of excellence",
+        "SAP and integration roles move to the managed-service partner\n"
+        "Network engineering consolidates into the cloud platform team\n"
+        "Application engineering population enters a selection process",
+        "Build a single data and platform backbone for the group\n"
+        "Shift from project delivery to product ownership",
+    ),
+    "Finance": (
+        "Treasury and tax move to the group shared-service centre",
+        "Treasury & Tax is decommissioned as a standalone organisation\n"
+        "Controlling reduces duplicate cost-accounting roles",
+        "Concentrate transactional finance in the shared-service centre\n"
+        "Keep business partnering close to the functions",
+    ),
+    "People & Culture": (
+        "Rebalancing from sourcing capacity to people analytics",
+        "Sourcing specialist roles reduce as hiring volumes normalise\n"
+        "Payroll administration moves to the shared-service centre",
+        "Invest in people data and talent intelligence",
+    ),
+    "Operations": (
+        "Digitising supply-chain planning and quality validation",
+        "Logistics coordination is partly automated\n"
+        "New validation engineering capacity for the quality system",
+        "Move from manual coordination to planning analytics",
+    ),
+    "Research & Development": (
+        "Shifting laboratory capacity towards decentralised trials",
+        "Laboratory technician roles reduce with automation\n"
+        "New decentralised-trial management capability",
+        "Run more trials remotely, closer to patients",
+    ),
+    "Commercial": (
+        "Field organisation unchanged; marketing gains automation capability",
+        "Account management and inside sales enter a selection process",
+        "Sharpen digital campaign execution",
+    ),
+    "Executive Office": (
+        "No structural change",
+        "",
+        "Maintain a lean corporate centre",
+    ),
+    # DLT-2 detail slides — the drill-down a leader gets for their own branch.
+    "Data & Analytics": (
+        "Engineering capacity grows; reporting moves to self-service",
+        "Data engineering population enters a selection process\n"
+        "Reporting analysts reskill towards self-service enablement",
+        "One data platform serving every function\n"
+        "Analysts spend their time on questions, not on extracts",
+    ),
+    "Platform Engineering": (
+        "Network operations consolidate into the cloud platform team",
+        "Network engineering roles reduce as the estate moves to cloud\n"
+        "SAP and integration work moves to a managed-service partner\n"
+        "Application engineering population enters a selection process",
+        "Run one platform, not five\n"
+        "Buy the commodity, build the differentiator",
+    ),
+}
 
 
 def unique_names(count):
@@ -387,9 +501,193 @@ def main():
                     fte_by_code.get(row["code"], 0),
             })
 
+    # ─── Write Org Design Data + Notes ───────────────────────────────────────
+    write_org_design(people, org_by_code, depth_of)
+
     vacancies = sum(1 for p in people if p["[E] Position Status"] == "Vacant")
     print("Wrote %s (%d rows, %d vacant)" % (emp_path, len(people), vacancies))
     print("Wrote %s (%d rows)" % (so_path, len(so_rows)))
+
+
+# ─── Org design data (the stacked deck) ──────────────────────────────────────
+
+
+def write_org_design(people, org_by_code, depth_of):
+    """Derive the flat deck table from the same people.
+
+    CURRENT headcount is the people table as it stands (filled positions);
+    FUTURE applies SCENARIO. Vacancies already in the people table become
+    posted roles, so the two files never disagree about who exists today.
+
+    Row emission per (org, position title), mirroring what the Apps Script
+    model expects on each side:
+
+      unchanged     one row, Stack blank        — counts on both sides
+      in selection  one row, Stack blank        — status "In selection process"
+      reduced by k  two rows: Stack "Current" (current=n, future=n-k, at risk)
+                    and Stack "Future" (current=0, future=n-k, mapped)
+      new / vacant  one row, Stack "Future"     — status "Posted"
+    """
+    # Distinct ISO-3 codes per org, from where its people actually sit.
+    countries_by_code = {}
+    for person in people:
+        iso = LOCATION_ISO.get(person["[E] Location"])
+        if not iso:
+            continue
+        countries_by_code.setdefault(person["_code"], set()).add(iso)
+
+    # Filled and vacant counts per (org code, title).
+    filled, vacant = {}, {}
+    for person in people:
+        key = (person["_code"], person["REF Title [F]"])
+        if person["[E] Position Status"] == "Vacant":
+            vacant[key] = vacant.get(key, 0) + 1
+        else:
+            filled[key] = filled.get(key, 0) + 1
+
+    name_of = {code: org_by_code[code][1] for code in org_by_code}
+
+    def ancestors(code):
+        """Codes from the root down to `code`, inclusive."""
+        chain, cur = [], code
+        while cur:
+            chain.append(cur)
+            cur = org_by_code[cur][2]
+        return list(reversed(chain))
+
+    def dlt_columns(code):
+        """The DLT ladder describing a SLIDE, blank below its own level.
+
+        The filter tree nests slides by this path, so a DLT-1 slide must not
+        carry a DLT-2 value — that would file it under one of its own children.
+        """
+        chain = ancestors(code)
+        cols = {"DLT": COMPANY_NAME}
+        for i, c in enumerate(chain[1:], start=1):
+            if i <= 6:
+                cols["DLT-%d" % i] = name_of[c]
+        return cols
+
+    rows = []
+
+    def emit(slide_code, org_code, title, cur, fut, stack, status):
+        if cur == 0 and fut == 0:
+            return
+        cols = dlt_columns(slide_code)
+        iso = sorted(countries_by_code.get(org_code, {"CHE"}))
+        rows.append({
+            "Slide Title": name_of[slide_code],
+            "Section Name": name_of[slide_code],
+            "Section Level": "DLT-%d" % depth_of(slide_code) if depth_of(slide_code) else "DLT",
+            "Level": "DLT-%d" % depth_of(org_code) if depth_of(org_code) else "DLT",
+            "Supervisory Organization": name_of[org_code],
+            "Position Name": title,
+            # zlib.crc32, not hash(): Python randomises string hashing per
+            # process, which would make the file non-deterministic.
+            "Position ID": "P-%s-%04d" % (org_code, zlib.crc32(title.encode()) % 10000),
+            "Current HC": cur,
+            "Future HC": fut,
+            "FTE": 1.0,
+            "Country": ", ".join(iso[:3]),
+            "Stack": stack,
+            "Status": status,
+            "DLT": cols.get("DLT", ""),
+            "DLT-1": cols.get("DLT-1", ""), "DLT-2": cols.get("DLT-2", ""),
+            "DLT-3": cols.get("DLT-3", ""), "DLT-4": cols.get("DLT-4", ""),
+            "DLT-5": cols.get("DLT-5", ""), "DLT-6": cols.get("DLT-6", ""),
+        })
+
+    def emit_org(slide_code, org_code):
+        scenario = SCENARIO.get(org_code, {})
+        at_risk = scenario.get("at_risk", {})
+        in_selection = set(scenario.get("selection", []))
+        titles = sorted({t for (c, t) in list(filled) + list(vacant) if c == org_code})
+
+        for title in titles:
+            n = filled.get((org_code, title), 0)
+            if n:
+                cut = min(n, at_risk.get(title, 0))
+                if cut:
+                    emit(slide_code, org_code, title, n, n - cut, "Current", "At risk")
+                    emit(slide_code, org_code, title, 0, n - cut, "Future", "Mapped")
+                elif title in in_selection:
+                    emit(slide_code, org_code, title, n, n, "", "In selection process")
+                else:
+                    emit(slide_code, org_code, title, n, n, "", "Mapped")
+            v = vacant.get((org_code, title), 0)
+            if v:
+                emit(slide_code, org_code, title, 0, v, "Future", "Posted")
+
+        for title, count in scenario.get("new", []):
+            emit(slide_code, org_code, title, 0, count, "Future", "Posted")
+
+    # One slide per organization that has children: a DLT-1 function slide shows
+    # its whole subtree; a DLT-2 slide shows just its own branch, so a reader can
+    # drill without re-reading the parent.
+    children_of = {}
+    for code in org_by_code:
+        parent = org_by_code[code][2]
+        if parent:
+            children_of.setdefault(parent, []).append(code)
+
+    def subtree(code):
+        out = [code]
+        for child in sorted(children_of.get(code, [])):
+            out.extend(subtree(child))
+        return out
+
+    root = next(c for c in org_by_code if org_by_code[c][2] is None)
+    slide_codes = [c for c in org_by_code
+                   if depth_of(c) in (1, 2) and children_of.get(c)]
+    slide_codes.sort(key=lambda c: (depth_of(c), name_of[c]))
+    # The root gets a slide too, showing the top two layers.
+    slide_codes.insert(0, root)
+
+    for slide_code in slide_codes:
+        if slide_code == root:
+            members = [root] + sorted(children_of.get(root, []))
+        else:
+            members = subtree(slide_code)
+        for org_code in members:
+            emit_org(slide_code, org_code)
+
+    design_columns = [
+        "Slide Title", "Section Name", "Section Level", "Level",
+        "Supervisory Organization", "Position Name", "Position ID",
+        "Current HC", "Future HC", "FTE", "Country", "Stack", "Status",
+        "DLT", "DLT-1", "DLT-2", "DLT-3", "DLT-4", "DLT-5", "DLT-6",
+    ]
+    design_path = os.path.join(OUT_DIR, "Org Design Data.csv")
+    with open(design_path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=design_columns)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+    notes_path = os.path.join(OUT_DIR, "Org Design Notes.csv")
+    slide_names = []
+    seen = set()
+    for row in rows:
+        if row["Slide Title"] not in seen:
+            seen.add(row["Slide Title"])
+            slide_names.append(row["Slide Title"])
+    with open(notes_path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=[
+            "Slide", "Slide Subtitle", "Potential People Impact",
+            "Organizational Ambition"])
+        writer.writeheader()
+        for name in slide_names:
+            subtitle, impact, ambition = SLIDE_NOTES.get(
+                name, ("Target organization design", "", ""))
+            writer.writerow({
+                "Slide": name,
+                "Slide Subtitle": subtitle,
+                "Potential People Impact": impact,
+                "Organizational Ambition": ambition,
+            })
+
+    print("Wrote %s (%d rows, %d slides)" % (design_path, len(rows), len(slide_names)))
+    print("Wrote %s (%d rows)" % (notes_path, len(slide_names)))
 
 
 if __name__ == "__main__":
