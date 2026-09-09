@@ -72,6 +72,14 @@ button:focus-visible {
     100% { background-position: calc(200px + 100%) 0; }
 }
 
+@keyframes cia-spin {
+    to { transform: rotate(360deg); }
+}
+
+.cia-spin {
+    animation: cia-spin 0.8s linear infinite;
+}
+
 .cia-skeleton {
     background: linear-gradient(90deg, ${tokens.colors.bgAlt} 0%, ${tokens.colors.ruleSoft} 50%, ${tokens.colors.bgAlt} 100%);
     background-size: 200px 100%;

@@ -1,211 +1,196 @@
-import {useCallback, useRef, useState} from 'react';
+import {useCallback, useMemo, useRef, useState} from 'react';
 import {tokens} from '../../styles/tokens';
 import {Panel} from '../primitives/Panel';
 
-type Phase = 'idle' | 'uploading' | 'success';
+type Phase = 'idle' | 'processing' | 'success';
 
-interface StagedFile {
-    name: string;
-    size: number;
-    rows: number;
+interface SourceKind {
+    key: string;
+    label: string;
+    icon: string;
+    color: string;
 }
 
-const ACCEPT = '.csv,.tsv,.xlsx,.xls,.json';
+const KINDS: Record<string, SourceKind> = {
+    transcript: {key: 'transcript', label: 'Meeting transcript', icon: '🎙', color: '#0B41CD'},
+    flipchart: {key: 'flipchart', label: 'Flip chart', icon: '📋', color: '#FF7D29'},
+    notes: {key: 'notes', label: 'Notes', icon: '📝', color: '#00B458'},
+    kdi: {key: 'kdi', label: 'KDI', icon: '📊', color: '#C40000'},
+    lucid: {key: 'lucid', label: 'Lucid board', icon: '🧩', color: '#BC36F0'},
+};
 
-function fmtSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+interface SourceItem {
+    id: string;
+    name: string;
+    kind: keyof typeof KINDS;
+    sessionDate: string;
+    meta: string;
+}
+
+/** Mock library of capture artefacts available for processing. */
+const LIBRARY: ReadonlyArray<SourceItem> = [
+    {id: 's1', name: 'Leadership kickoff — working session', kind: 'transcript', sessionDate: '2026-08-18', meta: '58 min · 6 speakers'},
+    {id: 's2', name: 'Current-state pain points (wall)', kind: 'flipchart', sessionDate: '2026-08-18', meta: '4 photos'},
+    {id: 's3', name: 'Affiliate readiness workshop', kind: 'transcript', sessionDate: '2026-08-21', meta: '1h 42 min · 11 speakers'},
+    {id: 's4', name: 'Process redesign — facilitator notes', kind: 'notes', sessionDate: '2026-08-21', meta: '3 pages'},
+    {id: 's5', name: 'KDI baseline extract — Q2', kind: 'kdi', sessionDate: '2026-08-25', meta: '212 rows'},
+    {id: 's6', name: 'Operating model future-state', kind: 'lucid', sessionDate: '2026-08-27', meta: '2 frames · 40 cards'},
+    {id: 's7', name: 'Role impact deep-dive', kind: 'transcript', sessionDate: '2026-09-01', meta: '55 min · 8 speakers'},
+    {id: 's8', name: 'Change network brainstorm', kind: 'flipchart', sessionDate: '2026-09-01', meta: '6 photos'},
+    {id: 's9', name: 'Stakeholder interviews — consolidated', kind: 'notes', sessionDate: '2026-09-03', meta: '9 pages'},
+    {id: 's10', name: 'Journey map — to-be', kind: 'lucid', sessionDate: '2026-09-04', meta: '1 frame · 63 cards'},
+];
+
+function fmtDate(iso: string): string {
+    const d = new Date(`${iso}T00:00:00`);
+    return d.toLocaleDateString(undefined, {day: '2-digit', month: 'short', year: 'numeric'});
 }
 
 /**
- * Data-intake page. Purely a front-end mock: staged files and the "ingest"
- * action never touch Airtable or any backend — it simulates a short upload
- * and reports success. Nothing is persisted.
+ * Data-intake page. Purely a front-end mock: selecting sources and running
+ * "process" never touches Airtable or any backend — it simulates parsing and
+ * reports success. Nothing is persisted.
  */
 export function AddDataView() {
-    const [target, setTarget] = useState('Impacts');
-    const [dragging, setDragging] = useState(false);
-    const [files, setFiles] = useState<StagedFile[]>([]);
+    const [selected, setSelected] = useState<Set<string>>(new Set());
     const [phase, setPhase] = useState<Phase>('idle');
-    const [ingestedRows, setIngestedRows] = useState(0);
-    const inputRef = useRef<HTMLInputElement | null>(null);
+    const [processingIdx, setProcessingIdx] = useState(0);
+    const [processedIds, setProcessedIds] = useState<string[]>([]);
+    const timers = useRef<number[]>([]);
 
-    const stage = useCallback((list: FileList | null) => {
-        if (!list || list.length === 0) return;
-        const staged: StagedFile[] = Array.from(list).map(f => ({
-            name: f.name,
-            size: f.size,
-            // Cosmetic row estimate — we never actually parse the file.
-            rows: Math.max(1, Math.round(f.size / 180)),
-        }));
-        setFiles(prev => [...prev, ...staged]);
+    const selectedItems = useMemo(() => LIBRARY.filter(s => selected.has(s.id)), [selected]);
+
+    const toggle = useCallback((id: string) => {
+        setSelected(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
         setPhase('idle');
     }, []);
 
-    const onDrop = useCallback(
-        (e: React.DragEvent) => {
-            e.preventDefault();
-            setDragging(false);
-            stage(e.dataTransfer.files);
-        },
-        [stage],
-    );
-
-    const removeFile = useCallback((idx: number) => {
-        setFiles(prev => prev.filter((_, i) => i !== idx));
+    const toggleAll = useCallback(() => {
+        setSelected(prev => (prev.size === LIBRARY.length ? new Set() : new Set(LIBRARY.map(s => s.id))));
         setPhase('idle');
     }, []);
 
     const reset = useCallback(() => {
-        setFiles([]);
+        timers.current.forEach(t => window.clearTimeout(t));
+        timers.current = [];
+        setSelected(new Set());
         setPhase('idle');
-        setIngestedRows(0);
-        if (inputRef.current) inputRef.current.value = '';
+        setProcessingIdx(0);
+        setProcessedIds([]);
     }, []);
 
-    const ingest = useCallback(() => {
-        if (files.length === 0) return;
-        const total = files.reduce((sum, f) => sum + f.rows, 0);
-        setIngestedRows(total);
-        setPhase('uploading');
-        // Fake processing delay — no data actually leaves the browser.
-        window.setTimeout(() => setPhase('success'), 1100);
-    }, [files]);
+    const process = useCallback(() => {
+        const ids = selectedItems.map(s => s.id);
+        if (ids.length === 0) return;
+        setProcessedIds(ids);
+        setProcessingIdx(0);
+        setPhase('processing');
+        timers.current.forEach(t => window.clearTimeout(t));
+        timers.current = [];
+        // Step through each source for a convincing loader — no real parsing.
+        const per = 650;
+        ids.forEach((_, i) => {
+            timers.current.push(window.setTimeout(() => setProcessingIdx(i + 1), per * (i + 1)));
+        });
+        timers.current.push(window.setTimeout(() => setPhase('success'), per * ids.length + 500));
+    }, [selectedItems]);
 
-    const totalRows = files.reduce((sum, f) => sum + f.rows, 0);
+    const allSelected = selected.size === LIBRARY.length && LIBRARY.length > 0;
+    const processingItems = useMemo(
+        () => processedIds.map(id => LIBRARY.find(s => s.id === id)).filter((s): s is SourceItem => !!s),
+        [processedIds],
+    );
 
     return (
         <div style={{display: 'flex', flexDirection: 'column', gap: tokens.space.md}}>
             <Panel
                 eyebrow="Intake"
-                title="Add data"
-                subtitle="Drop a new review export to feed the control tower — CSV, Excel, or JSON"
+                title="Select sources to process"
+                subtitle="Meeting transcripts, flip charts, notes, KDI extracts and Lucid boards captured across sessions"
                 actions={
-                    <select
-                        value={target}
-                        onChange={e => setTarget(e.target.value)}
-                        style={selectStyle}
-                        title="Target table"
-                    >
-                        <option value="Impacts">Impacts</option>
-                        <option value="Change_Components">Change_Components</option>
-                        <option value="Roles">Roles</option>
-                    </select>
+                    <button type="button" onClick={toggleAll} style={secondaryBtn} disabled={phase === 'processing'}>
+                        {allSelected ? 'Clear all' : 'Select all'}
+                    </button>
                 }
             >
+                {/* Column header */}
                 <div
-                    onDragOver={e => {
-                        e.preventDefault();
-                        setDragging(true);
-                    }}
-                    onDragLeave={() => setDragging(false)}
-                    onDrop={onDrop}
-                    onClick={() => inputRef.current?.click()}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={e => {
-                        if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click();
-                    }}
                     style={{
-                        border: `2px dashed ${dragging ? tokens.colors.accent : tokens.colors.rule}`,
-                        borderRadius: tokens.radius.lg,
-                        background: dragging ? tokens.colors.accentTint : tokens.colors.bgAlt,
-                        padding: `${tokens.space.xxl} ${tokens.space.xl}`,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
+                        display: 'grid',
+                        gridTemplateColumns: '28px 1.6fr 150px 120px',
                         gap: tokens.space.sm,
-                        cursor: 'pointer',
-                        textAlign: 'center',
-                        transition: 'border-color 120ms ease, background 120ms ease',
+                        alignItems: 'center',
+                        padding: `${tokens.space.xs} ${tokens.space.sm}`,
+                        borderBottom: `1px solid ${tokens.colors.rule}`,
                     }}
                 >
-                    <div
-                        aria-hidden
-                        style={{
-                            width: 46,
-                            height: 46,
-                            borderRadius: '50%',
-                            background: tokens.colors.bgPanel,
-                            border: `1px solid ${tokens.colors.rule}`,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: 20,
-                            color: tokens.colors.accent,
-                            boxShadow: tokens.shadow.panel,
-                        }}
-                    >
-                        ⬆
-                    </div>
-                    <div
-                        style={{
-                            fontFamily: tokens.fonts.serif,
-                            fontSize: 15,
-                            fontWeight: 600,
-                            color: tokens.colors.text,
-                        }}
-                    >
-                        {dragging ? 'Drop to stage files' : 'Drag & drop files here'}
-                    </div>
-                    <div style={{fontSize: 12, color: tokens.colors.textMuted}}>
-                        or <span style={{color: tokens.colors.accent, fontWeight: 600}}>browse</span> — CSV, TSV,
-                        Excel, or JSON
-                    </div>
-                    <input
-                        ref={inputRef}
-                        type="file"
-                        accept={ACCEPT}
-                        multiple
-                        onChange={e => stage(e.target.files)}
-                        style={{display: 'none'}}
-                    />
+                    <span />
+                    <span className="cia-eyebrow">Source</span>
+                    <span className="cia-eyebrow">Type</span>
+                    <span className="cia-eyebrow" style={{textAlign: 'right'}}>Session date</span>
                 </div>
 
-                {files.length > 0 ? (
-                    <div style={{marginTop: tokens.space.md, display: 'flex', flexDirection: 'column', gap: tokens.space.xs}}>
-                        {files.map((f, i) => (
-                            <div
-                                key={`${f.name}-${i}`}
+                <div style={{display: 'flex', flexDirection: 'column'}}>
+                    {LIBRARY.map(item => {
+                        const kind = KINDS[item.kind]!;
+                        const isSel = selected.has(item.id);
+                        return (
+                            <label
+                                key={item.id}
                                 style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
+                                    display: 'grid',
+                                    gridTemplateColumns: '28px 1.6fr 150px 120px',
                                     gap: tokens.space.sm,
-                                    padding: `${tokens.space.sm} ${tokens.space.md}`,
-                                    background: tokens.colors.bgPanel,
-                                    border: `1px solid ${tokens.colors.rule}`,
-                                    borderRadius: tokens.radius.md,
+                                    alignItems: 'center',
+                                    padding: `${tokens.space.sm}`,
+                                    borderBottom: `1px solid ${tokens.colors.ruleSoft}`,
+                                    background: isSel ? tokens.colors.accentTint : 'transparent',
+                                    cursor: 'pointer',
+                                    transition: 'background 100ms ease',
                                 }}
                             >
-                                <span aria-hidden style={{fontSize: 15, color: tokens.colors.accent}}>▤</span>
-                                <span style={{fontSize: 13, fontWeight: 600, color: tokens.colors.text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
-                                    {f.name}
+                                <input
+                                    type="checkbox"
+                                    checked={isSel}
+                                    onChange={() => toggle(item.id)}
+                                    disabled={phase === 'processing'}
+                                    style={{width: 16, height: 16, accentColor: tokens.colors.accent, cursor: 'pointer'}}
+                                />
+                                <span style={{minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1}}>
+                                    <span style={{fontSize: 13, fontWeight: 600, color: tokens.colors.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+                                        {item.name}
+                                    </span>
+                                    <span style={{fontSize: 11, color: tokens.colors.textFaint, fontFamily: tokens.fonts.mono}}>
+                                        {item.meta}
+                                    </span>
                                 </span>
-                                <span style={{fontSize: 11, color: tokens.colors.textFaint, fontFamily: tokens.fonts.mono}}>
-                                    ~{f.rows.toLocaleString()} rows · {fmtSize(f.size)}
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={() => removeFile(i)}
-                                    title="Remove"
+                                <span
                                     style={{
-                                        border: 'none',
-                                        background: 'transparent',
-                                        color: tokens.colors.textFaint,
-                                        cursor: 'pointer',
-                                        fontSize: 15,
-                                        lineHeight: 1,
-                                        padding: 2,
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        fontSize: 11,
+                                        fontWeight: 600,
+                                        color: kind.color,
                                     }}
                                 >
-                                    ✕
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                ) : null}
+                                    <span aria-hidden>{kind.icon}</span>
+                                    {kind.label}
+                                </span>
+                                <span style={{fontSize: 12, color: tokens.colors.textMuted, textAlign: 'right', fontFamily: tokens.fonts.mono}}>
+                                    {fmtDate(item.sessionDate)}
+                                </span>
+                            </label>
+                        );
+                    })}
+                </div>
 
+                {/* Footer / action row */}
                 {phase === 'success' ? (
                     <div
                         role="status"
@@ -214,7 +199,7 @@ export function AddDataView() {
                             display: 'flex',
                             alignItems: 'center',
                             gap: tokens.space.sm,
-                            padding: `${tokens.space.md}`,
+                            padding: tokens.space.md,
                             background: '#E7F8EF',
                             border: `1px solid ${tokens.colors.sevLow}`,
                             borderRadius: tokens.radius.md,
@@ -239,15 +224,72 @@ export function AddDataView() {
                         </span>
                         <div style={{flex: 1, minWidth: 0}}>
                             <div style={{fontSize: 13, fontWeight: 700, color: '#046B38'}}>
-                                Successfully ingested {ingestedRows.toLocaleString()} records into {target}
+                                Data successfully parsed
                             </div>
                             <div style={{fontSize: 11, color: '#2E7D52'}}>
-                                {files.length} file{files.length === 1 ? '' : 's'} processed · validation queued
+                                {processingItems.length} source{processingItems.length === 1 ? '' : 's'} processed · entities extracted and mapped to the control tower
                             </div>
                         </div>
                         <button type="button" onClick={reset} style={secondaryBtn}>
-                            Add more
+                            Process more
                         </button>
+                    </div>
+                ) : phase === 'processing' ? (
+                    <div
+                        style={{
+                            marginTop: tokens.space.md,
+                            padding: tokens.space.md,
+                            background: tokens.colors.bgAlt,
+                            border: `1px solid ${tokens.colors.rule}`,
+                            borderRadius: tokens.radius.md,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: tokens.space.sm,
+                        }}
+                    >
+                        <div style={{display: 'flex', alignItems: 'center', gap: tokens.space.sm}}>
+                            <span
+                                className="cia-spin"
+                                aria-hidden
+                                style={{
+                                    width: 18,
+                                    height: 18,
+                                    borderRadius: '50%',
+                                    border: `2px solid ${tokens.colors.accentTint}`,
+                                    borderTopColor: tokens.colors.accent,
+                                    flexShrink: 0,
+                                }}
+                            />
+                            <span style={{fontSize: 13, fontWeight: 700, color: tokens.colors.text}}>
+                                Processing data…
+                            </span>
+                            <span style={{fontSize: 12, color: tokens.colors.textMuted, marginLeft: 'auto', fontFamily: tokens.fonts.mono}}>
+                                {Math.min(processingIdx, processingItems.length)} / {processingItems.length}
+                            </span>
+                        </div>
+                        <div
+                            style={{
+                                height: 6,
+                                borderRadius: 3,
+                                background: tokens.colors.ruleSoft,
+                                overflow: 'hidden',
+                            }}
+                        >
+                            <div
+                                style={{
+                                    height: '100%',
+                                    width: `${processingItems.length ? (processingIdx / processingItems.length) * 100 : 0}%`,
+                                    background: `linear-gradient(90deg, ${tokens.colors.accent}, ${tokens.colors.accentSoft})`,
+                                    borderRadius: 3,
+                                    transition: 'width 450ms ease',
+                                }}
+                            />
+                        </div>
+                        <div style={{fontSize: 11, color: tokens.colors.textMuted, fontFamily: tokens.fonts.mono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+                            {processingIdx < processingItems.length
+                                ? `Parsing: ${processingItems[processingIdx]?.name ?? ''}`
+                                : 'Finalising extraction…'}
+                        </div>
                     </div>
                 ) : (
                     <div
@@ -261,41 +303,34 @@ export function AddDataView() {
                         }}
                     >
                         <span style={{fontSize: 12, color: tokens.colors.textMuted}}>
-                            {files.length === 0
-                                ? 'No files staged yet.'
-                                : `${files.length} file${files.length === 1 ? '' : 's'} staged · ~${totalRows.toLocaleString()} rows ready for ${target}`}
+                            {selected.size === 0
+                                ? 'No sources selected.'
+                                : `${selected.size} source${selected.size === 1 ? '' : 's'} selected for processing`}
                         </span>
-                        <div style={{display: 'flex', gap: tokens.space.sm}}>
-                            {files.length > 0 ? (
-                                <button type="button" onClick={reset} style={secondaryBtn} disabled={phase === 'uploading'}>
-                                    Clear
-                                </button>
-                            ) : null}
-                            <button
-                                type="button"
-                                onClick={ingest}
-                                disabled={files.length === 0 || phase === 'uploading'}
-                                style={{
-                                    ...primaryBtn,
-                                    opacity: files.length === 0 || phase === 'uploading' ? 0.5 : 1,
-                                    cursor: files.length === 0 || phase === 'uploading' ? 'default' : 'pointer',
-                                }}
-                            >
-                                {phase === 'uploading' ? 'Ingesting…' : 'Ingest data →'}
-                            </button>
-                        </div>
+                        <button
+                            type="button"
+                            onClick={process}
+                            disabled={selected.size === 0}
+                            style={{
+                                ...primaryBtn,
+                                opacity: selected.size === 0 ? 0.5 : 1,
+                                cursor: selected.size === 0 ? 'default' : 'pointer',
+                            }}
+                        >
+                            Process selected →
+                        </button>
                     </div>
                 )}
             </Panel>
 
-            <Panel eyebrow="Demo" title="How intake works" subtitle="What happens when you drop a file">
+            <Panel eyebrow="Demo" title="How intake works" subtitle="What happens when you process sources">
                 <ol style={{margin: 0, paddingLeft: 18, color: tokens.colors.textMuted, fontSize: 13, lineHeight: 1.7}}>
-                    <li>Files are staged in the browser and row counts estimated.</li>
+                    <li>Pick the captured artefacts from the session library above.</li>
                     <li>
-                        <strong style={{color: tokens.colors.text}}>Ingest</strong> runs field-mapping and validation
-                        against the <code>{target}</code> schema.
+                        <strong style={{color: tokens.colors.text}}>Process</strong> transcribes, OCRs and parses each
+                        source, extracting impacts, roles and tags.
                     </li>
-                    <li>Valid records flow into the control tower and refresh every view.</li>
+                    <li>Parsed entities flow into the control tower and refresh every view.</li>
                 </ol>
                 <p
                     style={{
@@ -306,23 +341,12 @@ export function AddDataView() {
                         fontStyle: 'italic',
                     }}
                 >
-                    Preview build — staged files stay in your browser and are not written to the base.
+                    Preview build — processing is simulated and nothing is written to the base.
                 </p>
             </Panel>
         </div>
     );
 }
-
-const selectStyle: React.CSSProperties = {
-    padding: '5px 10px',
-    border: `1px solid ${tokens.colors.rule}`,
-    borderRadius: tokens.radius.sm,
-    fontSize: 12,
-    background: tokens.colors.bg,
-    fontFamily: tokens.fonts.mono,
-    color: tokens.colors.text,
-    minWidth: 160,
-};
 
 const primaryBtn: React.CSSProperties = {
     padding: '8px 16px',
