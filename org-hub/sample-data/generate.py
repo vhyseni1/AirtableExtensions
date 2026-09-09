@@ -33,6 +33,11 @@ from datetime import date, timedelta
 
 random.seed(20260909)
 
+# The programme plan and conversation dates hang off this date, so "overdue"
+# and "this week" mean something in the demo. Deterministic on purpose — move
+# it forward when the demo data starts to look stale.
+BASELINE = date(2026, 9, 9)
+
 OUT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ─── Supervisory organization skeleton ───────────────────────────────────────
@@ -535,6 +540,13 @@ def main():
     # ─── Write Org Design Data + Notes ───────────────────────────────────────
     write_org_design(people, org_by_code, depth_of)
 
+    # ─── Programme + conversations ───────────────────────────────────────────
+    # Anchored to a fixed baseline rather than today, so the CSVs stay
+    # deterministic; shift BASELINE to move the whole plan around "now".
+    baseline = BASELINE
+    write_programme(baseline)
+    write_conversations(people, org_by_code, baseline)
+
     vacancies = sum(1 for p in people if p["[E] Position Status"] == "Vacant")
     print("Wrote %s (%d rows, %d vacant)" % (emp_path, len(people), vacancies))
     print("Wrote %s (%d rows)" % (so_path, len(so_rows)))
@@ -732,6 +744,173 @@ def write_org_design(people, org_by_code, depth_of):
 
     print("Wrote %s (%d rows, %d slides)" % (design_path, len(rows), len(slide_names)))
     print("Wrote %s (%d rows)" % (notes_path, len(slide_names)))
+
+
+# ─── Programme milestones + employee conversations ───────────────────────────
+
+
+WORKSTREAMS = [
+    ("Org design", "Design"),
+    ("Works council & consultation", "Consultation"),
+    ("Selection & mapping", "Selection"),
+    ("Finance & business case", "Design"),
+    ("Technology & access", "Transition"),
+    ("Communications & change", "Consultation"),
+    ("HR operations & payroll", "Transition"),
+]
+
+MILESTONES = [
+    # (workstream, milestone, phase, offset_days_from_baseline, status, progress, rag)
+    ("Org design", "Target operating model signed off", "Design", -56, "Complete", 100, "Green"),
+    ("Org design", "Future org structure baselined", "Design", -35, "Complete", 100, "Green"),
+    ("Org design", "Span & layer review closed", "Design", -14, "In progress", 70, "Amber"),
+    ("Finance & business case", "Business case approved", "Design", -49, "Complete", 100, "Green"),
+    ("Finance & business case", "Savings baseline locked", "Design", -21, "Complete", 100, "Green"),
+    ("Finance & business case", "One-off cost provision agreed", "Consultation", 7, "In progress", 55, "Amber"),
+    ("Works council & consultation", "Country obligations mapped", "Consultation", -28, "Complete", 100, "Green"),
+    ("Works council & consultation", "DE Betriebsrat pack submitted", "Consultation", -7, "In progress", 80, "Amber"),
+    ("Works council & consultation", "ES Comité de Empresa opened", "Consultation", -3, "In progress", 45, "Amber"),
+    ("Works council & consultation", "PL consultation opened", "Consultation", 5, "Not started", 0, "Red"),
+    ("Works council & consultation", "Consultation concluded", "Consultation", 42, "Not started", 0, "Amber"),
+    ("Selection & mapping", "Selection criteria agreed", "Selection", -10, "Complete", 100, "Green"),
+    ("Selection & mapping", "Mapping decisions issued", "Selection", 14, "In progress", 30, "Amber"),
+    ("Selection & mapping", "Selection process closed", "Selection", 49, "Not started", 0, "Amber"),
+    ("Communications & change", "Leader briefing pack issued", "Consultation", -21, "Complete", 100, "Green"),
+    ("Communications & change", "All-hands announcement", "Consultation", -14, "Complete", 100, "Green"),
+    ("Communications & change", "Manager conversation training", "Consultation", -2, "In progress", 65, "Amber"),
+    ("Communications & change", "Employee conversations complete", "Selection", 28, "In progress", 20, "Red"),
+    ("Technology & access", "Access change list prepared", "Transition", 21, "Not started", 0, "Green"),
+    ("Technology & access", "System org structure updated", "Transition", 56, "Not started", 0, "Green"),
+    ("HR operations & payroll", "Payroll change window agreed", "Transition", 12, "In progress", 40, "Amber"),
+    ("HR operations & payroll", "Contracts & letters issued", "Transition", 63, "Not started", 0, "Amber"),
+    ("HR operations & payroll", "New structure effective", "Close", 84, "Not started", 0, "Amber"),
+    ("Org design", "Programme closure review", "Close", 112, "Not started", 0, "Green"),
+]
+
+CONVERSATION_TYPES = ["At risk notification", "Selection process briefing",
+                      "Role change discussion", "Redeployment options"]
+SENTIMENTS = ["Positive", "Neutral", "Concerned", "Distressed"]
+SENTIMENT_WEIGHTS = [26, 44, 24, 6]
+
+
+def write_programme(baseline):
+    """A programme plan anchored to a baseline date, so the demo always looks live."""
+    owners = {}
+    path = os.path.join(OUT_DIR, "Programme Milestones.csv")
+    columns = ["Milestone ID", "Workstream", "Milestone", "Phase", "Owner",
+               "Due Date", "Status", "Progress", "RAG", "Depends On", "Country"]
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=columns)
+        writer.writeheader()
+        prev_by_ws = {}
+        for i, (ws, name, phase, offset, status, progress, rag) in enumerate(MILESTONES, start=1):
+            if ws not in owners:
+                owners[ws] = "%s %s" % (random.choice(FIRST_NAMES), random.choice(LAST_NAMES))
+            country = ""
+            for code in ("DE", "ES", "PL", "IE", "SG"):
+                if name.startswith(code + " "):
+                    country = {"DE": "DEU", "ES": "ESP", "PL": "POL",
+                               "IE": "IRL", "SG": "SGP"}[code]
+            writer.writerow({
+                "Milestone ID": "MS-%03d" % i,
+                "Workstream": ws,
+                "Milestone": name,
+                "Phase": phase,
+                "Owner": owners[ws],
+                "Due Date": (baseline + timedelta(days=offset)).isoformat(),
+                "Status": status,
+                "Progress": progress,
+                "RAG": rag,
+                "Depends On": prev_by_ws.get(ws, ""),
+                "Country": country,
+            })
+            prev_by_ws[ws] = "MS-%03d" % i
+    print("Wrote %s (%d rows)" % (path, len(MILESTONES)))
+
+
+def write_conversations(people, org_by_code, baseline):
+    """One row per person owing a conversation.
+
+    The population is every filled position in an org the scenario touches —
+    the same people the org-design table marks at risk or in selection. Deriving
+    it from the scenario rather than inventing names keeps this table
+    reconcilable with the others.
+    """
+    name_of = {code: org_by_code[code][1] for code in org_by_code}
+    leader_by_code = {}
+    for person in people:
+        if person["_is_leader"]:
+            leader_by_code[person["_code"]] = person
+
+    rows = []
+    for person in people:
+        code = person["_code"]
+        scenario = SCENARIO.get(code)
+        if not scenario or person["[E] Position Status"] == "Vacant":
+            continue
+        title = person["REF Title [F]"]
+        at_risk = title in scenario.get("at_risk", {})
+        in_selection = title in set(scenario.get("selection", []))
+        if not (at_risk or in_selection):
+            continue
+
+        # The conversation is run by the org's leader — but that seat is
+        # sometimes vacant, and a vacancy does not excuse the conversation. Walk
+        # up until a filled leader is found, which is what actually happens.
+        manager, walk = None, code
+        while walk and not manager:
+            candidate = leader_by_code.get(walk)
+            if candidate and candidate["[E] First Name, Last Name"]:
+                manager = candidate
+            else:
+                walk = org_by_code[walk][2]
+        ctype = "At risk notification" if at_risk else "Selection process briefing"
+        # Conversations are worked through in waves: some held, some booked,
+        # the rest still to schedule. Weighted so the view has a real backlog.
+        roll = random.random()
+        if roll < 0.45:
+            status, held_offset = "Held", -random.randint(1, 12)
+        elif roll < 0.75:
+            status, held_offset = "Scheduled", random.randint(1, 10)
+        elif roll < 0.95:
+            status, held_offset = "To schedule", None
+        else:
+            status, held_offset = "Declined", -random.randint(1, 6)
+
+        scheduled = held = ""
+        if held_offset is not None:
+            d = (baseline + timedelta(days=held_offset)).isoformat()
+            scheduled = d
+            if status in ("Held", "Declined"):
+                held = d
+
+        rows.append({
+            "Conversation ID": "CV-%04d" % (len(rows) + 1),
+            "Employee": person["[E] First Name, Last Name"],
+            "Employee ID": person["[E] Employee ID"],
+            "Manager": manager["[E] First Name, Last Name"] if manager else "",
+            "Supervisory Organization": name_of[code],
+            "Country": LOCATION_ISO.get(person["[E] Location"], ""),
+            "Conversation Type": ctype,
+            "Status": status,
+            "Scheduled Date": scheduled,
+            "Held Date": held,
+            "Outcome": ("Acknowledged" if status == "Held" else
+                        "Declined to meet" if status == "Declined" else ""),
+            "Sentiment": (random.choices(SENTIMENTS, SENTIMENT_WEIGHTS)[0]
+                          if status == "Held" else ""),
+        })
+
+    path = os.path.join(OUT_DIR, "Employee Conversations.csv")
+    columns = ["Conversation ID", "Employee", "Employee ID", "Manager",
+               "Supervisory Organization", "Country", "Conversation Type",
+               "Status", "Scheduled Date", "Held Date", "Outcome", "Sentiment"]
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=columns)
+        writer.writeheader()
+        for r in rows:
+            writer.writerow(r)
+    print("Wrote %s (%d rows)" % (path, len(rows)))
 
 
 if __name__ == "__main__":

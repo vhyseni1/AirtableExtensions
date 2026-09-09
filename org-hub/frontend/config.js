@@ -240,3 +240,71 @@ export const WORKS_COUNCIL = {
     // Where the demo says the exported pack lands.
     driveLocation: 'PwC · Org Design Shared Drive / Works Council Packs',
 };
+
+// ─── Programme milestones (the PMO view) ─────────────────────────────────────
+//
+// Optional table. Without it the Programme view explains what it needs rather
+// than rendering an empty plan.
+export const PROGRAMME = {
+    tableName: 'Programme Milestones',
+    workstreamField: 'Workstream',
+    milestoneField: 'Milestone',
+    ownerField: 'Owner',
+    dueDateField: 'Due Date',
+    statusField: 'Status',
+    progressField: 'Progress',
+    ragField: 'RAG',
+    dependsOnField: 'Depends On',
+    countryField: 'Country',
+    // A milestone this many days past due with work still open is escalated on
+    // the view regardless of its typed RAG — a plan that says Green while the
+    // date has passed is the failure mode a PMO view exists to catch.
+    overdueEscalationDays: 0,
+};
+
+// Status → how a milestone reads. `done` closes it out; anything else is open.
+export const MILESTONE_STATUS = {
+    'Complete': {done: true, tone: 'good'},
+    'In progress': {done: false, tone: 'info'},
+    'Not started': {done: false, tone: 'muted'},
+    'Blocked': {done: false, tone: 'critical'},
+};
+
+export const RAG_COLORS = {
+    Green: {color: '#0ca30c', label: 'Green'},
+    Amber: {color: '#eda100', label: 'Amber'},
+    Red: {color: '#d03b3b', label: 'Red'},
+};
+
+// ─── Employee conversations (the HR view) ────────────────────────────────────
+//
+// Who has to be spoken to, by whom, and whether it has happened. The POPULATION
+// is derived from the org-design data — every at-risk or in-selection role owes
+// a conversation — so the view is honest about scope even when no tracking
+// table exists. The optional table adds the tracking on top.
+export const CONVERSATIONS = {
+    tableName: 'Employee Conversations',
+    employeeField: 'Employee',
+    managerField: 'Manager',
+    orgField: 'Supervisory Organization',
+    countryField: 'Country',
+    typeField: 'Conversation Type',
+    statusField: 'Status',
+    scheduledField: 'Scheduled Date',
+    heldField: 'Held Date',
+    outcomeField: 'Outcome',
+    sentimentField: 'Sentiment',
+};
+
+export const CONVERSATION_STATUS = {
+    'Held': {tone: 'good', done: true},
+    'Scheduled': {tone: 'info', done: false},
+    'To schedule': {tone: 'warn', done: false},
+    'Declined': {tone: 'critical', done: false},
+};
+
+// ─── Programme phases (the executive timeline) ───────────────────────────────
+//
+// A fixed spine the milestones hang off, so the executive brief can show where
+// the programme is without inventing dates.
+export const PHASES = ['Design', 'Consultation', 'Selection', 'Transition', 'Close'];

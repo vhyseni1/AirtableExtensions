@@ -49,7 +49,7 @@ export function peopleImpact(model) {
     const slots = flattenSlots(model);
 
     const totals = {
-        current: 0, future: 0,
+        current: 0, future: 0, curFuture: 0,
         mapped: 0, selection: 0, posted: 0, risk: 0,
         multiCountrySlots: 0,
     };
@@ -60,7 +60,8 @@ export function peopleImpact(model) {
     const bump = (map, key, patch) => {
         if (!key) return;
         const row = map.get(key) || {
-            key, current: 0, future: 0, mapped: 0, selection: 0, posted: 0, risk: 0,
+            key, current: 0, future: 0, curFuture: 0,
+            mapped: 0, selection: 0, posted: 0, risk: 0,
         };
         Object.entries(patch).forEach(([k, v]) => { row[k] += v; });
         map.set(key, row);
@@ -73,6 +74,9 @@ export function peopleImpact(model) {
         const patch = {
             current: slot.current,
             future: slot.future,
+            // The outcome of today's population once the change lands. The gap
+            // between `current` and this is the actual position reduction.
+            curFuture: slot.curFuture,
             mapped: slot.mapFut,
             selection: slot.selFut,
             posted: slot.postFut,
@@ -86,16 +90,24 @@ export function peopleImpact(model) {
 
     const rank = map => [...map.values()].sort((a, b) => b.current - a.current || a.key.localeCompare(b.key));
 
-    // The change bridge: today's headcount, minus the roles at risk, plus the
-    // roles being created, lands on the target. Any residual is the part the
-    // status fields don't explain — surfaced rather than absorbed, because a
-    // non-zero residual means the source data is internally inconsistent.
-    const explained = totals.current - totals.risk + totals.posted;
+    // The change bridge.
+    //
+    // The reduction is `current - curFuture`, NOT the at-risk count. "At risk"
+    // is the POPULATION whose roles are in scope; some of them are redeployed
+    // into surviving or new roles, so fewer positions come out than people are
+    // affected. Using the at-risk figure here makes the bridge miss by exactly
+    // the number of people redeployed, which then reads as a data-quality fault
+    // when it is nothing of the kind.
+    const removed = totals.current - totals.curFuture;
+    const explained = totals.current - removed + totals.posted;
     const bridge = {
         current: totals.current,
-        risk: totals.risk,
+        removed,
         posted: totals.posted,
         future: totals.future,
+        // People affected minus positions actually removed: the redeployment.
+        redeployed: totals.risk - removed,
+        risk: totals.risk,
         residual: totals.future - explained,
     };
 

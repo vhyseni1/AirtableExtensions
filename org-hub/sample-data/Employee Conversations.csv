@@ -1,0 +1,52 @@
+Conversation ID,Employee,Employee ID,Manager,Supervisory Organization,Country,Conversation Type,Status,Scheduled Date,Held Date,Outcome,Sentiment
+CV-0001,Tomas Vogel,E-1011,Tomas Vogel,Treasury & Tax,CHE,At risk notification,Declined,2026-09-08,2026-09-08,Declined to meet,
+CV-0002,Yasmin Sarr,E-1033,Katarina Marchetti,Data & Analytics,DEU,At risk notification,Held,2026-08-29,2026-08-29,Acknowledged,Neutral
+CV-0003,Yasmin Larsen,E-1034,Tomas Kowalski,Data Engineering,ESP,Selection process briefing,Held,2026-08-29,2026-08-29,Acknowledged,Positive
+CV-0004,Rosa Amrani,E-1037,Tomas Kowalski,Data Engineering,ESP,Selection process briefing,Held,2026-09-05,2026-09-05,Acknowledged,Concerned
+CV-0005,Vera Brandt,E-1039,Tomas Kowalski,Data Engineering,CHE,At risk notification,To schedule,,,,
+CV-0006,Matteo Horvath,E-1041,Katarina Marchetti,Analytics & Insights,POL,At risk notification,Scheduled,2026-09-11,,,
+CV-0007,Ravi Karlsen,E-1043,Katarina Marchetti,Analytics & Insights,POL,Selection process briefing,To schedule,,,,
+CV-0008,Anton Weber,E-1045,Katarina Marchetti,Analytics & Insights,CHE,At risk notification,Held,2026-09-07,2026-09-07,Acknowledged,Positive
+CV-0009,Priya Sundberg,E-1047,Katarina Marchetti,Analytics & Insights,POL,Selection process briefing,To schedule,,,,
+CV-0010,Selma Baptiste,E-1052,Leon Fontaine,Cloud Infrastructure,IRL,At risk notification,Scheduled,2026-09-17,,,
+CV-0011,Bruno Nasser,E-1053,Leon Fontaine,Cloud Infrastructure,IRL,At risk notification,Held,2026-09-01,2026-09-01,Acknowledged,Concerned
+CV-0012,Theo Strand,E-1056,Leon Fontaine,Cloud Infrastructure,IRL,At risk notification,To schedule,,,,
+CV-0013,Samuel El-Amin,E-1057,Adrian Lindholm,Application Services,IRL,Selection process briefing,To schedule,,,,
+CV-0014,Kasper Petrov,E-1058,Adrian Lindholm,Application Services,CHE,At risk notification,Held,2026-09-05,2026-09-05,Acknowledged,Positive
+CV-0015,Manuel Lindgren,E-1059,Adrian Lindholm,Application Services,POL,At risk notification,Held,2026-08-29,2026-08-29,Acknowledged,Positive
+CV-0016,Emilie Vogel,E-1060,Adrian Lindholm,Application Services,POL,At risk notification,Scheduled,2026-09-10,,,
+CV-0017,Hassan Zimmermann,E-1061,Adrian Lindholm,Application Services,POL,Selection process briefing,Scheduled,2026-09-12,,,
+CV-0018,Bruno Leclerc,E-1062,Adrian Lindholm,Application Services,CHE,At risk notification,Held,2026-08-29,2026-08-29,Acknowledged,Distressed
+CV-0019,Manuel Kristensen,E-1063,Adrian Lindholm,Application Services,POL,At risk notification,Held,2026-09-01,2026-09-01,Acknowledged,Neutral
+CV-0020,Matteo Colombo,E-1064,Adrian Lindholm,Application Services,POL,Selection process briefing,Held,2026-09-08,2026-09-08,Acknowledged,Neutral
+CV-0021,Miguel Aaltonen,E-1074,Agnes Conti,Controlling,DEU,At risk notification,To schedule,,,,
+CV-0022,Sara Zimmermann,E-1076,Agnes Conti,Controlling,DEU,At risk notification,Declined,2026-09-06,2026-09-06,Declined to meet,
+CV-0023,Lotte Falk,E-1077,Agnes Conti,Controlling,DEU,At risk notification,Held,2026-09-01,2026-09-01,Acknowledged,Distressed
+CV-0024,Camille Osei,E-1078,Tomas Vogel,Treasury & Tax,CHE,At risk notification,Scheduled,2026-09-10,,,
+CV-0025,Rania Muller,E-1079,Tomas Vogel,Treasury & Tax,CHE,At risk notification,To schedule,,,,
+CV-0026,Aisha Haddadi,E-1080,Tomas Vogel,Treasury & Tax,CHE,At risk notification,Held,2026-09-08,2026-09-08,Acknowledged,Concerned
+CV-0027,Emil Brandt,E-1081,Tomas Vogel,Treasury & Tax,CHE,At risk notification,Scheduled,2026-09-18,,,
+CV-0028,Ingrid Haddadi,E-1085,Aleksander Sokolov,Talent Acquisition,DEU,At risk notification,To schedule,,,,
+CV-0029,Yasmin Prieto,E-1086,Aleksander Sokolov,Talent Acquisition,CHE,At risk notification,To schedule,,,,
+CV-0030,Anders Fischer,E-1089,Aleksander Sokolov,Talent Acquisition,ESP,At risk notification,Held,2026-09-08,2026-09-08,Acknowledged,Positive
+CV-0031,Dimitri Bergstrom,E-1090,Bianca Horvath,HR Operations,POL,At risk notification,To schedule,,,,
+CV-0032,Simon Aaltonen,E-1093,Bianca Horvath,HR Operations,CHE,At risk notification,Scheduled,2026-09-14,,,
+CV-0033,Thomas Prieto,E-1094,Bianca Horvath,HR Operations,ESP,At risk notification,Scheduled,2026-09-13,,,
+CV-0034,Anton Novotny,E-1097,Roxana Conti,Sales EMEA,DEU,Selection process briefing,Scheduled,2026-09-10,,,
+CV-0035,Isabelle Sundberg,E-1100,Roxana Conti,Sales EMEA,DEU,Selection process briefing,Scheduled,2026-09-14,,,
+CV-0036,Lucia Larsen,E-1103,Roxana Conti,Sales EMEA,DEU,At risk notification,Held,2026-08-31,2026-08-31,Acknowledged,Neutral
+CV-0037,Helena Novak,E-1104,Roxana Conti,Sales EMEA,DEU,Selection process briefing,Held,2026-09-06,2026-09-06,Acknowledged,Distressed
+CV-0038,Marco Lombardi,E-1107,Beatrice Klein,Marketing,ESP,At risk notification,Scheduled,2026-09-18,,,
+CV-0039,Julien Marchetti,E-1114,Pierre Serrano,Supply Chain,POL,At risk notification,Scheduled,2026-09-17,,,
+CV-0040,Henrik Novak,E-1115,Pierre Serrano,Supply Chain,POL,At risk notification,Scheduled,2026-09-11,,,
+CV-0041,Greta Larsen,E-1118,Pierre Serrano,Supply Chain,POL,At risk notification,Held,2026-09-04,2026-09-04,Acknowledged,Concerned
+CV-0042,Lotte Michel,E-1120,Dalia Falk,Quality & Compliance,IRL,At risk notification,To schedule,,,,
+CV-0043,Louise Lindberg,E-1124,Dalia Falk,Quality & Compliance,IRL,At risk notification,To schedule,,,,
+CV-0044,Rafael Prieto,E-1128,Priya Haddad,Clinical Development,SGP,Selection process briefing,Held,2026-08-30,2026-08-30,Acknowledged,Concerned
+CV-0045,Dalia Frei,E-1130,Priya Haddad,Clinical Development,SGP,At risk notification,To schedule,,,,
+CV-0046,Roxana Lindberg,E-1132,Priya Haddad,Clinical Development,SGP,Selection process briefing,Scheduled,2026-09-16,,,
+CV-0047,Noor Andersen,E-1134,Priya Haddad,Clinical Development,CHE,At risk notification,Held,2026-09-02,2026-09-02,Acknowledged,Neutral
+CV-0048,Nadine Ferreira,E-1136,Stefan Keller,Preclinical Research,CHE,At risk notification,Scheduled,2026-09-13,,,
+CV-0049,Kira Conti,E-1137,Stefan Keller,Preclinical Research,CHE,At risk notification,Scheduled,2026-09-10,,,
+CV-0050,Anja Solberg,E-1140,Stefan Keller,Preclinical Research,CHE,At risk notification,To schedule,,,,
+CV-0051,Lucas Berg,E-1141,Stefan Keller,Preclinical Research,CHE,At risk notification,Held,2026-09-04,2026-09-04,Acknowledged,Distressed

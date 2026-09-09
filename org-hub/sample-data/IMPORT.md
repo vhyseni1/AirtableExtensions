@@ -14,6 +14,8 @@ reconciles with the people table org by org.
 | `Supervisory Organizations.csv` | 24 | the supervisory-org table — one row per org unit |
 | `Org Design Data.csv` | 185 | the flat table behind the stacked deck — one row per (slide, level, org, position, side) |
 | `Org Design Notes.csv` | 9 | per-slide subtitle and commentary |
+| `Programme Milestones.csv` | 24 | the PMO delivery plan |
+| `Employee Conversations.csv` | 51 | the HR conversation tracker |
 
 The first two feed the hierarchy views (position view, org trees, dashboard);
 the last two feed the two stacked deck views. They are different shapes on
@@ -100,6 +102,42 @@ If your import drops it, the field still resolves.
 
 The `Slide` values must match `Slide Title` in the data table exactly; matching
 is case- and whitespace-insensitive, but nothing else.
+
+### 5. Programme Milestones
+
+1. **Add a table → Import data → CSV file**, name it **`Programme Milestones`**,
+   primary field **`Milestone ID`**.
+2. Convert after import:
+
+   | Field | Type | Notes |
+   | --- | --- | --- |
+   | `Due Date` | Date | ISO `YYYY-MM-DD` |
+   | `Status` | Single select | `Complete`, `In progress`, `Not started`, `Blocked` |
+   | `RAG` | Single select | `Green`, `Amber`, `Red` |
+   | `Phase` | Single select | `Design`, `Consultation`, `Selection`, `Transition`, `Close` |
+   | `Progress` | Number (integer, 0–100) | |
+
+   Dates are anchored to **9 September 2026** (the `BASELINE` constant in
+   `generate.py`). Move it forward when the demo starts to look stale — the
+   whole plan shifts with it, keeping "past due" and "next 14 days" meaningful.
+
+### 6. Employee Conversations
+
+1. **Add a table → Import data → CSV file**, name it **`Employee Conversations`**,
+   primary field **`Conversation ID`**.
+2. Convert after import:
+
+   | Field | Type | Notes |
+   | --- | --- | --- |
+   | `Status` | Single select | `Held`, `Scheduled`, `To schedule`, `Declined` |
+   | `Conversation Type` | Single select | |
+   | `Sentiment` | Single select | `Positive`, `Neutral`, `Concerned`, `Distressed` |
+   | `Scheduled Date`, `Held Date` | Date | |
+
+   Every row is a person the scenario marks at risk or in selection, so this
+   table reconciles with `Org Design Data`. The view compares the two and shows
+   an **Untracked** count when the design owes more conversations than the
+   tracker holds.
 
 ## What the data is built to exercise
 

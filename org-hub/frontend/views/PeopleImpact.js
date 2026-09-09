@@ -119,10 +119,10 @@ export default function PeopleImpact({model}) {
                     <div className="panel-span-2">
                         <Bridge
                             title="Headcount bridge"
-                            subtitle="How the current organisation becomes the target"
+                            subtitle={`${fmtNum(m.totals.risk)} people at risk · ${fmtNum(m.bridge.removed)} positions removed · ${fmtNum(m.bridge.redeployed)} redeployed`}
                             steps={[
                                 {label: 'Current', value: m.bridge.current, kind: 'base'},
-                                {label: 'At risk', value: m.bridge.risk, kind: 'down'},
+                                {label: 'Roles removed', value: m.bridge.removed, kind: 'down'},
                                 {label: 'New roles', value: m.bridge.posted, kind: 'up'},
                                 {label: 'Target', value: m.bridge.future, kind: 'total'},
                             ]}

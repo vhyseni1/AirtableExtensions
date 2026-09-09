@@ -12,9 +12,10 @@ import {useState, useMemo, useRef, useCallback} from 'react';
 import {Slide, ComparisonSlide} from '../components/Slide';
 import FilterTree from '../components/FilterTree';
 import {ExportMenu, ToggleSwitch} from '../components/Controls';
+import ExportCeremony from '../components/ExportCeremony';
 import {paginateLevels, buildFilterTree, computeKpis} from '../lib/stacked';
 import {exportPNG, exportSlidesPDF, toCSV, downloadText} from '../lib/exports';
-import {SLIDE} from '../config';
+import {SLIDE, WORKS_COUNCIL} from '../config';
 
 // Zoom presets rather than free pan/zoom: a slide is a fixed 1280×720 canvas,
 // so what a reader wants is "fit the width", not arbitrary panning.
@@ -26,6 +27,7 @@ export default function StackedDeck({model, variant}) {
     const [showNotes, setShowNotes] = useState(true);
     const [zoom, setZoom] = useState(0.65);
     const [selected, setSelected] = useState(() => new Set());
+    const [ceremony, setCeremony] = useState(false);
     const deckRef = useRef(null);
 
     const allSlideTitles = useMemo(() => slides.map(s => s.slideTitle), [slides]);
@@ -81,6 +83,10 @@ export default function StackedDeck({model, variant}) {
     }, [visible, variant]);
 
     const exportItems = useMemo(() => [
+        {
+            label: `Publish deck · ${pages.length} page${pages.length !== 1 ? 's' : ''}`,
+            run: () => setCeremony(true),
+        },
         {
             label: `PDF · ${pages.length} slide${pages.length !== 1 ? 's' : ''} (16:9)`,
             run: () => exportSlidesPDF(deckRef.current, SLIDE, 'org-design-deck'),
@@ -189,6 +195,15 @@ export default function StackedDeck({model, variant}) {
                     )))}
                 </div>
             </div>
+
+            <ExportCeremony
+                open={ceremony}
+                totalPages={pages.length}
+                driveLocation={WORKS_COUNCIL.driveLocation}
+                title={variant === 'comparison' ? 'Current vs future deck' : 'Stacked org deck'}
+                demo
+                onClose={() => setCeremony(false)}
+            />
         </div>
     );
 }

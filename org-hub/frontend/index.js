@@ -19,7 +19,7 @@ import {
 import {useState, useMemo, useCallback} from 'react';
 import './style.css';
 
-import {PEOPLE, SUP_ORG, ORG_DESIGN} from './config';
+import {PEOPLE, SUP_ORG, ORG_DESIGN, PROGRAMME, CONVERSATIONS} from './config';
 import {findTable, findFieldByName, normName} from './lib/fields';
 import {
     resolvePeopleConfig, configKey, buildOrg, buildStatusColors,
@@ -39,80 +39,140 @@ import StackedDeck from './views/StackedDeck';
 import PeopleImpact from './views/PeopleImpact';
 import Savings from './views/Savings';
 import WorksCouncil from './views/WorksCouncil';
+import ExecutiveBrief from './views/ExecutiveBrief';
+import Programme from './views/Programme';
+import Conversations from './views/Conversations';
+import {
+    resolveProgrammeConfig, buildProgramme,
+    resolveConversationsConfig, buildConversations,
+} from './lib/delivery';
+import {peopleImpact} from './lib/orgMetrics';
+import {depthByNode} from './lib/people';
 
 // ─── Navigation model ────────────────────────────────────────────────────────
 //
-// Two levels: a tab, and (for tabs that have them) a sub-tab. Kept as data so
-// the header renders itself and adding a view is a one-entry change.
+// Sections and items, rendered as a persistent sidebar so every destination is
+// visible at once rather than hidden behind a tab. `needs` names the optional
+// table an item depends on; an item whose table is missing is shown disabled
+// with the reason, not silently dropped — a demo that quietly loses half its
+// menu looks broken rather than unconfigured.
 
 const NAV = [
-    {key: 'dashboard', label: 'Dashboard'},
     {
-        key: 'charts',
-        label: 'Org charts',
-        subs: [
-            {key: 'stacked', label: 'Stacked org'},
-            {key: 'comparison', label: 'Current vs future'},
-            {key: 'position', label: 'Position view'},
-            {key: 'suporg', label: 'Supervisory org tree'},
-            {key: 'people-tree', label: 'People tree'},
+        key: 'overview',
+        label: 'Overview',
+        items: [
+            {key: 'executive', label: 'Executive brief', icon: '◆', needs: 'design'},
+            {key: 'dashboard', label: 'Org health', icon: '◈'},
+        ],
+    },
+    {
+        key: 'organisation',
+        label: 'Organisation',
+        items: [
+            {key: 'stacked', label: 'Stacked org', icon: '▤', needs: 'design'},
+            {key: 'comparison', label: 'Current vs future', icon: '◨', needs: 'design'},
+            {key: 'position', label: 'Position view', icon: '⬡'},
+            {key: 'suporg', label: 'Supervisory tree', icon: '⑂', needs: 'suporg'},
+            {key: 'people-tree', label: 'People tree', icon: '⑃'},
         ],
     },
     {
         key: 'impact',
         label: 'Impact',
-        subs: [
-            {key: 'people-impact', label: 'People impact'},
-            {key: 'savings', label: 'Savings'},
-            {key: 'works-council', label: 'Works council'},
+        items: [
+            {key: 'people-impact', label: 'People impact', icon: '◉', needs: 'design'},
+            {key: 'conversations', label: 'Employee conversations', icon: '◍', needs: 'design'},
+            {key: 'works-council', label: 'Works council', icon: '⚖', needs: 'design'},
+        ],
+    },
+    {
+        key: 'finance',
+        label: 'Finance',
+        items: [
+            {key: 'savings', label: 'Savings & payback', icon: '▲', needs: 'design'},
+        ],
+    },
+    {
+        key: 'delivery',
+        label: 'Delivery',
+        items: [
+            {key: 'programme', label: 'Programme plan', icon: '◎', needs: 'programme'},
         ],
     },
     {
         key: 'data',
         label: 'Data',
-        subs: [
-            {key: 'design-data', label: 'Org design data'},
-            {key: 'people-data', label: 'Employees & positions'},
-            {key: 'suporg-data', label: 'Supervisory organizations'},
+        items: [
+            {key: 'design-data', label: 'Org design data', icon: '▦', needs: 'design'},
+            {key: 'people-data', label: 'Employees & positions', icon: '▦'},
+            {key: 'suporg-data', label: 'Supervisory orgs', icon: '▦', needs: 'suporg'},
         ],
     },
 ];
 
-function Header({tab, setTab, sub, setSub, subject}) {
-    const active = NAV.find(t => t.key === tab) || NAV[0];
+const ALL_ITEMS = NAV.flatMap(section => section.items);
+
+function Sidebar({view, setView, collapsed, setCollapsed, availability, badges}) {
     return (
-        <div className="app-header">
-            <div className="app-header-top">
-                <span className="app-title">Org Hub</span>
-                <nav className="tabs">
-                    {NAV.map(t => (
-                        <button
-                            key={t.key}
-                            className={`tab ${t.key === tab ? 'active' : ''}`}
-                            onClick={() => {
-                                setTab(t.key);
-                                if (t.subs) setSub(t.subs[0].key);
-                            }}
-                        >
-                            {t.label}
-                        </button>
-                    ))}
-                </nav>
-                {subject && <span className="app-subject">{subject}</span>}
+        <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
+            <div className="sidebar-brand">
+                <span className="sidebar-mark" />
+                {!collapsed && <span className="sidebar-name">Org Hub</span>}
+                <button
+                    className="sidebar-toggle"
+                    onClick={() => setCollapsed(c => !c)}
+                    title={collapsed ? 'Expand menu' : 'Collapse menu'}
+                    aria-label={collapsed ? 'Expand menu' : 'Collapse menu'}
+                >
+                    {collapsed ? '›' : '‹'}
+                </button>
             </div>
-            {active.subs && (
-                <nav className="subtabs">
-                    {active.subs.map(s => (
-                        <button
-                            key={s.key}
-                            className={`subtab ${s.key === sub ? 'active' : ''}`}
-                            onClick={() => setSub(s.key)}
-                        >
-                            {s.label}
-                        </button>
-                    ))}
-                </nav>
-            )}
+
+            <nav className="sidebar-nav">
+                {NAV.map(section => (
+                    <div key={section.key} className="sidebar-section">
+                        {!collapsed && <div className="sidebar-section-label">{section.label}</div>}
+                        {section.items.map(item => {
+                            const ok = !item.needs || availability[item.needs];
+                            const badge = badges[item.key];
+                            return (
+                                <button
+                                    key={item.key}
+                                    className={`sidebar-item${view === item.key ? ' active' : ''}${ok ? '' : ' disabled'}`}
+                                    onClick={() => ok && setView(item.key)}
+                                    disabled={!ok}
+                                    title={ok ? item.label : `${item.label} — needs the ${item.needs} table`}
+                                >
+                                    <span className="sidebar-icon">{item.icon}</span>
+                                    {!collapsed && <span className="sidebar-label">{item.label}</span>}
+                                    {!collapsed && badge != null && badge > 0 && (
+                                        <span className={`sidebar-badge${badge > 0 ? ' hot' : ''}`}>{badge}</span>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+                ))}
+            </nav>
+        </aside>
+    );
+}
+
+function TopBar({view, subject, onExport}) {
+    const item = ALL_ITEMS.find(i => i.key === view);
+    const section = NAV.find(s => s.items.some(i => i.key === view));
+    return (
+        <div className="topbar">
+            <div className="topbar-crumbs">
+                <span className="topbar-section">{section ? section.label : ''}</span>
+                <span className="topbar-sep">/</span>
+                <span className="topbar-view">{item ? item.label : ''}</span>
+            </div>
+            <div className="topbar-right">
+                {subject && <span className="app-subject">{subject}</span>}
+                {onExport}
+            </div>
         </div>
     );
 }
@@ -194,23 +254,25 @@ const NO_NOTES = {};
 
 // The notes table is optional, and hooks can't be called conditionally — so
 // notes are loaded by a component that only mounts when the table exists.
-function OrgDesignSection({table, notesTable, view}) {
+// Both variants funnel into OrgDesignBody, which hands the built model to a
+// render prop; the caller decides which view to draw with it.
+function OrgDesignSection({table, notesTable, render}) {
     return notesTable
-        ? <OrgDesignWithNotes table={table} notesTable={notesTable} view={view} />
-        : <OrgDesignBody table={table} notesMap={NO_NOTES} view={view} />;
+        ? <OrgDesignWithNotes table={table} notesTable={notesTable} render={render} />
+        : <OrgDesignBody table={table} notesMap={NO_NOTES} render={render} />;
 }
 
-function OrgDesignWithNotes({table, notesTable, view}) {
+function OrgDesignWithNotes({table, notesTable, render}) {
     const notesRecords = useRecords(notesTable);
     const notesCfg = useMemo(() => resolveNotesConfig(notesTable, ORG_DESIGN), [notesTable]);
     const notesMap = useMemo(
         () => buildNotesMap(notesRecords || [], notesCfg),
         [notesRecords, notesCfg],
     );
-    return <OrgDesignBody table={table} notesMap={notesMap} view={view} />;
+    return <OrgDesignBody table={table} notesMap={notesMap} render={render} />;
 }
 
-function OrgDesignBody({table, notesMap, view}) {
+function OrgDesignBody({table, notesMap, render}) {
     const records = useRecords(table);
     const cfg = useMemo(() => resolveOrgDesignConfig(table, ORG_DESIGN), [table]);
     const key = configKey(cfg);
@@ -228,28 +290,15 @@ function OrgDesignBody({table, notesMap, view}) {
         return out;
     }, [cfg]);
 
-    if (view === 'data') {
-        return (
-            <DataTable
-                table={table}
-                records={records}
-                resolved={resolvedForGrid}
-                groupField={cfg.slideTitleField}
-            />
-        );
-    }
-    if (view === 'people-impact') return <PeopleImpact model={model} />;
-    if (view === 'savings') return <Savings model={model} />;
-    if (view === 'works-council') return <WorksCouncil model={model} />;
-    return <StackedDeck model={model} variant={view} />;
+    return render(model, {records, cfg, resolvedForGrid, table});
 }
 
 // ─── App ─────────────────────────────────────────────────────────────────────
 
 function OrgHubApp() {
     const base = useBase();
-    const [tab, setTab] = useState('dashboard');
-    const [sub, setSub] = useState('stacked');
+    const [view, setView] = useState('executive');
+    const [collapsed, setCollapsed] = useState(false);
 
     const peopleTable = findTable(base, PEOPLE.tableName);
     // findTable falls back to the first table in the base, so an optional table
@@ -263,6 +312,8 @@ function OrgHubApp() {
     const supOrgTable = useMemo(() => optionalTable(SUP_ORG.tableName), [optionalTable]);
     const designTable = useMemo(() => optionalTable(ORG_DESIGN.tableName), [optionalTable]);
     const notesTable = useMemo(() => optionalTable(ORG_DESIGN.notesTableName), [optionalTable]);
+    const programmeTable = useMemo(() => optionalTable(PROGRAMME.tableName), [optionalTable]);
+    const conversationsTable = useMemo(() => optionalTable(CONVERSATIONS.tableName), [optionalTable]);
 
     if (!peopleTable) {
         return (
@@ -282,14 +333,41 @@ function OrgHubApp() {
             supOrgTable={supOrgTable}
             designTable={designTable}
             notesTable={notesTable}
-            tab={tab} setTab={setTab} sub={sub} setSub={setSub}
+            programmeTable={programmeTable}
+            conversationsTable={conversationsTable}
+            view={view}
+            setView={setView}
+            collapsed={collapsed}
+            setCollapsed={setCollapsed}
         />
     );
 }
 
-// Split from OrgHubApp so the hooks below never run before the table check
-// above has passed (hooks can't be called conditionally).
-function OrgHub({peopleTable, supOrgTable, designTable, notesTable, tab, setTab, sub, setSub}) {
+// Programme and conversations are small tables read by several views, so they
+// are loaded once here and passed down rather than re-read per view. Each has
+// its own component because `useRecords` cannot be called conditionally.
+function DeliveryData({programmeTable, conversationsTable, owed, children}) {
+    const programmeRecords = useRecords(programmeTable);
+    const conversationRecords = useRecords(conversationsTable);
+
+    const programme = useMemo(() => buildProgramme(
+        programmeRecords || [],
+        programmeTable ? resolveProgrammeConfig(programmeTable) : null,
+    ), [programmeRecords, programmeTable]);
+
+    const conversations = useMemo(() => buildConversations(
+        conversationRecords || [],
+        conversationsTable ? resolveConversationsConfig(conversationsTable) : null,
+        {owed},
+    ), [conversationRecords, conversationsTable, owed]);
+
+    return children({programme, conversations});
+}
+
+function OrgHub({
+    peopleTable, supOrgTable, designTable, notesTable,
+    programmeTable, conversationsTable, view, setView, collapsed, setCollapsed,
+}) {
     const {org, cfg, records, noView, viewerEmail} = usePeopleOrg(peopleTable);
 
     const dimensionFields = useMemo(
@@ -305,125 +383,158 @@ function OrgHub({peopleTable, supOrgTable, designTable, notesTable, tab, setTab,
         [supOrgTable],
     );
 
-    // Sub-views that depend on an optional table. When it is missing the view
-    // is unavailable rather than broken, and the shell falls back to a sibling.
-    const requires = {
-        stacked: designTable,
-        comparison: designTable,
-        'design-data': designTable,
-        'people-impact': designTable,
-        savings: designTable,
-        'works-council': designTable,
-        suporg: supOrgTable,
-        'suporg-data': supOrgTable,
+    const availability = {
+        design: !!designTable,
+        suporg: !!supOrgTable,
+        programme: !!programmeTable,
+        conversations: !!conversationsTable,
     };
-    const fallback = {charts: 'position', data: 'people-data', impact: null};
-    const available = !(sub in requires) || !!requires[sub];
-    const effectiveSub = available ? sub : (fallback[tab] || sub);
 
-    const missingTableFor = key => (key in requires && requires[key] === designTable
-        ? ORG_DESIGN.tableName
-        : SUP_ORG.tableName);
+    // Fall back to a view that actually works if the selected one lost its table.
+    const item = ALL_ITEMS.find(i => i.key === view);
+    const effective = (item && (!item.needs || availability[item.needs])) ? view : 'dashboard';
+
+    // Span and layer figures for the executive brief, computed from the people
+    // tree rather than the design table so they describe the live organisation.
+    const orgHealth = useMemo(() => {
+        const people = Object.values(org.nodeMap);
+        const spans = people.filter(n => n.childIds.length > 0).map(n => n.childIds.length);
+        const depths = Object.values(depthByNode(org.nodeMap));
+        return {
+            avgSpan: spans.length ? spans.reduce((a, b) => a + b, 0) / spans.length : 0,
+            layers: depths.length ? Math.max(...depths) + 1 : 0,
+        };
+    }, [org]);
 
     const subject = `${Object.keys(org.nodeMap).length} positions`;
 
     if (noView) {
         return (
-            <div className="app-root">
-                <Header tab={tab} setTab={setTab} sub={effectiveSub} setSub={setSub} />
-                <Notice tone="warn">
-                    This view is personalized per leader, and there is no view available
-                    for {viewerEmail ? <strong>{viewerEmail}</strong> : 'your account'}. If
-                    you should have access, ask an administrator to add your email as a
-                    leader, or to the admin list in <code>frontend/config.js</code>.
-                </Notice>
+            <div className="app-shell">
+                <Sidebar
+                    view={effective} setView={setView}
+                    collapsed={collapsed} setCollapsed={setCollapsed}
+                    availability={availability} badges={{}}
+                />
+                <div className="app-main">
+                    <Notice tone="warn">
+                        This view is personalized per leader, and there is no view available
+                        for {viewerEmail ? <strong>{viewerEmail}</strong> : 'your account'}. If
+                        you should have access, ask an administrator to add your email as a
+                        leader, or to the admin list in <code>frontend/config.js</code>.
+                    </Notice>
+                </div>
             </div>
         );
     }
 
-    let body = null;
-    if (tab === 'dashboard') {
-        // The supervisory-org tree needs useRecords on a second table, which
-        // can't be called conditionally — hence the two variants.
-        body = supOrgTable ? (
-            <DashboardWithSupOrg
-                org={org}
-                supOrgTable={supOrgTable}
-                peopleTable={peopleTable}
-                dimensionFields={dimensionFields}
-                supOrgDimensionFields={supOrgDimensionFields}
+    const shell = body => (
+        <div className="app-shell">
+            <Sidebar
+                view={effective} setView={setView}
+                collapsed={collapsed} setCollapsed={setCollapsed}
+                availability={availability} badges={body.badges || {}}
             />
-        ) : (
-            <Dashboard
-                org={org}
-                supOrg={null}
-                peopleTable={peopleTable}
-                supOrgTable={null}
-                dimensionFields={dimensionFields}
-                supOrgDimensionFields={[]}
-            />
+            <div className="app-main">
+                <TopBar view={effective} subject={subject} />
+                {body.node}
+            </div>
+        </div>
+    );
+
+    // Views that don't touch the org-design table can render without it.
+    const plain = key => {
+        if (key === 'dashboard') {
+            return supOrgTable ? (
+                <DashboardWithSupOrg
+                    org={org} supOrgTable={supOrgTable} peopleTable={peopleTable}
+                    dimensionFields={dimensionFields} supOrgDimensionFields={supOrgDimensionFields}
+                />
+            ) : (
+                <Dashboard
+                    org={org} supOrg={null} peopleTable={peopleTable} supOrgTable={null}
+                    dimensionFields={dimensionFields} supOrgDimensionFields={[]}
+                />
+            );
+        }
+        if (key === 'people-tree') return <PeopleTree org={org} />;
+        if (key === 'suporg') return <SupOrgSection table={supOrgTable} view="chart" />;
+        if (key === 'suporg-data') return <SupOrgSection table={supOrgTable} view="data" />;
+        if (key === 'people-data') {
+            return (
+                <DataTable table={peopleTable} records={records}
+                    resolved={cfg} groupField={cfg.orgFilterField} />
+            );
+        }
+        return (
+            <PositionChart org={org} cfg={cfg}
+                decisionFieldPresent={!!cfg.employeeDecisionField} />
         );
-    } else if (tab === 'impact') {
-        body = designTable ? (
-            <OrgDesignSection
-                table={designTable}
-                notesTable={notesTable}
-                view={effectiveSub}
-            />
-        ) : (
-            <Notice tone="warn">
-                The impact views need a table named “{ORG_DESIGN.tableName}”.
-                See <code>sample-data/IMPORT.md</code>.
-            </Notice>
-        );
-    } else if (effectiveSub === 'stacked' || effectiveSub === 'comparison') {
-        body = (
-            <OrgDesignSection
-                table={designTable}
-                notesTable={notesTable}
-                view={effectiveSub}
-            />
-        );
-    } else if (effectiveSub === 'design-data') {
-        body = <OrgDesignSection table={designTable} notesTable={notesTable} view="data" />;
-    } else if (effectiveSub === 'suporg') {
-        body = <SupOrgSection table={supOrgTable} view="chart" />;
-    } else if (effectiveSub === 'suporg-data') {
-        body = <SupOrgSection table={supOrgTable} view="data" />;
-    } else if (effectiveSub === 'people-tree') {
-        body = <PeopleTree org={org} />;
-    } else if (effectiveSub === 'people-data') {
-        body = (
-            <DataTable
-                table={peopleTable}
-                records={records}
-                resolved={cfg}
-                groupField={cfg.orgFilterField}
-            />
-        );
-    } else {
-        body = (
-            <PositionChart
-                org={org}
-                cfg={cfg}
-                decisionFieldPresent={!!cfg.employeeDecisionField}
-            />
-        );
+    };
+
+    const DESIGN_VIEWS = new Set([
+        'executive', 'stacked', 'comparison', 'design-data',
+        'people-impact', 'savings', 'works-council', 'conversations', 'programme',
+    ]);
+
+    if (!DESIGN_VIEWS.has(effective)) {
+        return shell({node: plain(effective)});
     }
 
     return (
-        <div className="app-root">
-            <Header tab={tab} setTab={setTab} sub={effectiveSub} setSub={setSub} subject={subject} />
-            {!available && (
-                <Notice tone="info">
-                    That view needs a table named “{missingTableFor(sub)}”, which this base
-                    doesn’t have — showing “{effectiveSub}” instead. See
-                    <code> sample-data/IMPORT.md </code> to create it.
-                </Notice>
+        <OrgDesignSection
+            table={designTable}
+            notesTable={notesTable}
+            render={(model, design) => (
+                <DeliveryData
+                    programmeTable={programmeTable}
+                    conversationsTable={conversationsTable}
+                    owed={peopleImpact(model).impacted}
+                >
+                    {({programme, conversations}) => shell({
+                        badges: {
+                            programme: programme.available ? programme.overdue.length : 0,
+                            conversations: conversations.available
+                                ? (conversations.counts['To schedule'] || 0) + conversations.untracked
+                                : 0,
+                            'works-council': 0,
+                        },
+                        node: renderDesignView({
+                            view: effective, model, programme, conversations,
+                            orgHealth, setView, design,
+                        }),
+                    })}
+                </DeliveryData>
             )}
-            {body}
-        </div>
+        />
     );
+}
+
+function renderDesignView({view, model, programme, conversations, orgHealth, setView, design}) {
+    switch (view) {
+        case 'design-data':
+            return (
+                <DataTable
+                    table={design.table}
+                    records={design.records}
+                    resolved={design.resolvedForGrid}
+                    groupField={design.cfg.slideTitleField}
+                />
+            );
+        case 'executive':
+            return (
+                <ExecutiveBrief
+                    model={model} programme={programme} conversations={conversations}
+                    orgHealth={orgHealth} onNavigate={setView}
+                />
+            );
+        case 'people-impact': return <PeopleImpact model={model} />;
+        case 'savings': return <Savings model={model} />;
+        case 'works-council': return <WorksCouncil model={model} />;
+        case 'programme': return <Programme programme={programme} />;
+        case 'conversations': return <Conversations conversations={conversations} />;
+        default: return <StackedDeck model={model} variant={view} />;
+    }
 }
 
 // Loads the supervisory-org tree and hands it to the dashboard.

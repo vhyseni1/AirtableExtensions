@@ -13,11 +13,11 @@ import Confetti from './Confetti';
 const PHASES = [
     {key: 'collecting', label: 'Collecting consultation scope'},
     {key: 'rendering', label: 'Rendering org charts'},
-    {key: 'packaging', label: 'Assembling works council pack'},
+    {key: 'packaging', label: 'Assembling the pack'},
     {key: 'saving', label: 'Saving to shared drive'},
 ];
 
-export default function ExportCeremony({open, totalPages, countries, driveLocation, demo, onClose}) {
+export default function ExportCeremony({open, totalPages, countries, driveLocation, demo, title = 'Works council pack', onClose}) {
     const [phase, setPhase] = useState(0);
     const [count, setCount] = useState(0);
     const [done, setDone] = useState(false);
@@ -72,7 +72,7 @@ export default function ExportCeremony({open, totalPages, countries, driveLocati
 
                 {!done ? (
                     <>
-                        <div className="ceremony-eyebrow">Works council pack</div>
+                        <div className="ceremony-eyebrow">{title}</div>
                         <div className="ceremony-counter">
                             <span className="ceremony-count">{count}</span>
                             <span className="ceremony-of">/ {totalPages}</span>

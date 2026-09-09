@@ -1,0 +1,25 @@
+Milestone ID,Workstream,Milestone,Phase,Owner,Due Date,Status,Progress,RAG,Depends On,Country
+MS-001,Org design,Target operating model signed off,Design,Ingrid Osei,2026-07-15,Complete,100,Green,,
+MS-002,Org design,Future org structure baselined,Design,Ingrid Osei,2026-08-05,Complete,100,Green,MS-001,
+MS-003,Org design,Span & layer review closed,Design,Ingrid Osei,2026-08-26,In progress,70,Amber,MS-002,
+MS-004,Finance & business case,Business case approved,Design,Bastien Rieger,2026-07-22,Complete,100,Green,,
+MS-005,Finance & business case,Savings baseline locked,Design,Bastien Rieger,2026-08-19,Complete,100,Green,MS-004,
+MS-006,Finance & business case,One-off cost provision agreed,Consultation,Bastien Rieger,2026-09-16,In progress,55,Amber,MS-005,
+MS-007,Works council & consultation,Country obligations mapped,Consultation,Julien Rasmussen,2026-08-12,Complete,100,Green,,
+MS-008,Works council & consultation,DE Betriebsrat pack submitted,Consultation,Julien Rasmussen,2026-09-02,In progress,80,Amber,MS-007,DEU
+MS-009,Works council & consultation,ES Comité de Empresa opened,Consultation,Julien Rasmussen,2026-09-06,In progress,45,Amber,MS-008,ESP
+MS-010,Works council & consultation,PL consultation opened,Consultation,Julien Rasmussen,2026-09-14,Not started,0,Red,MS-009,POL
+MS-011,Works council & consultation,Consultation concluded,Consultation,Julien Rasmussen,2026-10-21,Not started,0,Amber,MS-010,
+MS-012,Selection & mapping,Selection criteria agreed,Selection,Lucia Andersen,2026-08-30,Complete,100,Green,,
+MS-013,Selection & mapping,Mapping decisions issued,Selection,Lucia Andersen,2026-09-23,In progress,30,Amber,MS-012,
+MS-014,Selection & mapping,Selection process closed,Selection,Lucia Andersen,2026-10-28,Not started,0,Amber,MS-013,
+MS-015,Communications & change,Leader briefing pack issued,Consultation,Henrik Petrov,2026-08-19,Complete,100,Green,,
+MS-016,Communications & change,All-hands announcement,Consultation,Henrik Petrov,2026-08-26,Complete,100,Green,MS-015,
+MS-017,Communications & change,Manager conversation training,Consultation,Henrik Petrov,2026-09-07,In progress,65,Amber,MS-016,
+MS-018,Communications & change,Employee conversations complete,Selection,Henrik Petrov,2026-10-07,In progress,20,Red,MS-017,
+MS-019,Technology & access,Access change list prepared,Transition,Matteo Moreau,2026-09-30,Not started,0,Green,,
+MS-020,Technology & access,System org structure updated,Transition,Matteo Moreau,2026-11-04,Not started,0,Green,MS-019,
+MS-021,HR operations & payroll,Payroll change window agreed,Transition,Rania Meyer,2026-09-21,In progress,40,Amber,,
+MS-022,HR operations & payroll,Contracts & letters issued,Transition,Rania Meyer,2026-11-11,Not started,0,Amber,MS-021,
+MS-023,HR operations & payroll,New structure effective,Close,Rania Meyer,2026-12-02,Not started,0,Amber,MS-022,
+MS-024,Org design,Programme closure review,Close,Ingrid Osei,2026-12-30,Not started,0,Green,MS-003,

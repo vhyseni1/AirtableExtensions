@@ -17,18 +17,30 @@ for visibility.)
 
 ## Views
 
+Navigation is a persistent left sidebar, grouped by who is asking:
+
 ```
-Dashboard
-Org charts ─┬─ Stacked org           the deck: DLT bands → org clusters → position slots,
+Overview     ─┬─ Executive brief      the CEO screen: one-line summary + what needs you
+              └─ Org health           spans, layers, vacancy, breakdowns
+Organisation ─┬─ Stacked org           the deck: DLT bands → org clusters → position slots,
             │                        current pass then future pass
             ├─ Current vs future     the same bands, both states side by side
             ├─ Position view         Workday-style: one person in focus, reports below
             ├─ Supervisory org tree  collapsible box hierarchy of supervisory orgs
-            └─ People tree           the same box renderer, over reporting lines
-Data ──────┬─ Org design data
-           ├─ Employees & positions
-           └─ Supervisory organizations
+              └─ People tree         the same box renderer, over reporting lines
+Impact       ─┬─ People impact        headcount bridge, status split, breakdowns
+              ├─ Employee conversations   who owes a conversation, and who has had one
+              └─ Works council        consultation obligations + the export ceremony
+Finance      ─── Savings & payback    cost bridge, one-off, payback, assumptions
+Delivery     ─── Programme plan       milestones, workstream RAG, what is late
+Data         ─┬─ Org design data
+              ├─ Employees & positions
+              └─ Supervisory organizations
 ```
+
+A menu item whose optional table is missing is shown **disabled with the reason**
+rather than hidden — a demo that quietly loses half its menu looks broken rather
+than unconfigured.
 
 The five chart views read **two different shapes of data**, and that is the
 thing to understand before configuring anything:
