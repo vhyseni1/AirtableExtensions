@@ -57,7 +57,18 @@ frontend/
   TeamView.js    per-team queue
   Workflow.js    interactive lanes + Promote / Accept / Return
   style.css      responsive, focus-visible, prefers-reduced-motion
+standalone/
+  index.html     dependency-free single-file replica of all three views (see below)
+  README.md      what it replicates and where it necessarily differs
 ```
+
+## Standalone HTML replica
+
+`standalone/index.html` is the same three views — plus a full-data Register tab — in one flat
+file with no build step, no server and no network calls. It runs the identical stage-path,
+aggregate and Promote/Accept/Return logic against an embedded copy of `sample-data/`, writing to
+an in-memory dataset instead of the base, and can load an Airtable CSV export at runtime. Use it
+for demos, reviews and anyone without a Team+ seat. Details in `standalone/README.md`.
 
 ## Run / release
 

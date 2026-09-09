@@ -1,0 +1,1859 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Feature Management — Pipeline Tracker</title>
+<style>
+:root{
+  --fp-border:#e2e8f0; --fp-bg:#f8fafc; --fp-card:#fff; --fp-text:#0f172a;
+  --fp-muted:#64748b; --fp-radius:8px; --fp-accent:#0f172a;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  color:var(--fp-text); background:var(--fp-bg); font-size:13px;
+}
+.fp-app{padding:12px 16px 40px;max-width:1800px;margin:0 auto}
+
+/* header */
+.fp-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.fp-brand{font-weight:700;font-size:15px}
+.fp-brand small{display:block;font-weight:400;font-size:11px;color:var(--fp-muted);margin-top:2px}
+.fp-modeswitch{display:inline-flex;border:1px solid var(--fp-border);border-radius:999px;overflow:hidden;background:#fff}
+.fp-modeswitch button{border:none;background:transparent;padding:6px 16px;cursor:pointer;font:inherit;font-size:13px;color:var(--fp-muted)}
+.fp-modeswitch button.active{background:var(--fp-accent);color:#fff}
+.fp-datasrc{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.fp-btn{border:1px solid var(--fp-border);background:#fff;border-radius:6px;padding:5px 12px;font:inherit;font-size:12px;cursor:pointer;font-weight:600;color:var(--fp-text)}
+.fp-btn:hover{border-color:#94a3b8}
+.fp-btn.primary{background:#16a34a;border-color:#16a34a;color:#fff}
+.fp-btn.ghost{color:var(--fp-muted)}
+.fp-btn:disabled{opacity:.55;cursor:progress}
+
+/* rails */
+.fp-rail{display:flex;align-items:stretch;gap:4px;margin-bottom:14px;overflow-x:auto}
+.fp-rail-seg{display:flex;align-items:center;flex:1 1 0;min-width:96px}
+.fp-rail-card{flex:1;background:var(--fp-card);border:1px solid var(--fp-border);border-top:3px solid #ccc;border-radius:var(--fp-radius);padding:10px 8px;text-align:center}
+.fp-rail-count{font-size:22px;font-weight:700;line-height:1}
+.fp-rail-name{font-size:11px;color:var(--fp-muted);margin-top:4px}
+.fp-rail-arrow{color:#cbd5e1;padding:0 2px;font-size:14px}
+
+.fp-ladder{display:grid;grid-template-columns:repeat(14,minmax(0,1fr));gap:3px;margin-bottom:16px}
+.fp-ladder-cell{background:var(--fp-card);border:1px solid var(--fp-border);border-top:3px solid #ccc;border-radius:6px;padding:7px 5px;text-align:center;min-width:0}
+.fp-ladder-code{font-size:11px;font-weight:700}
+.fp-ladder-n{font-size:17px;font-weight:700;line-height:1.15}
+.fp-ladder-name{font-size:9px;color:var(--fp-muted);line-height:1.25;margin-top:2px;word-break:break-word}
+.fp-ladder-team{font-size:9px;color:#94a3b8;margin-top:3px;word-break:break-word}
+
+/* KPIs */
+.fp-kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:16px}
+.fp-kpi{background:var(--fp-card);border:1px solid var(--fp-border);border-radius:var(--fp-radius);padding:10px 12px}
+.fp-kpi-value{font-size:24px;font-weight:700}
+.fp-kpi-label{font-size:11px;color:var(--fp-muted);margin-top:2px}
+.fp-kpis-sm{grid-template-columns:repeat(4,1fr)}
+
+/* bars */
+.fp-teambar{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.fp-teambar label{display:flex;flex-direction:column;font-size:11px;color:var(--fp-muted);gap:3px}
+.fp-teambar select{font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--fp-border);border-radius:6px;background:#fff;min-width:200px;color:var(--fp-text)}
+.fp-section-title{font-weight:700;margin:14px 0 8px;font-size:13px;display:flex;align-items:center;gap:8px}
+.fp-section-title .fp-count{font-weight:400;color:var(--fp-muted);font-size:11px}
+
+/* roadmap */
+.fp-rm-head,.fp-rm-row{display:grid;grid-template-columns:230px 1fr 210px;gap:10px;align-items:center}
+.fp-rm-head{padding:0 0 4px}
+.fp-rm-row{background:var(--fp-card);border:1px solid var(--fp-border);border-radius:var(--fp-radius);padding:8px 10px;margin-bottom:6px}
+.fp-rm-name{min-width:0}
+.fp-rm-feature{font-weight:600;font-size:13px}
+.fp-rm-sub{display:flex;gap:4px;margin-top:3px;flex-wrap:wrap}
+.fp-rm-track{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.fp-rm-colhead{font-size:10px;text-align:center;font-weight:700}
+.fp-rm-cell{text-align:center;font-size:11px;padding:8px 0;border-radius:4px;border-bottom:3px solid transparent;color:#334155;background:#f8fafc}
+.fp-rm-cell.reached{font-weight:700}
+.fp-rm-meta{display:flex;flex-direction:column;gap:4px}
+.fp-rm-figures{display:flex;justify-content:space-between;align-items:center;font-size:11px;gap:6px}
+.fp-rm-pct{font-weight:700}
+.fp-rm-date{color:var(--fp-muted)}
+.fp-rm-kdo{font-size:11px;color:var(--fp-muted);margin-top:4px}
+.fp-initiative{margin-bottom:16px}
+.fp-initiative-head{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#475569;background:#eef2f7;border-radius:6px;padding:5px 10px;margin-bottom:6px;display:flex;justify-content:space-between}
+
+.fp-progress{background:#e2e8f0;border-radius:999px;height:7px;overflow:hidden}
+.fp-progress-fill{height:100%;border-radius:999px}
+
+/* chips */
+.fp-chip{color:#fff;border-radius:999px;padding:1px 8px;font-size:10px;font-weight:600;white-space:nowrap;display:inline-block}
+.fp-tag{background:#eef2f7;border-radius:4px;padding:1px 6px;font-size:10px;color:#334155;white-space:nowrap;display:inline-block}
+.fp-phase-tag{border:1px solid;border-radius:4px;padding:0 5px;font-size:10px;display:inline-block}
+
+/* board / lanes */
+.fp-board{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:20px;align-items:start}
+.fp-col,.fp-lane{background:#f1f5f9;border-radius:var(--fp-radius);display:flex;flex-direction:column;min-height:80px}
+.fp-col-head,.fp-lane-head{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:8px;font-size:11px;font-weight:700;border-bottom:2px solid #ccc}
+.fp-lane-head{padding:9px 10px;font-size:12px}
+.fp-col-count{background:#fff;border-radius:999px;padding:0 7px;font-size:11px;color:var(--fp-muted)}
+.fp-col-body,.fp-lane-body{padding:6px;display:flex;flex-direction:column;gap:6px}
+.fp-lanes{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;align-items:start}
+.fp-card{text-align:left;width:100%;background:var(--fp-card);border:1px solid var(--fp-border);border-left:4px solid #ccc;border-radius:6px;padding:8px;cursor:pointer;font:inherit;color:inherit}
+.fp-card:hover{box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.fp-card-title{font-weight:600;font-size:12px;margin-bottom:4px}
+.fp-card-meta{display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-bottom:4px}
+.fp-card-row{display:flex;gap:6px;align-items:center}
+.fp-card-sub{font-size:11px;color:var(--fp-muted);margin-top:4px}
+.fp-task{background:var(--fp-card);border:1px solid var(--fp-border);border-radius:6px;padding:9px}
+.fp-task.slim{padding:7px;cursor:pointer}
+.fp-task-title{font-weight:600;font-size:12px;cursor:pointer}
+.fp-task-sub{font-size:11px;color:var(--fp-muted);margin-top:3px}
+.fp-task-blocked{font-size:11px;color:#b91c1c;margin-top:4px}
+.fp-assignee{margin-bottom:6px}
+.fp-assignee-head{font-size:11px;font-weight:700;color:#334155;display:flex;gap:6px;align-items:center;margin:2px 0 4px}
+
+/* actions */
+.fp-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.fp-actions button{border:1px solid var(--fp-border);border-radius:6px;padding:5px 12px;font:inherit;font-size:12px;cursor:pointer;background:#fff;font-weight:600;color:var(--fp-text)}
+.fp-actions button.push,.fp-actions button.accept{background:#16a34a;color:#fff;border-color:#16a34a}
+.fp-actions button.ghost{background:#fff;color:var(--fp-muted)}
+.fp-actions button:disabled{opacity:.55;cursor:not-allowed}
+.fp-return textarea{width:100%;min-height:54px;border:1px solid var(--fp-border);border-radius:6px;padding:6px;font:inherit;font-size:12px;margin-top:6px}
+
+/* feed */
+.fp-feed{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.fp-feed li{background:var(--fp-card);border:1px solid var(--fp-border);border-radius:6px;padding:8px;flex:1 1 240px}
+.fp-feed-top{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.fp-feed-ts{font-size:10px;color:var(--fp-muted)}
+.fp-feed-route{font-size:12px;font-weight:600;margin-top:4px}
+.fp-feed-sub{font-size:11px;color:var(--fp-muted);margin-top:2px}
+.fp-feed-note{font-size:11px;color:#475569;margin-top:4px;font-style:italic}
+
+/* acceptance */
+.fp-accept{list-style:none;margin:6px 0;padding:0}
+.fp-accept li{display:flex;gap:6px;font-size:11px;padding:1px 0;color:#475569}
+.fp-accept li.done{color:#166534}
+.fp-accept-box{font-weight:700}
+
+/* tables (register) */
+.fp-tablewrap{overflow-x:auto;background:var(--fp-card);border:1px solid var(--fp-border);border-radius:var(--fp-radius);margin-bottom:18px}
+table.fp-table{border-collapse:collapse;width:100%;font-size:11px}
+table.fp-table th,table.fp-table td{border:1px solid var(--fp-border);padding:5px 7px;text-align:left;vertical-align:top;white-space:nowrap}
+table.fp-table th{background:#f1f5f9;font-weight:700;position:sticky;top:0;z-index:1}
+table.fp-table td.wrap{white-space:normal;min-width:220px}
+table.fp-table tr:nth-child(even) td{background:#fcfdfe}
+
+/* toast / notes */
+.fp-toast{padding:8px 12px;border-radius:6px;margin-bottom:12px;font-size:12px}
+.fp-toast.ok{background:#dcfce7;color:#166534}
+.fp-toast.err{background:#fee2e2;color:#991b1b}
+.fp-toast ul{margin:6px 0 0;padding-left:18px}
+.fp-foot{margin-top:22px;font-size:11px;color:var(--fp-muted);border-top:1px solid var(--fp-border);padding-top:10px}
+.fp-muted{color:var(--fp-muted)}
+.fp-small{font-size:11px}
+.fp-empty{text-align:center;padding:6px 0;color:var(--fp-muted)}
+
+/* modal */
+.fp-modal-back{position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
+.fp-modal{background:#fff;border-radius:10px;max-width:760px;width:100%;max-height:86vh;overflow:auto;padding:18px 20px}
+.fp-modal h3{margin:0 0 2px;font-size:15px}
+.fp-modal .fp-modal-sub{color:var(--fp-muted);font-size:12px;margin-bottom:12px}
+.fp-kv{display:grid;grid-template-columns:200px 1fr;gap:4px 12px;font-size:12px}
+.fp-kv dt{color:var(--fp-muted)}
+.fp-kv dd{margin:0;word-break:break-word}
+.fp-modal-close{float:right}
+
+button:focus-visible,select:focus-visible,textarea:focus-visible,.fp-card:focus-visible{outline:2px solid #2563eb;outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media (max-width:1400px){.fp-ladder{grid-template-columns:repeat(7,minmax(0,1fr))}}
+@media (max-width:1100px){
+  .fp-kpis{grid-template-columns:repeat(3,1fr)}
+  .fp-board{grid-template-columns:repeat(4,1fr)}
+  .fp-lanes{grid-template-columns:repeat(2,1fr)}
+  .fp-rm-head,.fp-rm-row{grid-template-columns:170px 1fr 160px}
+  .fp-kpis-sm{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:640px){
+  .fp-kpis{grid-template-columns:repeat(2,1fr)}
+  .fp-board,.fp-lanes,.fp-ladder{grid-template-columns:1fr}
+  .fp-rm-head{display:none}
+  .fp-rm-row{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="fp-app">
+  <header class="fp-header">
+    <div class="fp-brand">Feature Management — Pipeline Tracker
+      <small>Standalone HTML replica · synthetic demo data · no vendor branding</small>
+    </div>
+    <div class="fp-modeswitch" role="tablist" aria-label="View" id="modeswitch"></div>
+    <div class="fp-datasrc">
+      <label class="fp-btn" for="csvinput" style="display:inline-block">Load CSVs…</label>
+      <input id="csvinput" type="file" accept=".csv" multiple hidden />
+      <button class="fp-btn ghost" id="resetbtn" type="button">Reset demo data</button>
+    </div>
+  </header>
+  <div id="toast"></div>
+  <main id="view"></main>
+  <div class="fp-foot" id="foot"></div>
+</div>
+<div id="modal"></div>
+<script>
+/* Seed dataset — synthetic demo data generated by sample-data/generate.py. Same shape as an Airtable CSV export: one object per row, keyed by the exact field names. */
+const SEED = {
+ "teams": [
+  {
+   "Team Name": "Accounting / Reporting COE (Control Crew)",
+   "Users": "Priya Anand, Marco Reuter",
+   "Domain": "Control",
+   "Tool / Environment": "Excel, DRA",
+   "Email": "coe@bankdemo.internal"
+  },
+  {
+   "Team Name": "Data & AI Modelling Crew",
+   "Users": "Lena Hofmann, Tomás Silva",
+   "Domain": "Data & AI",
+   "Tool / Environment": "DRA, Enterprise Architect",
+   "Email": "modelling@bankdemo.internal"
+  },
+  {
+   "Team Name": "Data & AI Gateway Crew",
+   "Users": "Ravi Menon, Sofia Costa",
+   "Domain": "Data & AI",
+   "Tool / Environment": "ampliFi gateway",
+   "Email": "gateway@bankdemo.internal"
+  },
+  {
+   "Team Name": "Data & AI Feed-agnostic Crew",
+   "Users": "Jan Vermeer, Aisha Khan",
+   "Domain": "Data & AI",
+   "Tool / Environment": "ASD tenant",
+   "Email": "feedagnostic@bankdemo.internal"
+  },
+  {
+   "Team Name": "Data & AI System 1 Sourcing Crew (MOR)",
+   "Users": "Kenji Tan, Olga Petrova",
+   "Domain": "Data & AI",
+   "Tool / Environment": "ACD tenant",
+   "Email": "mor@bankdemo.internal"
+  },
+  {
+   "Team Name": "Data & AI System 2 Sourcing Crew (MIDAS)",
+   "Users": "David Okoro, Mei Lin",
+   "Domain": "Data & AI",
+   "Tool / Environment": "ARD tenant",
+   "Email": "midas@bankdemo.internal"
+  },
+  {
+   "Team Name": "Data & AI Ref Data Sourcing Crew",
+   "Users": "Hugo Bernard, Sara Galli",
+   "Domain": "Data & AI",
+   "Tool / Environment": "ASD tenant",
+   "Email": "refdata@bankdemo.internal"
+  },
+  {
+   "Team Name": "FPSL/GL/GR Crew (Control)",
+   "Users": "Anita Desai, Lukas Brandt",
+   "Domain": "Calculate",
+   "Tool / Environment": "SAP / Fioneer",
+   "Email": "fpsl@bankdemo.internal"
+  },
+  {
+   "Team Name": "Calculate Crew",
+   "Users": "Yuki Mori, Pawel Nowak",
+   "Domain": "Calculate",
+   "Tool / Environment": "SAP / Fioneer",
+   "Email": "calculate@bankdemo.internal"
+  },
+  {
+   "Team Name": "Report Crew",
+   "Users": "Clara Vogt, Sam Ito",
+   "Domain": "Report",
+   "Tool / Environment": "ARD tenant",
+   "Email": "report@bankdemo.internal"
+  }
+ ],
+ "features": [
+  {
+   "Feature Name": "Loans Disbursement",
+   "Initiative": "Balance Sheet Go-Live",
+   "Owning Team": "Accounting / Reporting COE (Control Crew)",
+   "Status": "In Progress",
+   "Priority": "Critical",
+   "Target Go-Live Date": "2026-07-25",
+   "Business Outcome / KDO Description": "Daily loan disbursement postings feeding the sub-ledger and liquidity reports."
+  },
+  {
+   "Feature Name": "Customer Deposits",
+   "Initiative": "Balance Sheet Go-Live",
+   "Owning Team": "Accounting / Reporting COE (Control Crew)",
+   "Status": "Blocked",
+   "Priority": "High",
+   "Target Go-Live Date": "2026-07-26",
+   "Business Outcome / KDO Description": "Customer deposit balances and accrued interest for sub-ledger and balance-sheet reporting."
+  },
+  {
+   "Feature Name": "Securities Holdings",
+   "Initiative": "Balance Sheet Go-Live",
+   "Owning Team": "Accounting / Reporting COE (Control Crew)",
+   "Status": "In Progress",
+   "Priority": "High",
+   "Target Go-Live Date": "2026-07-31",
+   "Business Outcome / KDO Description": "Securities positions and valuations sourced for sub-ledger posting and disclosure."
+  },
+  {
+   "Feature Name": "Interest Rate Swaps",
+   "Initiative": "Treasury & Markets",
+   "Owning Team": "Accounting / Reporting COE (Control Crew)",
+   "Status": "In Progress",
+   "Priority": "Critical",
+   "Target Go-Live Date": "2026-08-01",
+   "Business Outcome / KDO Description": "IRS lifecycle events and valuations posted through FPSL into GL/GR and risk reporting."
+  },
+  {
+   "Feature Name": "FX Spot & Forward",
+   "Initiative": "Treasury & Markets",
+   "Owning Team": "Accounting / Reporting COE (Control Crew)",
+   "Status": "In Progress",
+   "Priority": "Medium",
+   "Target Go-Live Date": "2026-10-16",
+   "Business Outcome / KDO Description": "FX spot/forward capture, revaluation and posting for treasury and balance-sheet reporting."
+  },
+  {
+   "Feature Name": "Repurchase Agreements",
+   "Initiative": "Treasury & Markets",
+   "Owning Team": "Accounting / Reporting COE (Control Crew)",
+   "Status": "In Progress",
+   "Priority": "Medium",
+   "Target Go-Live Date": "2026-09-04",
+   "Business Outcome / KDO Description": "Repo cash legs and collateral postings for liquidity and balance-sheet reporting."
+  }
+ ],
+ "attributes": [
+  {
+   "Attribute ID": "LD-01",
+   "Business Name": "Financial contract ID",
+   "Technical Name": "SOURCE_FINANCIAL_CONTRACT_ID",
+   "FSDM Mapping": "FINANCIAL_CONTRACT_ID",
+   "Feature": "Loans Disbursement",
+   "Sourcing Type": "Feed-specific (MOR)",
+   "Is Reference Data": "",
+   "Requires Gateway Derivation": "",
+   "Current Stage": "10. Report Build",
+   "Status": "Done",
+   "Assignee": "Clara Vogt",
+   "Assigned Team": "Report Crew",
+   "Approver Team": "",
+   "Approval Status": "Approved",
+   "Acceptance Criteria": "[{\"text\": \"Report layout built\", \"done\": true}, {\"text\": \"Figures reconciled to GR/GL\", \"done\": true}, {\"text\": \"Business owner UAT sign-off\", \"done\": true}]",
+   "Acceptance Met?": "checked",
+   "Environment": "N/A",
+   "Started Date": "",
+   "Completed Date": "",
+   "Due Date": "2026-07-20",
+   "Blocked Reason": "",
+   "Comments / Handoff Notes": "",
+   "Cycle Number": ""
+  },
+  {
+   "Attribute ID": "LD-02",
+   "Business Name": "Transaction amount",
+   "Technical Name": "TRANSACTION_AMOUNT",
+   "FSDM Mapping": "TRANSACTION_AMOUNT",
+   "Feature": "Loans Disbursement",
+   "Sourcing Type": "Feed-specific (MIDAS)",
+   "Is Reference Data": "",
+   "Requires Gateway Derivation": "",
+   "Current Stage": "9. Calculator Build",
+   "Status": "In Progress",
+   "Assignee": "Yuki Mori",
+   "Assigned Team": "Calculate Crew",
+   "Approver Team": "Report Crew",
+   "Approval Status": "Not Required",
+   "Acceptance Criteria": "[{\"text\": \"Calculator logic built\", \"done\": true}, {\"text\": \"Calc output validated\", \"done\": true}]",
+   "Acceptance Met?": "checked",
+   "Environment": "N/A",
+   "Started Date": "",
+   "Completed Date": "",
+   "Due Date": "2026-07-02",
+   "Blocked Reason": "",
+   "Comments / Handoff Notes": "Ready for report build.",
+   "Cycle Number": ""
+  },
+  {
+   "Attribute ID": "LD-03",
+   "Business Name": "Product type",
+   "Technical Name": "FSDM_PRODUCT_TYPE",
+   "FSDM Mapping": "PRODUCT_TYPE",
+   "Feature": "Loans Disbursement",
+   "Sourcing Type": "Reference Data",
+   "Is Reference Data": "checked",
+   "Requires Gateway Derivation": "",
+   "Current Stage": "5c. Static / Reference Data Source Systems",
+   "Status": "Done",
+   "Assignee": "Hugo Bernard",
+   "Assigned Team": "Data & AI Ref Data Sourcing Crew",
+   "Approver Team": "FPSL/GL/GR Crew (Control)",
+   "Approval Status": "Approved",
+   "Acceptance Criteria": "[{\"text\": \"Golden source identified\", \"done\": true}, {\"text\": \"Reference set version-pinned\", \"done\": true}, {\"text\": \"Lookup integrity validated\", \"done\": true}]",
+   "Acceptance Met?": "checked",
+   "Environment": "PROD",
+   "Started Date": "",
+   "Completed Date": "",
+   "Due Date": "2026-06-25",
+   "Blocked Reason": "",
+   "Comments / Handoff Notes": "",
+   "Cycle Number": ""
+  },
+  {
+   "Attribute ID": "CD-01",
+   "Business Name": "Counterparty ID",
+   "Technical Name": "SOURCE_COUNTERPARTY_ID",
+   "FSDM Mapping": "COUNTERPARTY_ID",
+   "Feature": "Customer Deposits",
+   "Sourcing Type": "Reference Data",
+   "Is Reference Data": "checked",
+   "Requires Gateway Derivation": "",
+   "Current Stage": "3. Data Modelling",
+   "Status": "Blocked",
+   "Assignee": "Lena Hofmann",
+   "Assigned Team": "Data & AI Modelling Crew",
+   "Approver Team": "Data & AI Gateway Crew",
+   "Approval Status": "Not Required",
+   "Acceptance Criteria": "[{\"text\": \"Logical model updated in EA\", \"done\": true}, {\"text\": \"FSDM mapping confirmed\", \"done\": false}, {\"text\": \"Peer review passed\", \"done\": false}]",
+   "Acceptance Met?": "",
+   "Environment": "N/A",
+   "Started Date": "",
+   "Completed Date": "",
+   "Due Date": "2026-06-28",
+   "Blocked Reason": "Gateway derivation rule conflicts with FSDM mapping — escalated to Modelling.",
+   "Comments / Handoff Notes": "",
+   "Cycle Number": ""
+  },
+  {
+   "Attribute ID": "CD-02",
+   "Business Name": "Transaction amount",
+   "Technical Name": "TRANSACTION_AMOUNT",
+   "FSDM Mapping": "TRANSACTION_AMOUNT",
+   "Feature": "Customer Deposits",
+   "Sourcing Type": "Feed-specific (MIDAS)",
+   "Is Reference Data": "",
+   "Requires Gateway Derivation": "",
+   "Current Stage": "6. FPSL Config",
+   "Status": "Submitted for Review",
+   "Assignee": "Anita Desai",
+   "Assigned Team": "FPSL/GL/GR Crew (Control)",
+   "Approver Team": "FPSL/GL/GR Crew (Control)",
+   "Approval Status": "Pending",
+   "Acceptance Criteria": "[{\"text\": \"FPSL posting key configured\", \"done\": true}, {\"text\": \"Sub-ledger posting simulated\", \"done\": true}]",
+   "Acceptance Met?": "checked",
+   "Environment": "N/A",
+   "Started Date": "",
+   "Completed Date": "",
+   "Due Date": "2026-07-05",
+   "Blocked Reason": "",
+   "Comments / Handoff Notes": "Awaiting Control sign-off.",
+   "Cycle Number": ""
+  },
+  {
+   "Attribute ID": "CD-03",
+   "Business Name": "Posting date",
+   "Technical Name": "POSTING_DATE",
+   "FSDM Mapping": "POSTING_DATE",
+   "Feature": "Customer Deposits",
+   "Sourcing Type": "Feed-agnostic",
+   "Is Reference Data": "",
+   "Requires Gateway Derivation": "",
+   "Current Stage": "5a. System / Feed-agnostic Sourcing",
+   "Status": "In Progress",
+   "Assignee": "Aisha Khan",
+   "Assigned Team": "Data & AI Feed-agnostic Crew",
+   "Approver Team": "FPSL/GL/GR Crew (Control)",
+   "Approval Status": "Not Required",
+   "Acceptance Criteria": "[{\"text\": \"Feed-agnostic source mapped\", \"done\": true}, {\"text\": \"VEST checks pass\", \"done\": false}, {\"text\": \"Row counts reconciled\", \"done\": false}]",
+   "Acceptance Met?": "",
+   "Environment": "UAT",
+   "Started Date": "",
+   "Completed Date": "",
+   "Due Date": "2026-07-08",
+   "Blocked Reason": "",
+   "Comments / Handoff Notes": "",
+   "Cycle Number": ""
+  },
+  {
+   "Attribute ID": "SH-01",
+   "Business Name": "Financial contract ID",
+   "Technical Name": "SOURCE_FINANCIAL_CONTRACT_ID",
+   "FSDM Mapping": "FINANCIAL_CONTRACT_ID",
+   "Feature": "Securities Holdings",
+   "Sourcing Type": "Feed-specific (MOR)",
+   "Is Reference Data": "",
+   "Requires Gateway Derivation": "",
+   "Current Stage": "3. Data Modelling",
+   "Status": "In Progress",
+   "Assignee": "Tomás Silva",
+   "Assigned Team": "Data & AI Modelling Crew",
+   "Approver Team": "Data & AI Gateway Crew",
+   "Approval Status": "Not Required",
+   "Acceptance Criteria": "[{\"text\": \"Logical model updated in EA\", \"done\": true}, {\"text\": \"FSDM mapping confirmed\", \"done\": true}, {\"text\": \"Peer review passed\", \"done\": false}]",
+   "Acceptance Met?": "",
+   "Environment": "N/A",
+   "Started Date": "",
+   "Completed Date": "",
+   "Due Date": "2026-07-07",
+   "Blocked Reason": "",
+   "Comments / Handoff Notes": "",
+   "Cycle Number": ""
+  },
+  {
+   "Attribute ID": "SH-02",
+   "Business Name": "Position currency",
+   "Technical Name": "POSITION_CURRENCY",
+   "FSDM Mapping": "POSITION_CURRENCY",
+   "Feature": "Securities Holdings",
+   "Sourcing Type": "Feed-agnostic",
+   "Is Reference Data": "",
+   "Requires Gateway Derivation": "checked",
+   "Current Stage": "4. Gateway Derivation",
+   "Status": "In Progress",
+   "Assignee": "Sofia Costa",
+   "Assigned Team": "Data & AI Gateway Crew",
+   "Approver Team": "Data & AI Feed-agnostic Crew",
+   "Approval Status": "Not Required",
+   "Acceptance Criteria": "[{\"text\": \"Derivation rule defined\", \"done\": true}, {\"text\": \"Unit-tested vs sample feed\", \"done\": true}, {\"text\": \"Logic documented\", \"done\": false}]",
+   "Acceptance Met?": "",
+   "Environment": "N/A",
+   "Started Date": "",
+   "Completed Date": "",
+   "Due Date": "2026-06-30",
+   "Blocked Reason": "",
+   "Comments / Handoff Notes": "",
+   "Cycle Number": ""
+  },
+  {
+   "Attribute ID": "SH-03",
+   "Business Name": "Counterparty type",
+   "Technical Name": "SOURCE_COUNTERPARTY_ID_TYPE",
+   "FSDM Mapping": "COUNTERPARTY_ID_TYPE",
+   "Feature": "Securities Holdings",
+   "Sourcing Type": "Reference Data",
+   "Is Reference Data": "checked",
+   "Requires Gateway Derivation": "",
+   "Current Stage": "2. Posting Model Specifications / Data Requirements",
+   "Status": "Not Started",
+   "Assignee": "",
+   "Assigned Team": "Accounting / Reporting COE (Control Crew)",
+   "Approver Team": "Data & AI Modelling Crew",
+   "Approval Status": "Not Required",
+   "Acceptance Criteria": "[{\"text\": \"Posting model spec drafted\", \"done\": false}, {\"text\": \"Data requirements complete\", \"done\": false}]",
+   "Acceptance Met?": "",
+   "Environment": "N/A",
+   "Started Date": "",
+   "Completed Date": "",
+   "Due Date": "2026-07-14",
+   "Blocked Reason": "",
+   "Comments / Handoff Notes": "",
+   "Cycle Number": ""
+  },
+  {
+   "Attribute ID": "IRS-01",
+   "Business Name": "Financial contract ID",
+   "Technical Name": "SOURCE_FINANCIAL_CONTRACT_ID",
+   "FSDM Mapping": "FINANCIAL_CONTRACT_ID",
+   "Feature": "Interest Rate Swaps",
+   "Sourcing Type": "Feed-specific (MOR)",
+   "Is Reference Data": "",
+   "Requires Gateway Derivation": "",
+   "Current Stage": "7. GL",
+   "Status": "Submitted for Review",
+   "Assignee": "Anita Desai",
+   "Assigned Team": "FPSL/GL/GR Crew (Control)",
+   "Approver Team": "FPSL/GL/GR Crew (Control)",
+   "Approval Status": "Pending",
+   "Acceptance Criteria": "[{\"text\": \"GL account assignment confirmed\", \"done\": true}, {\"text\": \"GL posting reconciled\", \"done\": true}]",
+   "Acceptance Met?": "checked",
+   "Environment": "N/A",
+   "Started Date": "",
+   "Completed Date": "",
+   "Due Date": "2026-07-02",
+   "Blocked Reason": "",
+   "Comments / Handoff Notes": "",
+   "Cycle Number": ""
+  },
+  {
+   "Attribute ID": "IRS-02",
+   "Business Name": "Transaction amount",
+   "Technical Name": "TRANSACTION_AMOUNT",
+   "FSDM Mapping": "TRANSACTION_AMOUNT",
+   "Feature": "Interest Rate Swaps",
+   "Sourcing Type": "Feed-specific (MIDAS)",
+   "Is Reference Data": "",
+   "Requires Gateway Derivation": "",
+   "Current Stage": "8. GR",
+   "Status": "Approved",
+   "Assignee": "Lukas Brandt",
+   "Assigned Team": "FPSL/GL/GR Crew (Control)",
+   "Approver Team": "Calculate Crew",
+   "Approval Status": "Approved",
+   "Acceptance Criteria": "[{\"text\": \"GR reconciliation rule configured\", \"done\": true}, {\"text\": \"GR balances tie out\", \"done\": true}]",
+   "Acceptance Met?": "checked",
+   "Environment": "N/A",
+   "Started Date": "",
+   "Completed Date": "",
+   "Due Date": "2026-06-29",
+   "Blocked Reason": "",
+   "Comments / Handoff Notes": "Approved — ready for calculator build.",
+   "Cycle Number": ""
+  },
+  {
+   "Attribute ID": "IRS-03",
+   "Business Name": "Settlement ID",
+   "Technical Name": "SETTLEMENT_ID",
+   "FSDM Mapping": "SETTLEMENT_ID",
+   "Feature": "Interest Rate Swaps",
+   "Sourcing Type": "Feed-specific (MIDAS)",
+   "Is Reference Data": "",
+   "Requires Gateway Derivation": "",
+   "Current Stage": "6. FPSL Config",
+   "Status": "Blocked",
+   "Assignee": "Lukas Brandt",
+   "Assigned Team": "FPSL/GL/GR Crew (Control)",
+   "Approver Team": "FPSL/GL/GR Crew (Control)",
+   "Approval Status": "Not Required",
+   "Acceptance Criteria": "[{\"text\": \"FPSL posting key configured\", \"done\": true}, {\"text\": \"Sub-ledger posting simulated\", \"done\": false}]",
+   "Acceptance Met?": "",
+   "Environment": "N/A",
+   "Started Date": "",
+   "Completed Date": "",
+   "Due Date": "2026-07-07",
+   "Blocked Reason": "MOR feed field not yet exposed in DEV — raised with sourcing crew.",
+   "Comments / Handoff Notes": "",
+   "Cycle Number": ""
+  },
+  {
+   "Attribute ID": "FX-01",
+   "Business Name": "Posting date",
+   "Technical Name": "POSTING_DATE",
+   "FSDM Mapping": "POSTING_DATE",
+   "Feature": "FX Spot & Forward",
+   "Sourcing Type": "Feed-agnostic",
+   "Is Reference Data": "",
+   "Requires Gateway Derivation": "",
+   "Current Stage": "3. Data Modelling",
+   "Status": "Submitted for Review",
+   "Assignee": "Lena Hofmann",
+   "Assigned Team": "Data & AI Modelling Crew",
+   "Approver Team": "Data & AI Gateway Crew",
+   "Approval Status": "Pending",
+   "Acceptance Criteria": "[{\"text\": \"Logical model updated in EA\", \"done\": true}, {\"text\": \"FSDM mapping confirmed\", \"done\": true}, {\"text\": \"Peer review passed\", \"done\": true}]",
+   "Acceptance Met?": "checked",
+   "Environment": "N/A",
+   "Started Date": "",
+   "Completed Date": "",
+   "Due Date": "2026-07-07",
+   "Blocked Reason": "",
+   "Comments / Handoff Notes": "",
+   "Cycle Number": ""
+  },
+  {
+   "Attribute ID": "FX-02",
+   "Business Name": "Transaction amount",
+   "Technical Name": "TRANSACTION_AMOUNT",
+   "FSDM Mapping": "TRANSACTION_AMOUNT",
+   "Feature": "FX Spot & Forward",
+   "Sourcing Type": "Feed-specific (MIDAS)",
+   "Is Reference Data": "",
+   "Requires Gateway Derivation": "",
+   "Current Stage": "2. Posting Model Specifications / Data Requirements",
+   "Status": "In Progress",
+   "Assignee": "Marco Reuter",
+   "Assigned Team": "Accounting / Reporting COE (Control Crew)",
+   "Approver Team": "Data & AI Modelling Crew",
+   "Approval Status": "Not Required",
+   "Acceptance Criteria": "[{\"text\": \"Posting model spec drafted\", \"done\": true}, {\"text\": \"Data requirements complete\", \"done\": false}]",
+   "Acceptance Met?": "",
+   "Environment": "N/A",
+   "Started Date": "",
+   "Completed Date": "",
+   "Due Date": "2026-07-10",
+   "Blocked Reason": "",
+   "Comments / Handoff Notes": "",
+   "Cycle Number": ""
+  },
+  {
+   "Attribute ID": "REPO-01",
+   "Business Name": "Financial contract ID",
+   "Technical Name": "SOURCE_FINANCIAL_CONTRACT_ID",
+   "FSDM Mapping": "FINANCIAL_CONTRACT_ID",
+   "Feature": "Repurchase Agreements",
+   "Sourcing Type": "Feed-specific (MOR)",
+   "Is Reference Data": "",
+   "Requires Gateway Derivation": "",
+   "Current Stage": "1. Business Requirements",
+   "Status": "In Progress",
+   "Assignee": "Marco Reuter",
+   "Assigned Team": "Accounting / Reporting COE (Control Crew)",
+   "Approver Team": "Accounting / Reporting COE (Control Crew)",
+   "Approval Status": "Not Required",
+   "Acceptance Criteria": "[{\"text\": \"Business outcome / KDO signed off\", \"done\": true}, {\"text\": \"Scope boundaries agreed\", \"done\": true}]",
+   "Acceptance Met?": "checked",
+   "Environment": "N/A",
+   "Started Date": "",
+   "Completed Date": "",
+   "Due Date": "2026-06-27",
+   "Blocked Reason": "",
+   "Comments / Handoff Notes": "Requirements complete — ready to push to modelling.",
+   "Cycle Number": ""
+  },
+  {
+   "Attribute ID": "REPO-02",
+   "Business Name": "Posting date",
+   "Technical Name": "POSTING_DATE",
+   "FSDM Mapping": "POSTING_DATE",
+   "Feature": "Repurchase Agreements",
+   "Sourcing Type": "Feed-agnostic",
+   "Is Reference Data": "",
+   "Requires Gateway Derivation": "",
+   "Current Stage": "1. Business Requirements",
+   "Status": "Not Started",
+   "Assignee": "",
+   "Assigned Team": "Accounting / Reporting COE (Control Crew)",
+   "Approver Team": "Accounting / Reporting COE (Control Crew)",
+   "Approval Status": "Not Required",
+   "Acceptance Criteria": "[{\"text\": \"Business outcome / KDO signed off\", \"done\": false}, {\"text\": \"Scope boundaries agreed\", \"done\": false}]",
+   "Acceptance Met?": "",
+   "Environment": "N/A",
+   "Started Date": "",
+   "Completed Date": "",
+   "Due Date": "2026-06-29",
+   "Blocked Reason": "",
+   "Comments / Handoff Notes": "",
+   "Cycle Number": ""
+  }
+ ],
+ "stages": [
+  {
+   "Stage Name": "1. Business Requirements",
+   "Stage Code": "1",
+   "Order": "1",
+   "Phase Group": "Requirements",
+   "Responsible Team": "Accounting / Reporting COE (Control Crew)",
+   "Approver Team": "Accounting / Reporting COE (Control Crew)"
+  },
+  {
+   "Stage Name": "2. Posting Model Specifications / Data Requirements",
+   "Stage Code": "2",
+   "Order": "2",
+   "Phase Group": "Requirements",
+   "Responsible Team": "Accounting / Reporting COE (Control Crew)",
+   "Approver Team": "Data & AI Modelling Crew"
+  },
+  {
+   "Stage Name": "3. Data Modelling",
+   "Stage Code": "3",
+   "Order": "3",
+   "Phase Group": "Modelling",
+   "Responsible Team": "Data & AI Modelling Crew",
+   "Approver Team": "Data & AI Gateway Crew"
+  },
+  {
+   "Stage Name": "4. Gateway Derivation",
+   "Stage Code": "4",
+   "Order": "4",
+   "Phase Group": "Transformation",
+   "Responsible Team": "Data & AI Gateway Crew",
+   "Approver Team": "Data & AI Feed-agnostic Crew"
+  },
+  {
+   "Stage Name": "5a. System / Feed-agnostic Sourcing",
+   "Stage Code": "5a",
+   "Order": "5",
+   "Phase Group": "Sourcing",
+   "Responsible Team": "Data & AI Feed-agnostic Crew",
+   "Approver Team": "FPSL/GL/GR Crew (Control)"
+  },
+  {
+   "Stage Name": "5b. MOR (Upstream System 1) Sourcing & VESTing",
+   "Stage Code": "5b-MOR",
+   "Order": "6",
+   "Phase Group": "Sourcing",
+   "Responsible Team": "Data & AI System 1 Sourcing Crew (MOR)",
+   "Approver Team": "FPSL/GL/GR Crew (Control)"
+  },
+  {
+   "Stage Name": "5b. MIDAS (Upstream System 2) Sourcing & VESTing",
+   "Stage Code": "5b-MIDAS",
+   "Order": "7",
+   "Phase Group": "Sourcing",
+   "Responsible Team": "Data & AI System 2 Sourcing Crew (MIDAS)",
+   "Approver Team": "FPSL/GL/GR Crew (Control)"
+  },
+  {
+   "Stage Name": "5b. Other Systems Sourcing & VESTing",
+   "Stage Code": "5b-Other",
+   "Order": "8",
+   "Phase Group": "Sourcing",
+   "Responsible Team": "Data & AI System 2 Sourcing Crew (MIDAS)",
+   "Approver Team": "FPSL/GL/GR Crew (Control)"
+  },
+  {
+   "Stage Name": "5c. Static / Reference Data Source Systems",
+   "Stage Code": "5c",
+   "Order": "9",
+   "Phase Group": "Sourcing",
+   "Responsible Team": "Data & AI Ref Data Sourcing Crew",
+   "Approver Team": "FPSL/GL/GR Crew (Control)"
+  },
+  {
+   "Stage Name": "6. FPSL Config",
+   "Stage Code": "6",
+   "Order": "10",
+   "Phase Group": "Sub-ledger",
+   "Responsible Team": "FPSL/GL/GR Crew (Control)",
+   "Approver Team": "FPSL/GL/GR Crew (Control)"
+  },
+  {
+   "Stage Name": "7. GL",
+   "Stage Code": "7",
+   "Order": "11",
+   "Phase Group": "Sub-ledger",
+   "Responsible Team": "FPSL/GL/GR Crew (Control)",
+   "Approver Team": "FPSL/GL/GR Crew (Control)"
+  },
+  {
+   "Stage Name": "8. GR",
+   "Stage Code": "8",
+   "Order": "12",
+   "Phase Group": "Sub-ledger",
+   "Responsible Team": "FPSL/GL/GR Crew (Control)",
+   "Approver Team": "Calculate Crew"
+  },
+  {
+   "Stage Name": "9. Calculator Build",
+   "Stage Code": "9",
+   "Order": "13",
+   "Phase Group": "Calculate",
+   "Responsible Team": "Calculate Crew",
+   "Approver Team": "Report Crew"
+  },
+  {
+   "Stage Name": "10. Report Build",
+   "Stage Code": "10",
+   "Order": "14",
+   "Phase Group": "Report",
+   "Responsible Team": "Report Crew",
+   "Approver Team": ""
+  }
+ ],
+ "handshakes": [
+  {
+   "Handshake ID": "HS-0001",
+   "Attribute": "LD-01",
+   "Feature": "Loans Disbursement",
+   "Stage": "9. Calculator Build",
+   "From Team": "Calculate Crew",
+   "To Team": "Report Crew",
+   "Action": "Approved",
+   "Decision Maker": "Clara Vogt",
+   "Timestamp": "2026-06-18",
+   "Comments": "Calc validated; handed to Report.",
+   "Cycle Number": "1"
+  },
+  {
+   "Handshake ID": "HS-0002",
+   "Attribute": "LD-01",
+   "Feature": "Loans Disbursement",
+   "Stage": "10. Report Build",
+   "From Team": "Report Crew",
+   "To Team": "",
+   "Action": "Approved",
+   "Decision Maker": "Clara Vogt",
+   "Timestamp": "2026-06-24",
+   "Comments": "Report signed off — delivered.",
+   "Cycle Number": "1"
+  },
+  {
+   "Handshake ID": "HS-0003",
+   "Attribute": "LD-02",
+   "Feature": "Loans Disbursement",
+   "Stage": "8. GR",
+   "From Team": "FPSL/GL/GR Crew (Control)",
+   "To Team": "Calculate Crew",
+   "Action": "Approved",
+   "Decision Maker": "Pawel Nowak",
+   "Timestamp": "2026-06-20",
+   "Comments": "GR balances tie out.",
+   "Cycle Number": "1"
+  },
+  {
+   "Handshake ID": "HS-0004",
+   "Attribute": "LD-03",
+   "Feature": "Loans Disbursement",
+   "Stage": "5c. Static / Reference Data Source Systems",
+   "From Team": "Data & AI Ref Data Sourcing Crew",
+   "To Team": "FPSL/GL/GR Crew (Control)",
+   "Action": "Approved",
+   "Decision Maker": "Anita Desai",
+   "Timestamp": "2026-06-25",
+   "Comments": "Reference set version-pinned.",
+   "Cycle Number": "1"
+  },
+  {
+   "Handshake ID": "HS-0005",
+   "Attribute": "CD-01",
+   "Feature": "Customer Deposits",
+   "Stage": "2. Posting Model Specifications / Data Requirements",
+   "From Team": "Data & AI Modelling Crew",
+   "To Team": "Accounting / Reporting COE (Control Crew)",
+   "Action": "Rejected / Returned",
+   "Decision Maker": "Lena Hofmann",
+   "Timestamp": "2026-06-22",
+   "Comments": "FSDM mapping inconsistent — returned.",
+   "Cycle Number": "2"
+  },
+  {
+   "Handshake ID": "HS-0006",
+   "Attribute": "CD-02",
+   "Feature": "Customer Deposits",
+   "Stage": "5b. MIDAS (Upstream System 2) Sourcing & VESTing",
+   "From Team": "Data & AI System 2 Sourcing Crew (MIDAS)",
+   "To Team": "FPSL/GL/GR Crew (Control)",
+   "Action": "Approved",
+   "Decision Maker": "Lukas Brandt",
+   "Timestamp": "2026-06-26",
+   "Comments": "MIDAS reconciliation signed off.",
+   "Cycle Number": "1"
+  },
+  {
+   "Handshake ID": "HS-0007",
+   "Attribute": "IRS-01",
+   "Feature": "Interest Rate Swaps",
+   "Stage": "6. FPSL Config",
+   "From Team": "FPSL/GL/GR Crew (Control)",
+   "To Team": "FPSL/GL/GR Crew (Control)",
+   "Action": "Approved",
+   "Decision Maker": "Anita Desai",
+   "Timestamp": "2026-06-23",
+   "Comments": "Posting key configured.",
+   "Cycle Number": "1"
+  },
+  {
+   "Handshake ID": "HS-0008",
+   "Attribute": "IRS-02",
+   "Feature": "Interest Rate Swaps",
+   "Stage": "7. GL",
+   "From Team": "FPSL/GL/GR Crew (Control)",
+   "To Team": "FPSL/GL/GR Crew (Control)",
+   "Action": "Approved",
+   "Decision Maker": "Lukas Brandt",
+   "Timestamp": "2026-06-27",
+   "Comments": "GL reconciled.",
+   "Cycle Number": "1"
+  },
+  {
+   "Handshake ID": "HS-0009",
+   "Attribute": "FX-01",
+   "Feature": "FX Spot & Forward",
+   "Stage": "2. Posting Model Specifications / Data Requirements",
+   "From Team": "Accounting / Reporting COE (Control Crew)",
+   "To Team": "Data & AI Modelling Crew",
+   "Action": "Approved",
+   "Decision Maker": "Tomás Silva",
+   "Timestamp": "2026-06-24",
+   "Comments": "Data requirements complete.",
+   "Cycle Number": "1"
+  },
+  {
+   "Handshake ID": "HS-0010",
+   "Attribute": "REPO-01",
+   "Feature": "Repurchase Agreements",
+   "Stage": "1. Business Requirements",
+   "From Team": "Accounting / Reporting COE (Control Crew)",
+   "To Team": "Accounting / Reporting COE (Control Crew)",
+   "Action": "Approved",
+   "Decision Maker": "Marco Reuter",
+   "Timestamp": "2026-06-25",
+   "Comments": "Requirements signed off.",
+   "Cycle Number": "1"
+  }
+ ]
+};
+</script>
+<script>
+/* ══════════════════════════════════════════════════════════════════════════
+   Field contract — mirrors frontend/constants.js verbatim. Records are plain
+   objects keyed by these exact field names (the shape of an Airtable CSV
+   export), so a base export drops straight in via "Load CSVs…".
+   ══════════════════════════════════════════════════════════════════════════ */
+const FIELDS = {
+  teams:      {name:'Team Name', users:'Users', domain:'Domain', tool:'Tool / Environment', email:'Email'},
+  features:   {name:'Feature Name', initiative:'Initiative', owningTeam:'Owning Team', status:'Status',
+               priority:'Priority', goLive:'Target Go-Live Date', kdo:'Business Outcome / KDO Description'},
+  attributes: {attributeId:'Attribute ID', businessName:'Business Name', technicalName:'Technical Name',
+               fsdm:'FSDM Mapping', feature:'Feature', sourcingType:'Sourcing Type',
+               isReferenceData:'Is Reference Data', requiresGateway:'Requires Gateway Derivation',
+               currentStage:'Current Stage', status:'Status', assignee:'Assignee',
+               assignedTeam:'Assigned Team', approverTeam:'Approver Team', approvalStatus:'Approval Status',
+               acceptanceCriteria:'Acceptance Criteria', acceptanceMet:'Acceptance Met?',
+               environment:'Environment', startedDate:'Started Date', completedDate:'Completed Date',
+               dueDate:'Due Date', blockedReason:'Blocked Reason', comments:'Comments / Handoff Notes',
+               cycleNumber:'Cycle Number'},
+  stages:     {name:'Stage Name', code:'Stage Code', order:'Order', phaseGroup:'Phase Group',
+               responsibleTeam:'Responsible Team', approverTeam:'Approver Team'},
+  handshakes: {handshakeId:'Handshake ID', attribute:'Attribute', feature:'Feature', stage:'Stage',
+               fromTeam:'From Team', toTeam:'To Team', action:'Action', decisionMaker:'Decision Maker',
+               timestamp:'Timestamp', comments:'Comments', cycleNumber:'Cycle Number'},
+};
+
+const STATUS = {
+  notStarted:'Not Started', inProgress:'In Progress', blocked:'Blocked',
+  submitted:'Submitted for Review', approved:'Approved', returned:'Rejected / Returned',
+  done:'Done', cancelled:'Cancelled / Not Required',
+};
+const APPROVAL = {
+  notRequired:'Not Required', pending:'Pending', approved:'Approved',
+  returned:'Returned with Comments', escalated:'Escalated',
+};
+const HANDSHAKE_ACTION = {submitted:'Submitted for Review', approved:'Approved', returned:'Rejected / Returned'};
+
+const PHASE_GROUPS = ['Requirements','Modelling','Transformation','Sourcing','Sub-ledger','Calculate','Report'];
+const PHASE_COLORS = {
+  Requirements:'#4f8cff', Modelling:'#a371f7', Transformation:'#2dd4bf', Sourcing:'#34d399',
+  'Sub-ledger':'#fb923c', Calculate:'#fbbf24', Report:'#f87171',
+};
+const STATUS_COLORS = {
+  'Not Started':'#94a3b8','In Progress':'#3b82f6','Blocked':'#ef4444','Submitted for Review':'#f59e0b',
+  'Approved':'#22c55e','Rejected / Returned':'#fb7185','Done':'#16a34a','Cancelled / Not Required':'#6b7280',
+};
+const SOURCING_BRANCH = {
+  'Feed-agnostic':'5a','Feed-specific (MOR)':'5b-MOR','Feed-specific (MIDAS)':'5b-MIDAS',
+  'Feed-specific (Other)':'5b-Other','Reference Data':'5c',
+};
+const ACTIVE_STATUSES = [STATUS.inProgress, STATUS.blocked, STATUS.submitted, STATUS.approved, STATUS.returned];
+
+/* Stage path: 1 → 2 → 3 → [4 if gateway] → <one 5x branch> → [6..10 unless reference data]. */
+function attributePath({sourcingType, requiresGateway}){
+  const codes = ['1','2','3'];
+  if (requiresGateway) codes.push('4');
+  const branch = SOURCING_BRANCH[sourcingType] || '5a';
+  codes.push(branch);
+  if (branch !== '5c') codes.push('6','7','8','9','10');
+  return codes;
+}
+function nextStageCode(attr, currentCode){
+  const p = attributePath(attr), i = p.indexOf(currentCode);
+  return (i === -1 || i === p.length - 1) ? null : p[i + 1];
+}
+function maturityFraction(attr, currentCode){
+  const p = attributePath(attr), i = p.indexOf(currentCode);
+  return (i === -1 || p.length <= 1) ? 0 : i / (p.length - 1);
+}
+
+/* ── helpers ─────────────────────────────────────────────────────────────── */
+const el = id => document.getElementById(id);
+function esc(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+const txt = (rec, f) => (rec && rec[f] != null ? String(rec[f]).trim() : '');
+const checked = (rec, f) => {
+  const v = txt(rec, f).toLowerCase();
+  return v === 'checked' || v === 'true' || v === 'yes' || v === '1' || v === 'x';
+};
+const listOf = (rec, f) => txt(rec, f).split(',').map(s => s.trim()).filter(Boolean);
+
+function parseAcceptance(raw){
+  if (!raw) return [];
+  try {
+    const p = JSON.parse(raw);
+    return Array.isArray(p)
+      ? p.filter(x => x && typeof x === 'object').map(x => ({text:String(x.text || ''), done:x.done === true}))
+      : [];
+  } catch { return []; }
+}
+const allAcceptanceMet = items => items.length > 0 && items.every(i => i.done);
+const remainingAcceptance = a => a.acceptance.filter(i => !i.done).map(i => i.text);
+const todayISO = () => new Date().toISOString().slice(0,10);
+
+/* RFC-4180-ish CSV parser (quoted fields, embedded commas / newlines / "" ). */
+function parseCSV(text){
+  const s = text.replace(/^﻿/, '');
+  const rows = []; let row = [], field = '', q = false;
+  for (let i = 0; i < s.length; i++){
+    const c = s[i];
+    if (q){
+      if (c === '"'){ if (s[i+1] === '"'){ field += '"'; i++; } else q = false; }
+      else field += c;
+    } else if (c === '"') q = true;
+    else if (c === ','){ row.push(field); field = ''; }
+    else if (c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+    else if (c !== '\r') field += c;
+  }
+  if (field !== '' || row.length){ row.push(field); rows.push(row); }
+  if (!rows.length) return [];
+  const head = rows.shift().map(h => h.trim());
+  return rows.filter(r => r.some(v => v !== '')).map(r => {
+    const o = {}; head.forEach((h, i) => (o[h] = r[i] != null ? r[i] : '')); return o;
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Model — the client-side join/aggregate pass (mirrors frontend/data.js).
+   ══════════════════════════════════════════════════════════════════════════ */
+function buildModel(raw){
+  const F = FIELDS;
+
+  const stages = (raw.stages || []).map(r => ({
+    id: txt(r, F.stages.code) || txt(r, F.stages.name),
+    name: txt(r, F.stages.name),
+    code: txt(r, F.stages.code),
+    order: Number(txt(r, F.stages.order)) || 0,
+    phaseGroup: txt(r, F.stages.phaseGroup),
+    responsibleTeamName: txt(r, F.stages.responsibleTeam),
+    approverTeamName: txt(r, F.stages.approverTeam),
+  })).sort((a,b) => a.order - b.order);
+  const stagesByCode = {}, stagesByName = {};
+  stages.forEach(s => { if (s.code) stagesByCode[s.code] = s; if (s.name) stagesByName[s.name] = s; });
+
+  const teamList = (raw.teams || []).map(r => ({
+    name: txt(r, F.teams.name),
+    users: listOf(r, F.teams.users),
+    domain: txt(r, F.teams.domain),
+    tool: txt(r, F.teams.tool),
+    email: txt(r, F.teams.email),
+  }));
+  const teamNames = teamList.map(t => t.name).filter(Boolean).sort();
+  const usersByTeam = {}; teamList.forEach(t => (usersByTeam[t.name] = t.users));
+  const allUsers = Array.from(new Set(teamList.flatMap(t => t.users))).sort();
+
+  const featureList = (raw.features || []).map((r, i) => ({
+    id: 'feat-' + i,
+    name: txt(r, F.features.name),
+    initiative: txt(r, F.features.initiative) || 'Ungrouped',
+    owningTeam: txt(r, F.features.owningTeam),
+    status: txt(r, F.features.status),
+    priority: txt(r, F.features.priority),
+    goLive: txt(r, F.features.goLive),
+    kdo: txt(r, F.features.kdo),
+  }));
+  const featureOrder = featureList.map(f => f.name).filter(Boolean);
+
+  const attrs = (raw.attributes || []).map((r, i) => {
+    const stage = stagesByName[txt(r, F.attributes.currentStage)] || stagesByCode[txt(r, F.attributes.currentStage)] || null;
+    const sourcingType = txt(r, F.attributes.sourcingType);
+    const requiresGateway = checked(r, F.attributes.requiresGateway);
+    const currentCode = stage ? stage.code : '';
+    const status = txt(r, F.attributes.status);
+    const approvalStatus = txt(r, F.attributes.approvalStatus);
+    const acceptance = parseAcceptance(txt(r, F.attributes.acceptanceCriteria));
+    const pathAttr = {sourcingType, requiresGateway};
+    const a = {
+      id: 'attr-' + i,
+      record: r,
+      attributeId: txt(r, F.attributes.attributeId),
+      businessName: txt(r, F.attributes.businessName),
+      technicalName: txt(r, F.attributes.technicalName),
+      fsdm: txt(r, F.attributes.fsdm),
+      featureName: txt(r, F.attributes.feature),
+      sourcingType, requiresGateway,
+      isReferenceData: checked(r, F.attributes.isReferenceData),
+      stage, currentCode,
+      currentStageName: stage ? stage.name : txt(r, F.attributes.currentStage),
+      phase: stage ? stage.phaseGroup : '',
+      status,
+      assignee: txt(r, F.attributes.assignee),
+      assignedTeamName: txt(r, F.attributes.assignedTeam),
+      approverTeamName: txt(r, F.attributes.approverTeam),
+      approvalStatus, acceptance,
+      acceptanceMet: checked(r, F.attributes.acceptanceMet) || allAcceptanceMet(acceptance),
+      environment: txt(r, F.attributes.environment),
+      startedDate: txt(r, F.attributes.startedDate),
+      completedDate: txt(r, F.attributes.completedDate),
+      dueDate: txt(r, F.attributes.dueDate),
+      blockedReason: txt(r, F.attributes.blockedReason),
+      comments: txt(r, F.attributes.comments),
+      cycleNumber: Number(txt(r, F.attributes.cycleNumber)) || 1,
+    };
+    a.path = attributePath(pathAttr);
+    a.nextCode = nextStageCode(pathAttr, currentCode);
+    a.hasNext = !!a.nextCode;
+    a.maturity = maturityFraction(pathAttr, currentCode);
+    a.isActive = ACTIVE_STATUSES.includes(status);
+    a.isBlocked = status === STATUS.blocked;
+    a.isAwaitingReview = status === STATUS.submitted || approvalStatus === APPROVAL.pending;
+    a.isReadyToPush = a.hasNext && (status === STATUS.approved || (status === STATUS.inProgress && a.acceptanceMet));
+    a.isDelivered = !a.hasNext && status === STATUS.done;
+    return a;
+  });
+
+  // per-feature aggregates
+  const byFeature = {};
+  const ensure = f => {
+    if (!byFeature[f]){
+      byFeature[f] = {total:0, delivered:0, blocked:0, maturitySum:0, phase:{}, stage:{}, furthest:-1};
+      PHASE_GROUPS.forEach(p => (byFeature[f].phase[p] = 0));
+    }
+    return byFeature[f];
+  };
+  featureOrder.forEach(ensure);
+  attrs.forEach(a => {
+    const v = ensure(a.featureName || 'Unassigned');
+    v.total++; v.maturitySum += a.maturity;
+    if (a.isDelivered) v.delivered++;
+    if (a.isBlocked) v.blocked++;
+    if (a.currentCode) v.stage[a.currentCode] = (v.stage[a.currentCode] || 0) + 1;
+    if (a.phase && v.phase[a.phase] != null){
+      v.phase[a.phase]++;
+      v.furthest = Math.max(v.furthest, PHASE_GROUPS.indexOf(a.phase));
+    }
+  });
+  Object.values(byFeature).forEach(v => {
+    v.pct = v.total ? Math.round((v.maturitySum / v.total) * 100) : 0;
+    v.furthestPhase = v.furthest >= 0 ? PHASE_GROUPS[v.furthest] : null;
+  });
+
+  const initiatives = {};
+  featureList.forEach(f => (initiatives[f.initiative] = initiatives[f.initiative] || []).push(f));
+
+  const phaseCounts = {}; PHASE_GROUPS.forEach(p => (phaseCounts[p] = 0));
+  const stageCounts = {}; stages.forEach(s => (stageCounts[s.code] = 0));
+  const statusCounts = {};
+  attrs.forEach(a => {
+    if (a.phase && phaseCounts[a.phase] != null) phaseCounts[a.phase]++;
+    if (a.currentCode && stageCounts[a.currentCode] != null) stageCounts[a.currentCode]++;
+    statusCounts[a.status || '—'] = (statusCounts[a.status || '—'] || 0) + 1;
+  });
+
+  const maturityAvg = attrs.length ? attrs.reduce((s,a) => s + a.maturity, 0) / attrs.length : 0;
+  const kpis = {
+    active: attrs.filter(a => a.isActive).length,
+    awaitingReview: attrs.filter(a => a.isAwaitingReview).length,
+    blocked: attrs.filter(a => a.isBlocked).length,
+    readyToPush: attrs.filter(a => a.isReadyToPush).length,
+    deliveredFeatures: Object.values(byFeature).filter(v => v.total && v.pct >= 100).length,
+    overallPct: Math.round(maturityAvg * 100),
+  };
+
+  const handshakes = (raw.handshakes || []).map((r, i) => ({
+    id: 'hs-' + i,
+    handshakeId: txt(r, FIELDS.handshakes.handshakeId),
+    attribute: txt(r, FIELDS.handshakes.attribute),
+    feature: txt(r, FIELDS.handshakes.feature),
+    stage: txt(r, FIELDS.handshakes.stage),
+    fromTeam: txt(r, FIELDS.handshakes.fromTeam),
+    toTeam: txt(r, FIELDS.handshakes.toTeam),
+    action: txt(r, FIELDS.handshakes.action),
+    decisionMaker: txt(r, FIELDS.handshakes.decisionMaker),
+    timestamp: txt(r, FIELDS.handshakes.timestamp),
+    comments: txt(r, FIELDS.handshakes.comments),
+    cycleNumber: txt(r, FIELDS.handshakes.cycleNumber),
+  })).sort((a,b) => (a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0));
+
+  return {stages, stagesByCode, teamList, teamNames, usersByTeam, allUsers, features: featureList,
+          initiatives, attrs, byFeature, phaseCounts, stageCounts, statusCounts, kpis, handshakes};
+}
+</script>
+<script>
+/* ══════════════════════════════════════════════════════════════════════════
+   State
+   ══════════════════════════════════════════════════════════════════════════ */
+const MODES = [
+  {key:'roadmap',  label:'Roadmap'},
+  {key:'team',     label:'By team'},
+  {key:'workflow', label:'Workflow'},
+  {key:'register', label:'Register'},
+];
+// Exposed on `window` so the dataset is inspectable from the console (window.state.raw).
+const state = window.state = {
+  raw: JSON.parse(JSON.stringify(SEED)),
+  model: null,
+  mode: 'roadmap',
+  team: '',
+  actor: '',
+  returningId: null,
+  toast: null,
+  openAttr: null,
+};
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Small view helpers
+   ══════════════════════════════════════════════════════════════════════════ */
+const chip = s => `<span class="fp-chip" style="background:${STATUS_COLORS[s] || '#cbd5e1'}">${esc(s || '—')}</span>`;
+const tag  = (t, title) => t ? `<span class="fp-tag"${title ? ` title="${esc(title)}"` : ''}>${esc(t)}</span>` : '';
+const phaseTag = p => p ? `<span class="fp-phase-tag" style="color:${PHASE_COLORS[p] || '#64748b'};border-color:${PHASE_COLORS[p] || '#64748b'}">${esc(p)}</span>` : '';
+const bar = (pct, color) =>
+  `<div class="fp-progress" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100">
+     <div class="fp-progress-fill" style="width:${Math.max(0, Math.min(100, pct))}%;background:${color || '#22c55e'}"></div>
+   </div>`;
+const kpi = (label, value, accent) =>
+  `<div class="fp-kpi"><div class="fp-kpi-value"${accent ? ` style="color:${accent}"` : ''}>${esc(value)}</div>
+   <div class="fp-kpi-label">${esc(label)}</div></div>`;
+function acceptanceList(items){
+  if (!items || !items.length) return '<div class="fp-muted fp-small">No acceptance criteria.</div>';
+  return `<ul class="fp-accept">${items.map(i =>
+    `<li class="${i.done ? 'done' : ''}"><span class="fp-accept-box" aria-hidden="true">${i.done ? '✓' : '○'}</span><span>${esc(i.text)}</span></li>`
+  ).join('')}</ul>`;
+}
+function heatBg(phase, count, max){
+  if (!count) return 'transparent';
+  const hex = PHASE_COLORS[phase] || '#64748b';
+  const alpha = 0.18 + 0.6 * (max ? count / max : 0);
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(2)})`;
+}
+const stageName = code => (state.model.stagesByCode[code] ? state.model.stagesByCode[code].name : '— (final)');
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Roadmap
+   ══════════════════════════════════════════════════════════════════════════ */
+function renderRoadmap(m){
+  const rail = PHASE_GROUPS.map((p,i) =>
+    `<div class="fp-rail-seg" role="listitem">
+       <div class="fp-rail-card" style="border-top-color:${PHASE_COLORS[p]}">
+         <div class="fp-rail-count" style="color:${PHASE_COLORS[p]}">${m.phaseCounts[p] || 0}</div>
+         <div class="fp-rail-name">${esc(p)}</div>
+       </div>
+       ${i < PHASE_GROUPS.length - 1 ? '<div class="fp-rail-arrow" aria-hidden="true">→</div>' : ''}
+     </div>`).join('');
+
+  const ladder = m.stages.map(s =>
+    `<div class="fp-ladder-cell" style="border-top-color:${PHASE_COLORS[s.phaseGroup] || '#cbd5e1'}"
+          title="${esc(s.name)} — responsible: ${esc(s.responsibleTeamName || '—')}, approver: ${esc(s.approverTeamName || '—')}">
+       <div class="fp-ladder-code" style="color:${PHASE_COLORS[s.phaseGroup] || '#64748b'}">${esc(s.code)}</div>
+       <div class="fp-ladder-n">${m.stageCounts[s.code] || 0}</div>
+       <div class="fp-ladder-name">${esc(s.name.replace(/^\d+[a-z-]*\.\s*/i,''))}</div>
+       <div class="fp-ladder-team">${esc(s.responsibleTeamName || '—')}</div>
+     </div>`).join('');
+
+  const kpis = [
+    kpi('Active', m.kpis.active),
+    kpi('Awaiting review', m.kpis.awaitingReview, '#f59e0b'),
+    kpi('Blocked', m.kpis.blocked, '#ef4444'),
+    kpi('Ready to push', m.kpis.readyToPush, '#22c55e'),
+    kpi('Delivered features', m.kpis.deliveredFeatures),
+    kpi('Overall maturity', m.kpis.overallPct + '%'),
+  ].join('');
+
+  // status mix — every status, with its count, nothing collapsed into "other"
+  const totalAttrs = m.attrs.length || 1;
+  const statusKeys = Object.keys(m.statusCounts).sort((a,b) => m.statusCounts[b] - m.statusCounts[a]);
+  const statusBar = `
+    <div style="display:flex;height:14px;border-radius:999px;overflow:hidden;border:1px solid var(--fp-border)">
+      ${statusKeys.map(s => `<div style="width:${(m.statusCounts[s]/totalAttrs*100).toFixed(2)}%;background:${STATUS_COLORS[s] || '#cbd5e1'}" title="${esc(s)}: ${m.statusCounts[s]}"></div>`).join('')}
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
+      ${statusKeys.map(s => `<span class="fp-small"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${STATUS_COLORS[s] || '#cbd5e1'};margin-right:4px"></span>${esc(s)} · <strong>${m.statusCounts[s]}</strong></span>`).join('')}
+    </div>`;
+
+  let maxCell = 0;
+  Object.values(m.byFeature).forEach(v => PHASE_GROUPS.forEach(p => (maxCell = Math.max(maxCell, v.phase[p] || 0))));
+
+  const initiativeNames = Object.keys(m.initiatives).sort((a,b) =>
+    a === 'Ungrouped' ? 1 : b === 'Ungrouped' ? -1 : a.localeCompare(b));
+
+  const featureRow = f => {
+    const agg = m.byFeature[f.name] || {phase:{}, pct:0, furthest:-1, total:0, delivered:0, blocked:0};
+    const furthestIdx = agg.furthest >= 0 ? agg.furthest : 0;
+    const cells = PHASE_GROUPS.map((p,i) => {
+      const c = agg.phase[p] || 0;
+      const reached = i <= furthestIdx && agg.total > 0;
+      return `<div class="fp-rm-cell${reached ? ' reached' : ''}"
+        style="background:${heatBg(p, c, maxCell)};border-bottom-color:${PHASE_COLORS[p]}"
+        title="${esc(f.name)} · ${esc(p)}: ${c} attribute(s)">${c || ''}</div>`;
+    }).join('');
+    return `<div class="fp-rm-row">
+      <div class="fp-rm-name">
+        <div class="fp-rm-feature">${esc(f.name)}</div>
+        <div class="fp-rm-sub">${tag(f.priority)}${tag(f.status)}${tag(f.owningTeam,'Owning team')}</div>
+        <div class="fp-rm-kdo">${esc(f.kdo)}</div>
+      </div>
+      <div class="fp-rm-track" role="img" aria-label="${esc(f.name)}: ${agg.pct}% mature, furthest phase ${esc(agg.furthestPhase || 'none')}">${cells}</div>
+      <div class="fp-rm-meta">
+        ${bar(agg.pct, agg.furthestPhase ? PHASE_COLORS[agg.furthestPhase] : '#22c55e')}
+        <div class="fp-rm-figures">
+          <span class="fp-rm-pct">${agg.pct}%</span>
+          ${f.goLive ? `<span class="fp-rm-date">🏁 ${esc(f.goLive)}</span>` : ''}
+        </div>
+        <div class="fp-small fp-muted">${agg.total} attr · ${agg.delivered} delivered${agg.blocked ? ` · <span style="color:#ef4444">${agg.blocked} blocked</span>` : ''}</div>
+      </div>
+    </div>`;
+  };
+
+  const roadmap = initiativeNames.map(init => {
+    const fs = m.initiatives[init];
+    const totals = fs.reduce((s,f) => {
+      const a = m.byFeature[f.name] || {total:0, pct:0};
+      s.attrs += a.total; s.pctSum += a.pct; return s;
+    }, {attrs:0, pctSum:0});
+    return `<div class="fp-initiative">
+      <div class="fp-initiative-head">
+        <span>${esc(init)}</span>
+        <span>${fs.length} feature(s) · ${totals.attrs} attributes · ${fs.length ? Math.round(totals.pctSum / fs.length) : 0}% avg maturity</span>
+      </div>
+      ${fs.map(featureRow).join('')}
+    </div>`;
+  }).join('') || '<div class="fp-muted">No features found.</div>';
+
+  const feed = m.handshakes.map(h =>
+    `<li>
+      <div class="fp-feed-top">${chip(h.action)}<span class="fp-feed-ts">${esc(h.timestamp)}${h.cycleNumber ? ` · cycle ${esc(h.cycleNumber)}` : ''}</span></div>
+      <div class="fp-feed-route">${esc(h.fromTeam || '—')} <span aria-hidden="true">→</span> ${esc(h.toTeam || '— (final)')}</div>
+      <div class="fp-feed-sub">${esc(h.feature)} · ${esc(h.attribute)} · ${esc(h.stage)}</div>
+      <div class="fp-feed-sub">${esc(h.decisionMaker)}</div>
+      ${h.comments ? `<div class="fp-feed-note">“${esc(h.comments)}”</div>` : ''}
+    </li>`).join('') || '<li class="fp-muted">No handshakes yet.</li>';
+
+  return `
+    <div class="fp-section-title">Pipeline — attributes by phase <span class="fp-count">${m.attrs.length} attributes</span></div>
+    <div class="fp-rail" role="list" aria-label="Pipeline phases">${rail}</div>
+    <div class="fp-section-title">Stage ladder — attributes at each of the ${m.stages.length} stages</div>
+    <div class="fp-ladder">${ladder}</div>
+    <div class="fp-kpis">${kpis}</div>
+    <div class="fp-section-title">Status mix — all ${m.attrs.length} attributes</div>
+    ${statusBar}
+    <div class="fp-section-title" style="margin-top:18px">Roadmap — features by initiative</div>
+    <div class="fp-rm-head">
+      <div class="fp-rm-name"></div>
+      <div class="fp-rm-track">${PHASE_GROUPS.map(p => `<div class="fp-rm-colhead" style="color:${PHASE_COLORS[p]}">${esc(p)}</div>`).join('')}</div>
+      <div class="fp-rm-meta fp-muted fp-small">Maturity · go-live</div>
+    </div>
+    ${roadmap}
+    <div class="fp-section-title">Handshake log <span class="fp-count">all ${m.handshakes.length} entries, newest first</span></div>
+    <ul class="fp-feed">${feed}</ul>`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   By team
+   ══════════════════════════════════════════════════════════════════════════ */
+function renderTeam(m){
+  const team = state.team;
+  const mine = m.attrs.filter(a => a.assignedTeamName === team);
+  const approving = m.attrs.filter(a => a.approverTeamName === team);
+  const roster = m.usersByTeam[team] || [];
+  const teamRec = m.teamList.find(t => t.name === team) || {};
+
+  const byPhase = {}; PHASE_GROUPS.forEach(p => (byPhase[p] = []));
+  const perPerson = {}; roster.forEach(u => (perPerson[u] = 0));
+  mine.forEach(a => {
+    if (byPhase[a.phase]) byPhase[a.phase].push(a);
+    const k = a.assignee || '(unassigned)';
+    perPerson[k] = (perPerson[k] || 0) + 1;
+  });
+
+  const board = PHASE_GROUPS.map(p => `
+    <div class="fp-col">
+      <div class="fp-col-head" style="border-bottom-color:${PHASE_COLORS[p]}">
+        <span>${esc(p)}</span><span class="fp-col-count">${byPhase[p].length}</span>
+      </div>
+      <div class="fp-col-body">
+        ${byPhase[p].map(a => `
+          <button type="button" class="fp-card" data-open="${a.id}" style="border-left-color:${PHASE_COLORS[p]}">
+            <div class="fp-card-title">${esc(a.businessName || a.attributeId)}</div>
+            <div class="fp-card-meta">${tag(a.attributeId)}${tag(a.featureName)}${a.environment && a.environment !== 'N/A' ? tag(a.environment) : ''}</div>
+            <div class="fp-card-row">${chip(a.status)}</div>
+            <div class="fp-card-sub">${esc(a.currentStageName)}${a.assignee ? ' · ' + esc(a.assignee) : ''}${a.dueDate ? ' · due ' + esc(a.dueDate) : ''}</div>
+            ${a.isBlocked && a.blockedReason ? `<div class="fp-task-blocked">${esc(a.blockedReason)}</div>` : ''}
+          </button>`).join('') || '<div class="fp-empty">—</div>'}
+      </div>
+    </div>`).join('');
+
+  return `
+    <div class="fp-teambar">
+      <label>Team
+        <select id="teamselect">${m.teamNames.map(t => `<option value="${esc(t)}"${t === team ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>
+      </label>
+      <div>
+        <div class="fp-small fp-muted">Roster (${roster.length})</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">
+          ${roster.map(u => tag(u,'Team member')).join('') || '<span class="fp-muted fp-small">No users listed on this team.</span>'}
+        </div>
+      </div>
+      <div class="fp-small fp-muted">${esc(teamRec.domain || '')}${teamRec.tool ? ' · ' + esc(teamRec.tool) : ''}${teamRec.email ? ' · ' + esc(teamRec.email) : ''}</div>
+    </div>
+
+    <div class="fp-kpis fp-kpis-sm">
+      ${kpi('Attributes owned', mine.length)}
+      ${kpi('Active', mine.filter(a => a.isActive).length)}
+      ${kpi('Blocked', mine.filter(a => a.isBlocked).length, '#ef4444')}
+      ${kpi('Ready to push', mine.filter(a => a.isReadyToPush).length, '#22c55e')}
+    </div>
+    <div class="fp-kpis fp-kpis-sm">
+      ${kpi('Awaiting review', mine.filter(a => a.isAwaitingReview).length, '#f59e0b')}
+      ${kpi('This team approves', approving.length)}
+      ${kpi('Pending this team’s approval', approving.filter(a => a.approvalStatus === APPROVAL.pending).length, '#f59e0b')}
+      ${kpi('Delivered', mine.filter(a => a.isDelivered).length, '#16a34a')}
+    </div>
+
+    <div class="fp-section-title">Load by person <span class="fp-count">every roster member, including idle</span></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+      ${Object.keys(perPerson).sort().map(p => tag(`${p} · ${perPerson[p]}`)).join('') || '<span class="fp-muted">Nothing assigned.</span>'}
+    </div>
+
+    <div class="fp-section-title">Work by stage <span class="fp-count">${mine.length} attribute(s) across all 7 phases</span></div>
+    <div class="fp-board">${board}</div>`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Workflow
+   ══════════════════════════════════════════════════════════════════════════ */
+function renderWorkflow(m){
+  const team = state.team;
+  const incoming = [], pending = [], inProgress = [], blocked = [], ready = [];
+  m.attrs.forEach(a => {
+    if (a.approverTeamName === team && a.approvalStatus === APPROVAL.pending) pending.push(a);
+    if (a.assignedTeamName !== team) return;
+    if (a.status === STATUS.notStarted) incoming.push(a);
+    else if (a.status === STATUS.inProgress && !a.isReadyToPush) inProgress.push(a);
+    else if (a.status === STATUS.blocked) blocked.push(a);
+    else if (a.isReadyToPush) ready.push(a);
+  });
+  const byAssignee = {};
+  inProgress.forEach(a => (byAssignee[a.assignee || '(unassigned)'] = byAssignee[a.assignee || '(unassigned)'] || []).push(a));
+
+  const pendingCards = pending.map(a => `
+    <div class="fp-task">
+      <div class="fp-task-title" data-open="${a.id}">${esc(a.businessName || a.attributeId)}</div>
+      <div class="fp-card-meta">${tag(a.attributeId)}${tag(a.featureName)}${chip(a.status)}</div>
+      <div class="fp-task-sub">Awaiting your approval · ${esc(a.currentStageName)}</div>
+      ${acceptanceList(a.acceptance)}
+      ${state.returningId === a.id ? `
+        <div class="fp-return">
+          <textarea id="returncomment" placeholder="Reason for returning (required)…"></textarea>
+          <div class="fp-actions">
+            <button type="button" data-act="confirm-return" data-id="${a.id}">Confirm return</button>
+            <button type="button" class="ghost" data-act="cancel-return">Cancel</button>
+          </div>
+        </div>` : `
+        <div class="fp-actions">
+          <button type="button" class="accept" data-act="accept" data-id="${a.id}">Accept → ${esc(a.nextCode ? stageName(a.nextCode) : '— (final)')}</button>
+          <button type="button" class="ghost" data-act="return" data-id="${a.id}">Return</button>
+        </div>`}
+    </div>`).join('');
+
+  const incomingCards = incoming.map(a => `
+    <div class="fp-task" data-open="${a.id}" style="cursor:pointer">
+      <div class="fp-task-title">${esc(a.businessName || a.attributeId)}</div>
+      <div class="fp-card-meta">${tag(a.attributeId)}${tag(a.featureName)}${chip(a.status)}</div>
+      <div class="fp-task-sub">New work · ${esc(a.currentStageName)}</div>
+    </div>`).join('');
+
+  const progressCards = Object.keys(byAssignee).sort().map(person => `
+    <div class="fp-assignee">
+      <div class="fp-assignee-head">${esc(person)} <span class="fp-col-count">${byAssignee[person].length}</span></div>
+      ${byAssignee[person].map(a => `
+        <div class="fp-task slim" data-open="${a.id}">
+          <div class="fp-task-title">${esc(a.businessName || a.attributeId)}</div>
+          <div class="fp-task-sub">${esc(a.featureName)} · ${esc(a.currentStageName)}${a.environment && a.environment !== 'N/A' ? ' · ' + esc(a.environment) : ''}</div>
+          <div class="fp-task-sub">${remainingAcceptance(a).length} of ${a.acceptance.length} acceptance item(s) outstanding</div>
+        </div>`).join('')}
+    </div>`).join('');
+
+  const blockedCards = blocked.map(a => `
+    <div class="fp-task" data-open="${a.id}" style="cursor:pointer">
+      <div class="fp-task-title">${esc(a.businessName || a.attributeId)}</div>
+      <div class="fp-card-meta">${tag(a.attributeId)}${tag(a.featureName)}</div>
+      <div class="fp-task-sub">${esc(a.currentStageName)}${a.assignee ? ' · ' + esc(a.assignee) : ''}</div>
+      <div class="fp-task-blocked">${esc(a.blockedReason || 'Blocked (no reason given)')}</div>
+    </div>`).join('');
+
+  const readyCards = ready.map(a => {
+    const met = a.acceptance.length === 0 || a.acceptance.every(i => i.done);
+    return `<div class="fp-task">
+      <div class="fp-task-title" data-open="${a.id}">${esc(a.businessName || a.attributeId)}</div>
+      <div class="fp-card-meta">${tag(a.attributeId)}${tag(a.featureName)}${chip(a.status)}</div>
+      <div class="fp-task-sub">Next: ${esc(a.nextCode ? stageName(a.nextCode) : '— (final)')}</div>
+      ${acceptanceList(a.acceptance)}
+      ${!met ? `<div class="fp-muted fp-small">${remainingAcceptance(a).length} acceptance item(s) outstanding</div>` : ''}
+      <div class="fp-actions"><button type="button" class="push" data-act="push" data-id="${a.id}">Push</button></div>
+    </div>`;
+  }).join('');
+
+  const lane = (title, count, accent, body, empty) => `
+    <div class="fp-lane">
+      <div class="fp-lane-head" style="border-bottom-color:${accent}"><span>${title}</span><span class="fp-col-count">${count}</span></div>
+      <div class="fp-lane-body">${body || `<div class="fp-muted">${empty}</div>`}</div>
+    </div>`;
+
+  return `
+    <div class="fp-teambar">
+      <label>My team
+        <select id="teamselect">${m.teamNames.map(t => `<option value="${esc(t)}"${t === team ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>
+      </label>
+      <label>Acting as
+        <select id="actorselect">${m.allUsers.map(u => `<option value="${esc(u)}"${u === state.actor ? ' selected' : ''}>${esc(u)}</option>`).join('')}</select>
+      </label>
+      <div class="fp-small fp-muted">Promote / Accept / Return write to the in-memory dataset and post a handshake — exactly as the extension writes to the base.</div>
+    </div>
+    <div class="fp-lanes">
+      ${lane('Incoming', incoming.length + pending.length, '#3b82f6', pendingCards + incomingCards, 'Nothing incoming.')}
+      ${lane('In progress', inProgress.length, '#f59e0b', progressCards, 'No work in progress.')}
+      ${lane('Blocked', blocked.length, '#ef4444', blockedCards, 'Nothing blocked.')}
+      ${lane('Ready to push', ready.length, '#22c55e', readyCards, 'Nothing ready to push.')}
+    </div>`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Register — every row of every table, every column
+   ══════════════════════════════════════════════════════════════════════════ */
+function table(title, rows, cols, wrapCols){
+  if (!rows.length) return `<div class="fp-section-title">${esc(title)}</div><div class="fp-muted">No rows.</div>`;
+  const wrap = wrapCols || [];
+  return `<div class="fp-section-title">${esc(title)} <span class="fp-count">${rows.length} row(s) · ${cols.length} column(s)</span></div>
+    <div class="fp-tablewrap"><table class="fp-table">
+      <thead><tr>${cols.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead>
+      <tbody>${rows.map(r => `<tr>${cols.map(c =>
+        `<td class="${wrap.includes(c) ? 'wrap' : ''}">${esc(r[c] == null ? '' : r[c])}</td>`).join('')}</tr>`).join('')}</tbody>
+    </table></div>`;
+}
+function renderRegister(){
+  const raw = state.raw;
+  const cols = o => Object.values(o);
+  return table('Attributes', raw.attributes, cols(FIELDS.attributes), ['Acceptance Criteria','Blocked Reason','Comments / Handoff Notes'])
+       + table('Features', raw.features, cols(FIELDS.features), ['Business Outcome / KDO Description'])
+       + table('Stages', raw.stages, cols(FIELDS.stages))
+       + table('Teams', raw.teams, cols(FIELDS.teams), ['Users'])
+       + table('Handshakes', raw.handshakes, cols(FIELDS.handshakes), ['Comments']);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Attribute detail (replaces expandRecord)
+   ══════════════════════════════════════════════════════════════════════════ */
+function renderModal(){
+  if (!state.openAttr){ el('modal').innerHTML = ''; return; }
+  const a = state.model.attrs.find(x => x.id === state.openAttr);
+  if (!a){ el('modal').innerHTML = ''; return; }
+  const path = a.path.map(code => {
+    const s = state.model.stagesByCode[code];
+    const here = code === a.currentCode;
+    const done = a.path.indexOf(code) < a.path.indexOf(a.currentCode);
+    const color = s ? (PHASE_COLORS[s.phaseGroup] || '#64748b') : '#64748b';
+    return `<span class="fp-tag" style="${here ? `background:${color};color:#fff;font-weight:700` : done ? 'background:#dcfce7;color:#166534' : ''}"
+      title="${esc(s ? s.name : code)}">${esc(code)}</span>`;
+  }).join(' <span class="fp-muted">→</span> ');
+
+  const rows = [
+    ['Attribute ID', a.attributeId], ['Business Name', a.businessName], ['Technical Name', a.technicalName],
+    ['FSDM Mapping', a.fsdm], ['Feature', a.featureName], ['Sourcing Type', a.sourcingType],
+    ['Is Reference Data', a.isReferenceData ? 'Yes' : 'No'], ['Requires Gateway Derivation', a.requiresGateway ? 'Yes' : 'No'],
+    ['Current Stage', a.currentStageName + (a.currentCode ? ` (${a.currentCode})` : '')],
+    ['Phase Group', a.phase], ['Next Stage', a.nextCode ? stageName(a.nextCode) : '— (final stage)'],
+    ['Maturity', Math.round(a.maturity * 100) + '%'],
+    ['Status', a.status], ['Approval Status', a.approvalStatus], ['Assignee', a.assignee],
+    ['Assigned Team', a.assignedTeamName], ['Approver Team', a.approverTeamName],
+    ['Acceptance Met?', a.acceptanceMet ? 'Yes' : 'No'], ['Environment', a.environment],
+    ['Started Date', a.startedDate], ['Completed Date', a.completedDate], ['Due Date', a.dueDate],
+    ['Blocked Reason', a.blockedReason], ['Comments / Handoff Notes', a.comments], ['Cycle Number', a.cycleNumber],
+  ];
+  const history = state.model.handshakes.filter(h => h.attribute === a.attributeId);
+
+  el('modal').innerHTML = `
+    <div class="fp-modal-back" data-act="close-modal">
+      <div class="fp-modal" role="dialog" aria-modal="true" aria-label="Attribute detail">
+        <button type="button" class="fp-btn fp-modal-close" data-act="close-modal">Close</button>
+        <h3>${esc(a.businessName || a.attributeId)}</h3>
+        <div class="fp-modal-sub">${esc(a.attributeId)} · ${esc(a.featureName)} · ${chip(a.status)} ${phaseTag(a.phase)}</div>
+        <div style="margin-bottom:10px">${path}</div>
+        ${bar(Math.round(a.maturity * 100), PHASE_COLORS[a.phase] || '#22c55e')}
+        <div class="fp-section-title">Acceptance criteria</div>
+        ${acceptanceList(a.acceptance)}
+        <div class="fp-section-title">All fields</div>
+        <dl class="fp-kv">${rows.map(([k,v]) => `<dt>${esc(k)}</dt><dd>${esc(v || '—')}</dd>`).join('')}</dl>
+        <div class="fp-section-title">Handshake history <span class="fp-count">${history.length}</span></div>
+        ${history.length ? `<ul class="fp-feed">${history.map(h => `
+          <li><div class="fp-feed-top">${chip(h.action)}<span class="fp-feed-ts">${esc(h.timestamp)}</span></div>
+          <div class="fp-feed-route">${esc(h.fromTeam || '—')} → ${esc(h.toTeam || '— (final)')}</div>
+          <div class="fp-feed-sub">${esc(h.stage)} · ${esc(h.decisionMaker)}</div>
+          ${h.comments ? `<div class="fp-feed-note">“${esc(h.comments)}”</div>` : ''}</li>`).join('')}</ul>`
+          : '<div class="fp-muted fp-small">No handshakes for this attribute.</div>'}
+      </div>
+    </div>`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Actions — mirror frontend/actions.js (write, then re-read)
+   ══════════════════════════════════════════════════════════════════════════ */
+function nextHandshakeId(){
+  const n = state.raw.handshakes.length + 1;
+  return 'HS-' + String(n).padStart(4, '0');
+}
+function postHandshake({attr, action, fromTeam, toTeam, stageLabel, comment, cycle}){
+  const H = FIELDS.handshakes, row = {};
+  row[H.handshakeId] = nextHandshakeId();
+  row[H.attribute] = attr.attributeId;
+  row[H.feature] = attr.featureName;
+  row[H.stage] = stageLabel;
+  row[H.fromTeam] = fromTeam || '';
+  row[H.toTeam] = toTeam || '';
+  row[H.action] = action;
+  row[H.decisionMaker] = state.actor || 'Current user';
+  row[H.timestamp] = todayISO();
+  row[H.comments] = comment || '';
+  row[H.cycleNumber] = String(cycle == null ? 1 : cycle);
+  state.raw.handshakes.push(row);
+}
+
+function promoteTask(a){
+  if (!allAcceptanceMet(a.acceptance)){
+    const e = new Error('Acceptance criteria not yet met.');
+    e.remaining = remainingAcceptance(a);
+    throw e;
+  }
+  const A = FIELDS.attributes, next = a.nextCode ? state.model.stagesByCode[a.nextCode] : null;
+  a.record[A.status] = STATUS.submitted;
+  a.record[A.approvalStatus] = APPROVAL.pending;
+  postHandshake({
+    attr: a, action: HANDSHAKE_ACTION.submitted,
+    fromTeam: a.assignedTeamName,
+    toTeam: (next && next.responsibleTeamName) || a.approverTeamName,
+    stageLabel: a.currentStageName, cycle: a.cycleNumber,
+  });
+}
+
+function decideTask(a, decision, comment){
+  const A = FIELDS.attributes, next = a.nextCode ? state.model.stagesByCode[a.nextCode] : null;
+
+  if (decision === 'accept'){
+    if (next){
+      a.record[A.currentStage] = next.name;
+      a.record[A.status] = STATUS.notStarted;
+      a.record[A.approvalStatus] = APPROVAL.notRequired;
+      a.record[A.assignedTeam] = next.responsibleTeamName;
+      a.record[A.approverTeam] = next.approverTeamName;
+      a.record[A.assignee] = (state.model.usersByTeam[next.responsibleTeamName] || [])[0] || '';
+      a.record[A.acceptanceMet] = '';
+    } else {
+      a.record[A.status] = STATUS.done;
+      a.record[A.approvalStatus] = APPROVAL.approved;
+      a.record[A.completedDate] = todayISO();
+    }
+    postHandshake({
+      attr: a, action: HANDSHAKE_ACTION.approved,
+      fromTeam: a.assignedTeamName,
+      toTeam: (next && next.responsibleTeamName) || '',
+      stageLabel: a.currentStageName, comment, cycle: a.cycleNumber,
+    });
+    return;
+  }
+
+  if (!comment || !comment.trim()) throw new Error('A comment is required when returning a task.');
+  const cycle = (Number(a.cycleNumber) || 1) + 1;
+  a.record[A.status] = STATUS.returned;
+  a.record[A.approvalStatus] = APPROVAL.returned;
+  a.record[A.comments] = comment.trim();
+  a.record[A.cycleNumber] = String(cycle);
+  postHandshake({
+    attr: a, action: HANDSHAKE_ACTION.returned,
+    fromTeam: a.approverTeamName || a.assignedTeamName,
+    toTeam: a.assignedTeamName,
+    stageLabel: a.currentStageName, comment: comment.trim(), cycle,
+  });
+}
+
+function run(fn, okMsg){
+  try {
+    fn();
+    state.toast = {type:'ok', msg: okMsg || 'Done — board updated.'};
+  } catch (e) {
+    state.toast = {type:'err', msg: e.message || 'Action failed.', remaining: e.remaining};
+  }
+  state.returningId = null;
+  render();
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Render / wiring
+   ══════════════════════════════════════════════════════════════════════════ */
+function render(){
+  const m = state.model = buildModel(state.raw);
+  if (!state.team || !m.teamNames.includes(state.team)) state.team = m.teamNames[0] || '';
+  if (!state.actor || !m.allUsers.includes(state.actor)) state.actor = m.allUsers[0] || '';
+
+  el('modeswitch').innerHTML = MODES.map(mo =>
+    `<button type="button" role="tab" aria-selected="${state.mode === mo.key}" class="${state.mode === mo.key ? 'active' : ''}" data-mode="${mo.key}">${mo.label}</button>`
+  ).join('');
+
+  el('toast').innerHTML = state.toast
+    ? `<div class="fp-toast ${state.toast.type === 'err' ? 'err' : 'ok'}" role="status">${esc(state.toast.msg)}
+       ${state.toast.remaining && state.toast.remaining.length ? `<ul>${state.toast.remaining.map(r => `<li>${esc(r)}</li>`).join('')}</ul>` : ''}</div>`
+    : '';
+
+  el('view').innerHTML =
+      state.mode === 'roadmap'  ? renderRoadmap(m)
+    : state.mode === 'team'     ? renderTeam(m)
+    : state.mode === 'workflow' ? renderWorkflow(m)
+    :                             renderRegister();
+
+  el('foot').innerHTML =
+    `${m.attrs.length} attributes · ${m.features.length} features · ${Object.keys(m.initiatives).length} initiatives · `
+    + `${m.stages.length} stages · ${m.teamNames.length} teams · ${m.allUsers.length} people · ${m.handshakes.length} handshakes. `
+    + `Every view renders the complete dataset — nothing is sampled or truncated. `
+    + `Load an Airtable CSV export (Teams / Features / Attributes / Stages / Handshakes) to replace the demo data; it stays in this browser tab.`;
+
+  renderModal();
+}
+
+document.addEventListener('click', ev => {
+  const t = ev.target.closest('[data-mode],[data-act],[data-open]');
+  if (!t) return;
+
+  if (t.dataset.mode){ state.mode = t.dataset.mode; state.toast = null; render(); return; }
+
+  if (t.dataset.act){
+    const act = t.dataset.act;
+    if (act === 'close-modal'){
+      if (ev.target.closest('.fp-modal') && !ev.target.dataset.act) return;
+      state.openAttr = null; renderModal(); return;
+    }
+    const a = state.model.attrs.find(x => x.id === t.dataset.id);
+    if (act === 'push')            return run(() => promoteTask(a), 'Pushed — submitted for review, handshake posted.');
+    if (act === 'accept')          return run(() => decideTask(a, 'accept', ''), 'Accepted — attribute advanced, handshake posted.');
+    if (act === 'return'){ state.returningId = t.dataset.id; state.toast = null; render(); return; }
+    if (act === 'cancel-return'){ state.returningId = null; render(); return; }
+    if (act === 'confirm-return'){
+      const c = el('returncomment') ? el('returncomment').value : '';
+      return run(() => decideTask(a, 'return', c), 'Returned — cycle bumped, handshake posted.');
+    }
+    return;
+  }
+
+  if (t.dataset.open){ state.openAttr = t.dataset.open; renderModal(); }
+});
+
+document.addEventListener('change', ev => {
+  if (ev.target.id === 'teamselect'){ state.team = ev.target.value; state.returningId = null; state.toast = null; render(); }
+  if (ev.target.id === 'actorselect'){ state.actor = ev.target.value; }
+});
+
+document.addEventListener('keydown', ev => {
+  if (ev.key === 'Escape' && state.openAttr){ state.openAttr = null; renderModal(); }
+});
+
+el('resetbtn').addEventListener('click', () => {
+  state.raw = JSON.parse(JSON.stringify(SEED));
+  state.toast = {type:'ok', msg:'Demo data reset.'};
+  state.openAttr = null; state.returningId = null;
+  render();
+});
+
+el('csvinput').addEventListener('change', async ev => {
+  const files = Array.from(ev.target.files || []);
+  if (!files.length) return;
+  const loaded = [];
+  for (const f of files){
+    const key = ['teams','features','attributes','stages','handshakes'].find(k => f.name.toLowerCase().includes(k));
+    if (!key) continue;
+    try {
+      state.raw[key] = parseCSV(await f.text());
+      loaded.push(`${key} (${state.raw[key].length})`);
+    } catch { /* skip unparseable file */ }
+  }
+  state.toast = loaded.length
+    ? {type:'ok', msg:'Loaded: ' + loaded.join(', ') + '.'}
+    : {type:'err', msg:'No file matched Teams / Features / Attributes / Stages / Handshakes — rename the CSV(s) and retry.'};
+  ev.target.value = '';
+  render();
+});
+
+render();
+</script>
+</body>
+</html>
