@@ -92,6 +92,37 @@ quoted directory; Node tooling handles it.)
 
 `npm run lint` runs ESLint over `frontend/`.
 
+### Windows / PowerShell
+
+`release.ps1` wraps the release with the preflight checks that catch the usual mistakes — wrong
+Node, unpaired remote, missing token, dirty tree, failing lint — and uploads nothing until they all
+pass. It operates on its own directory, so the space in the folder name is not an issue.
+
+```powershell
+.\release.ps1                                          # default remote, auto comment
+.\release.ps1 -Remote prod -Comment "Executive review"  # named remote (.block\prod.remote.json)
+.\release.ps1 -SkipLint -Force                          # ship the working tree as-is
+```
+
+| Parameter | Effect |
+|---|---|
+| `-Remote <name>` | Release to `.block\<name>.remote.json` instead of the default `.block\remote.json`. |
+| `-Comment <text>` | Release note (CLI caps it at 1000 chars; the script truncates). Defaults to `<branch>@<sha> — <timestamp>`. |
+| `-SkipLint` | Skip `npm run lint`. |
+| `-Force` | Allow a release from a dirty working tree — refused by default. |
+| `-CliVersion` | Pin `@airtable/blocks-cli` (default `3.0.3`) so a CLI release can't change your build unasked. |
+
+Prerequisites it checks for you, and how to satisfy them:
+
+- **Node 18.18+** — ESLint 9 in this repo is the binding constraint, not the CLI (which declares
+  `>=10`).
+- **Remote pairing** — `.block\remote.json`, created once with
+  `npx --yes --package @airtable/blocks-cli block add-remote <blockIdentifier> <remoteName>`.
+- **Personal access token** with the **`block:manage`** scope, from
+  <https://airtable.com/create/tokens>, stored via `block set-api-key` (writes
+  `.airtableblocksrc.json` — home directory by default; the app-scoped copy is git-ignored, keep it
+  that way).
+
 ## Workflow & limits
 
 Promote/Accept/Return each perform 2–3 writes (`createRecordsAsync`/`updateRecordsAsync`,
