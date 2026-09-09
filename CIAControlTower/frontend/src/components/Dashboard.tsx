@@ -14,6 +14,7 @@ import {DrillSheet} from './primitives/DrillSheet';
 import {EmptyState} from './primitives/EmptyState';
 import {SourceTrace} from './SourceTrace';
 import {Tabs, type TabKey} from './Tabs';
+import {AddDataView} from './views/AddDataView';
 import {FlowsView} from './views/FlowsView';
 import {HeatmapsView} from './views/HeatmapsView';
 import {RadarsView} from './views/RadarsView';
@@ -182,7 +183,9 @@ function DashboardBody({tableName}: {tableName: string}) {
                 />
             </div>
 
-            {filtered.length === 0 ? (
+            {tab === 'adddata' ? (
+                <AddDataView />
+            ) : filtered.length === 0 ? (
                 <div style={{padding: tokens.space.xxl, background: tokens.colors.bgPanel, border: `1px solid ${tokens.colors.rule}`, borderRadius: tokens.radius.md}}>
                     <EmptyState line="No reviewed impacts match the current filter. Try widening the lens." />
                 </div>
