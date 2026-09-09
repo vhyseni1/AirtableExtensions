@@ -343,25 +343,57 @@ function OrgHubApp() {
     );
 }
 
-// Programme and conversations are small tables read by several views, so they
-// are loaded once here and passed down rather than re-read per view. Each has
-// its own component because `useRecords` cannot be called conditionally.
+// Programme and conversations are small tables read by several views.
+//
+// `useRecords` DEREFERENCES its table — a null table throws inside the SDK, it
+// does not return null. Both of these tables are optional, and hooks cannot be
+// called conditionally, so each is read by a component that only mounts when
+// its table exists. The absent case skips the hook entirely and builds an
+// "unavailable" model, which every consuming view already handles.
 function DeliveryData({programmeTable, conversationsTable, owed, children}) {
-    const programmeRecords = useRecords(programmeTable);
-    const conversationRecords = useRecords(conversationsTable);
+    return (
+        <WithProgramme table={programmeTable}>
+            {programme => (
+                <WithConversations table={conversationsTable} owed={owed}>
+                    {conversations => children({programme, conversations})}
+                </WithConversations>
+            )}
+        </WithProgramme>
+    );
+}
 
-    const programme = useMemo(() => buildProgramme(
-        programmeRecords || [],
-        programmeTable ? resolveProgrammeConfig(programmeTable) : null,
-    ), [programmeRecords, programmeTable]);
+// Built once: an absent table's model never changes, and a fresh object each
+// render would bust the memos in every view that depends on it.
+const NO_PROGRAMME = buildProgramme([], null);
 
-    const conversations = useMemo(() => buildConversations(
-        conversationRecords || [],
-        conversationsTable ? resolveConversationsConfig(conversationsTable) : null,
-        {owed},
-    ), [conversationRecords, conversationsTable, owed]);
+function WithProgramme({table, children}) {
+    return table
+        ? <ProgrammeLoader table={table}>{children}</ProgrammeLoader>
+        : children(NO_PROGRAMME);
+}
 
-    return children({programme, conversations});
+function ProgrammeLoader({table, children}) {
+    const records = useRecords(table);
+    const cfg = useMemo(() => resolveProgrammeConfig(table), [table]);
+    const programme = useMemo(() => buildProgramme(records || [], cfg), [records, cfg]);
+    return children(programme);
+}
+
+function WithConversations({table, owed, children}) {
+    const absent = useMemo(() => buildConversations([], null, {owed}), [owed]);
+    return table
+        ? <ConversationsLoader table={table} owed={owed}>{children}</ConversationsLoader>
+        : children(absent);
+}
+
+function ConversationsLoader({table, owed, children}) {
+    const records = useRecords(table);
+    const cfg = useMemo(() => resolveConversationsConfig(table), [table]);
+    const conversations = useMemo(
+        () => buildConversations(records || [], cfg, {owed}),
+        [records, cfg, owed],
+    );
+    return children(conversations);
 }
 
 function OrgHub({
@@ -472,12 +504,40 @@ function OrgHub({
         );
     };
 
-    const DESIGN_VIEWS = new Set([
+    // Views that read the stacked org-design model. Every one of them carries
+    // `needs: 'design'` in NAV, so reaching this branch guarantees designTable.
+    const MODEL_VIEWS = new Set([
         'executive', 'stacked', 'comparison', 'design-data',
-        'people-impact', 'savings', 'works-council', 'conversations', 'programme',
+        'people-impact', 'savings', 'works-council', 'conversations',
     ]);
+    // Programme reads only the milestone table. Routing it through the design
+    // loader would demand a table it has no use for — and crash when a base has
+    // milestones but no org-design data.
+    const DELIVERY_ONLY_VIEWS = new Set(['programme']);
 
-    if (!DESIGN_VIEWS.has(effective)) {
+    const badgesFor = (programme, conversations) => ({
+        programme: programme.available ? programme.overdue.length : 0,
+        conversations: conversations.available
+            ? (conversations.counts['To schedule'] || 0) + conversations.untracked
+            : 0,
+    });
+
+    if (DELIVERY_ONLY_VIEWS.has(effective)) {
+        return (
+            <DeliveryData
+                programmeTable={programmeTable}
+                conversationsTable={conversationsTable}
+                owed={0}
+            >
+                {({programme, conversations}) => shell({
+                    badges: badgesFor(programme, conversations),
+                    node: <Programme programme={programme} />,
+                })}
+            </DeliveryData>
+        );
+    }
+
+    if (!MODEL_VIEWS.has(effective)) {
         return shell({node: plain(effective)});
     }
 
@@ -492,13 +552,7 @@ function OrgHub({
                     owed={peopleImpact(model).impacted}
                 >
                     {({programme, conversations}) => shell({
-                        badges: {
-                            programme: programme.available ? programme.overdue.length : 0,
-                            conversations: conversations.available
-                                ? (conversations.counts['To schedule'] || 0) + conversations.untracked
-                                : 0,
-                            'works-council': 0,
-                        },
+                        badges: badgesFor(programme, conversations),
                         node: renderDesignView({
                             view: effective, model, programme, conversations,
                             orgHealth, setView, design,
