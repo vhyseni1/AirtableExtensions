@@ -149,6 +149,10 @@ Prerequisites it checks for you, and how to satisfy them:
 A checkout has no `.block/` directory — that pairing is per machine and is not committed. Do this
 once, then never again on that machine.
 
+> The `app...` / `blk...` below are **placeholders**. The CLI only checks that an id starts with
+> `app` / `blk`, so pasting them literally writes a broken remote file that fails at upload time.
+> `release.ps1` now rejects that before it uploads anything.
+
 Get the **block identifier** (`<baseId>/<blockId>`, e.g. `app12345678/blk12345678`) from the base:
 **Extensions → Add an extension → Build a custom extension**. Airtable shows a
 `block init app…/blk… ` command; the `app…/blk…` part is the identifier.

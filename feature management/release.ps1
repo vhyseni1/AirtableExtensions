@@ -173,7 +173,42 @@ Do NOT run 'block init' in this folder - it refuses to write into a directory
 that already exists, and it would pull down a template over your code.
 "@
 }
-Write-Ok "Remote config: $(Join-Path '.block' $remoteFile)"
+# The CLI validates only that the ids START WITH app/blk, so a copy-pasted
+# placeholder such as "app.../blk..." is written to disk without complaint and
+# does not fail until the upload. Catch it here instead.
+try {
+    $remoteJson = Get-Content -LiteralPath $remotePath -Raw | ConvertFrom-Json
+} catch {
+    Stop-WithError "$(Join-Path '.block' $remoteFile) is not valid JSON." 'Delete it and re-pair, or fix the file by hand.'
+}
+$baseId  = if ($remoteJson.PSObject.Properties['baseId'])  { [string]$remoteJson.baseId }  else { '' }
+$blockId = if ($remoteJson.PSObject.Properties['blockId']) { [string]$remoteJson.blockId } else { '' }
+
+$idFix = @"
+Real ids, not placeholders:
+  baseId  - the app... segment of the base URL in your browser:
+            https://airtable.com/appXXXXXXXXXXXXXX/tbl...
+  blockId - shown by the base under
+            Extensions -> Add an extension -> Build a custom extension,
+            in the 'block init appXXXXXXXXXXXXXX/blkXXXXXXXXXXXXXX' command.
+Then either delete $(Join-Path '.block' $remoteFile) and re-run add-remote,
+or edit the file so it reads:
+  {"baseId": "appXXXXXXXXXXXXXX", "blockId": "blkXXXXXXXXXXXXXX"}
+"@
+
+# 'NONE' is the CLI's marker for a V2 extension that runs against any base.
+if ($baseId -ne 'NONE' -and $baseId -notmatch '^app[A-Za-z0-9]+$') {
+    Stop-WithError "baseId in $(Join-Path '.block' $remoteFile) is not a base id: '$baseId'" $idFix
+}
+if ($blockId -notmatch '^blk[A-Za-z0-9]+$') {
+    Stop-WithError "blockId in $(Join-Path '.block' $remoteFile) is not an extension id: '$blockId'" $idFix
+}
+# Airtable ids are conventionally 17 characters. Warn rather than fail - the
+# length is a convention, not something the CLI enforces.
+if (($baseId -ne 'NONE' -and $baseId.Length -ne 17) -or $blockId.Length -ne 17) {
+    Write-Warn "Unusual id length (expected 17 chars): baseId '$baseId', blockId '$blockId'. Continuing."
+}
+Write-Ok "Remote config: $(Join-Path '.block' $remoteFile) [$baseId / $blockId]"
 
 # --- 3. Credentials ----------------------------------------------------------
 # The CLI reads a personal access token from .airtableblocksrc.json - either in
