@@ -8,7 +8,7 @@
     personal access token, a dirty working tree, and lint failures. Nothing is
     uploaded until every check passes.
 
-    Run it from anywhere — it operates on its own directory, so the space in
+    Run it from anywhere - it operates on its own directory, so the space in
     "feature management" is handled.
 
 .PARAMETER Remote
@@ -17,7 +17,7 @@
 
 .PARAMETER Comment
     Release note stored with the release (max 1000 chars, truncated if longer).
-    Defaults to "<branch>@<short-sha> — <timestamp>".
+    Defaults to "<branch>@<short-sha> - <timestamp>".
 
 .PARAMETER SkipLint
     Skip `npm run lint`. Use only when you have already run it.
@@ -59,16 +59,16 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-# ─── Helpers ─────────────────────────────────────────────────────────────────
+# --- Helpers -----------------------------------------------------------------
 
-function Write-Step  { param([string]$Message) Write-Host "`n▶ $Message" -ForegroundColor Cyan }
-function Write-Ok    { param([string]$Message) Write-Host "  ✓ $Message" -ForegroundColor Green }
-function Write-Note  { param([string]$Message) Write-Host "  · $Message" -ForegroundColor DarkGray }
+function Write-Step  { param([string]$Message) Write-Host "`n> $Message" -ForegroundColor Cyan }
+function Write-Ok    { param([string]$Message) Write-Host "  [ok] $Message" -ForegroundColor Green }
+function Write-Note  { param([string]$Message) Write-Host "  - $Message" -ForegroundColor DarkGray }
 function Write-Warn  { param([string]$Message) Write-Host "  ! $Message" -ForegroundColor Yellow }
 
 function Stop-WithError {
     param([string]$Message, [string]$Fix)
-    Write-Host "`n✗ $Message" -ForegroundColor Red
+    Write-Host "`nERROR: $Message" -ForegroundColor Red
     if ($Fix) { Write-Host "  Fix: $Fix" -ForegroundColor Yellow }
     exit 1
 }
@@ -100,7 +100,7 @@ function Invoke-Native {
     }
 }
 
-# ─── 0. Work from the extension directory ────────────────────────────────────
+# --- 0. Work from the extension directory ------------------------------------
 
 $projectRoot = $PSScriptRoot
 if (-not $projectRoot) { $projectRoot = (Get-Location).Path }
@@ -110,7 +110,7 @@ try {
 Write-Host "Airtable extension release" -ForegroundColor White
 Write-Note "Directory: $projectRoot"
 
-# ─── 1. Toolchain ────────────────────────────────────────────────────────────
+# --- 1. Toolchain ------------------------------------------------------------
 
 Write-Step 'Checking toolchain'
 
@@ -118,10 +118,10 @@ $node = Resolve-Tool 'node'
 if (-not $node) { Stop-WithError 'Node.js was not found on PATH.' 'Install the current Node LTS from https://nodejs.org and reopen the terminal.' }
 
 $npm = Resolve-Tool 'npm'
-if (-not $npm) { Stop-WithError 'npm was not found on PATH.' 'It ships with Node.js — reinstall Node, or repair your PATH.' }
+if (-not $npm) { Stop-WithError 'npm was not found on PATH.' 'It ships with Node.js - reinstall Node, or repair your PATH.' }
 
 $npx = Resolve-Tool 'npx'
-if (-not $npx) { Stop-WithError 'npx was not found on PATH.' 'It ships with npm 5.2+ — reinstall Node.js.' }
+if (-not $npx) { Stop-WithError 'npx was not found on PATH.' 'It ships with npm 5.2+ - reinstall Node.js.' }
 
 $nodeVersion = (& $node --version).TrimStart('v')
 $nodeMajor = [int]($nodeVersion.Split('.')[0])
@@ -132,12 +132,12 @@ if ($nodeMajor -lt 18) {
 }
 Write-Ok "Node $nodeVersion"
 
-# ─── 2. Project shape ────────────────────────────────────────────────────────
+# --- 2. Project shape --------------------------------------------------------
 
 Write-Step 'Checking project'
 
 if (-not (Test-Path -LiteralPath (Join-Path $projectRoot 'block.json'))) {
-    Stop-WithError 'block.json is missing — this is not an extension root.' "Run the script from inside the extension folder."
+    Stop-WithError 'block.json is missing - this is not an extension root.' "Run the script from inside the extension folder."
 }
 Write-Ok 'block.json found'
 
@@ -161,8 +161,8 @@ Pair this folder with the base once:
 }
 Write-Ok "Remote config: $(Join-Path '.block' $remoteFile)"
 
-# ─── 3. Credentials ──────────────────────────────────────────────────────────
-# The CLI reads a personal access token from .airtableblocksrc.json — either in
+# --- 3. Credentials ----------------------------------------------------------
+# The CLI reads a personal access token from .airtableblocksrc.json - either in
 # this folder (app scope) or in your home directory (user scope). Never commit
 # the app-scoped one; .gitignore already excludes it.
 
@@ -179,7 +179,7 @@ Paste the token when prompted. It is stored in your home directory, not the repo
 }
 Write-Ok ('Token found in {0} scope' -f $(if (Test-Path -LiteralPath $appToken) { 'app' } else { 'user' }))
 
-# ─── 4. Source control state ─────────────────────────────────────────────────
+# --- 4. Source control state -------------------------------------------------
 
 Write-Step 'Checking git state'
 
@@ -201,13 +201,13 @@ if ($git) {
         }
         Write-Ok "On $branch at $sha"
     } else {
-        Write-Warn 'Not a git repository — skipping source-control checks.'
+        Write-Warn 'Not a git repository - skipping source-control checks.'
     }
 } else {
-    Write-Warn 'git not found on PATH — skipping source-control checks.'
+    Write-Warn 'git not found on PATH - skipping source-control checks.'
 }
 
-# ─── 5. Dependencies ─────────────────────────────────────────────────────────
+# --- 5. Dependencies ---------------------------------------------------------
 
 Write-Step 'Installing dependencies'
 
@@ -216,7 +216,7 @@ if (Test-Path -LiteralPath (Join-Path $projectRoot 'package-lock.json')) {
     # resolving something the lockfile does not describe.
     & $npm ci
     if ($LASTEXITCODE -ne 0) {
-        Write-Warn 'npm ci failed (lockfile likely out of sync) — falling back to npm install.'
+        Write-Warn 'npm ci failed (lockfile likely out of sync) - falling back to npm install.'
         Invoke-Native -FilePath $npm -Arguments @('install') -FailureMessage 'npm install failed.'
     }
 } else {
@@ -224,19 +224,19 @@ if (Test-Path -LiteralPath (Join-Path $projectRoot 'package-lock.json')) {
 }
 Write-Ok 'Dependencies installed'
 
-# ─── 6. Lint ─────────────────────────────────────────────────────────────────
+# --- 6. Lint -----------------------------------------------------------------
 
 if ($SkipLint) {
     Write-Warn 'Lint skipped (-SkipLint).'
 } else {
     Write-Step 'Linting'
     Invoke-Native -FilePath $npm -Arguments @('run', 'lint') `
-        -FailureMessage 'Lint failed — nothing was uploaded.' `
+        -FailureMessage 'Lint failed - nothing was uploaded.' `
         -Fix 'Fix the reported problems, or re-run with -SkipLint if you accept them.'
     Write-Ok 'Lint clean'
 }
 
-# ─── 7. Release ──────────────────────────────────────────────────────────────
+# --- 7. Release --------------------------------------------------------------
 
 Write-Step 'Releasing to Airtable'
 
@@ -254,7 +254,7 @@ $releaseArgs += @('--comment', $Comment)
 
 Write-Note "Comment: $Comment"
 Invoke-Native -FilePath $npx -Arguments $releaseArgs `
-    -FailureMessage 'block release failed — nothing was published.' `
+    -FailureMessage 'block release failed - nothing was published.' `
     -Fix @'
 Common causes:
   - Token lacks the block:manage scope, or does not cover this base -> recreate at https://airtable.com/create/tokens
@@ -263,7 +263,7 @@ Common causes:
 Re-run with -Verbose, or run the same command directly, to see the CLI output in full.
 '@
 
-Write-Host "`n✓ Released $branch@$sha" -ForegroundColor Green
+Write-Host "`nSUCCESS: released $branch@$sha" -ForegroundColor Green
 Write-Note 'Open the base and reload the extension to pick up the new version.'
 
 }
