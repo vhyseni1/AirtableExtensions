@@ -155,18 +155,22 @@ export const ORG_DESIGN = {
 // Status → slot appearance. `bucket` is the normalised status; the renderer
 // colours a slot by the bucket that dominates it on the side being shown.
 //
-// Teal / rose / amber / grey, deliberately not the purple-navy-pale-blue of the
-// decks this renderer was ported from — same semantics, different signature.
-// The four fills are checked two ways and both matter: every `fg` clears WCAG
-// 4.5:1 on its own `bg` (5.8–12.4), and adjacent fills stay apart under
-// deuteranopia and tritanopia (worst pair ΔE 17.1, normal vision 18.9), so the
-// amber and the grey can't collapse into each other the way the pale blue and
-// pale grey they replace did (ΔE 4.8). Re-check both if you change one.
+// Red / amber / slate / indigo. Indigo rather than the navy of the decks this
+// renderer was ported from, and no violet at all, so the deck reads as this app
+// rather than as that one — a saturated indigo and a desaturated navy are not
+// the same impression even though both are blue.
+//
+// Both checks matter and both were run over ALL SIX pairs, not just neighbours,
+// because any two buckets can end up side by side: every `fg` clears WCAG 4.5:1
+// on its own `bg` (5.46–12.40), and the worst pair holds ΔE 21.9 under
+// deuteranopia, 21.0 under tritanopia, 22.9 in normal vision. For scale, the
+// pale-blue and pale-grey these replace sat at 4.8 — indistinguishable. Re-run
+// scripts/validate_palette.js from the dataviz skill if you change one.
 export const STATUS_COLORS = {
-    risk: {bg: '#b23a52', fg: '#ffffff', label: 'At risk'},
-    posted: {bg: '#15614f', fg: '#ffffff', label: 'New position'},
-    selection: {bg: '#e8b55c', fg: '#3d2a05', label: 'In selection'},
-    mapped: {bg: '#eaecef', fg: '#1f2937', label: 'Mapped / no change'},
+    risk: {bg: '#c92a2a', fg: '#ffffff', label: 'At risk'},
+    posted: {bg: '#3b5bdb', fg: '#ffffff', label: 'New position'},
+    selection: {bg: '#f0a92b', fg: '#3d2a05', label: 'In selection'},
+    mapped: {bg: '#e8ecf4', fg: '#1f2937', label: 'Mapped / no change'},
 };
 
 // The slide canvas. 1280×720 is the 16:9 geometry the Apps Script decks use,
