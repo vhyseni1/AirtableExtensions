@@ -1358,11 +1358,19 @@
     --slot-gap: 6px;
     --cluster-gap: 8px;
     --line: #d7dee8;
-    --slide-header: #cfeaff;
-    --noimpact: #eeeeee;
-    --count-bg: #1d4ed8;
-    --diff-pos: #22c55e;
-    --diff-neg: #ef4444;
+    --slide-header: #dde8e5;
+    --noimpact: #eaecef;
+    /* The plain headcount badge is deliberately neutral: it sits beside the
+       +N / −N change badges, and a teal count next to a teal gain reads as two
+       kinds of the same thing. */
+    --count-bg: #3b4a63;
+    /* +N and −N never appear on the same slide (a current slot can only shrink,
+       a future one only grow), so these two are not a discrimination task — and
+       the badge text carries the sign regardless. The darker rose is still worth
+       it: against the gain green it clears deuteranopia at ΔE 11.6, where a
+       lighter rose managed 4.6. */
+    --diff-pos: #127a63;
+    --diff-neg: #7d1f31;
 
     display: flex;
     flex-direction: column;
@@ -1430,8 +1438,8 @@
     margin-left: 6px;
 }
 
-.mode-tag.current { background: #e0e7ff; color: #1e40af; }
-.mode-tag.future { background: #fce7f3; color: #9d174d; }
+.mode-tag.current { background: #edf0f4; color: #3b4a63; }
+.mode-tag.future { background: #dcece8; color: #15614f; }
 
 .content-band { margin-top: 10px; flex: 1 1 auto; min-height: 0; overflow: hidden; }
 
@@ -1444,7 +1452,7 @@
 
 .matrix-head-split { grid-template-columns: var(--tier-w) var(--side-w) var(--side-w); }
 
-.tier-head { font-size: 13px; font-weight: 900; color: #1d4ed8; padding-top: 6px; }
+.tier-head { font-size: 13px; font-weight: 900; color: #145a4b; padding-top: 6px; }
 
 .headbar {
     height: 44px;
@@ -1476,7 +1484,7 @@
     min-width: 26px;
     height: 22px;
     border-radius: 999px;
-    background: #2563eb;
+    background: var(--count-bg);
     color: #fff;
     font-size: 11px;
     font-weight: 900;
@@ -1525,17 +1533,19 @@
 }
 
 .kpi-cell.c-grey {
-    background: #e5e7eb;
+    background: #e7e9ee;
     color: #111827;
     border-top-color: rgba(0, 0, 0, 0.1);
     border-left-color: rgba(0, 0, 0, 0.1);
 }
 
-.kpi-cell.c-red { background: #b14cff; color: #fff; }
-.kpi-cell.c-green { background: #0b2a63; color: #fff; }
+/* These track STATUS_COLORS — At Risk and New Pos read as the same colour in
+   the KPI table as in the slots they count. */
+.kpi-cell.c-red { background: #b23a52; color: #fff; }
+.kpi-cell.c-green { background: #15614f; color: #fff; }
 
 .kpi-cell.c-blue {
-    background: #93c5fd;
+    background: #a9cfc8;
     color: #0b1220;
     border-top-color: rgba(0, 0, 0, 0.1);
     border-left-color: rgba(0, 0, 0, 0.1);
@@ -1555,7 +1565,7 @@
 .tier-label {
     font-size: 13px;
     font-weight: 900;
-    color: #1d4ed8;
+    color: #145a4b;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -1616,7 +1626,7 @@
     min-width: 18px;
     height: 16px;
     border-radius: 999px;
-    background: #2563eb;
+    background: var(--count-bg);
     color: #fff;
     font-size: 9px;
     font-weight: 900;
@@ -1700,9 +1710,16 @@
     justify-content: center;
 }
 
+/* The hairline ring is load-bearing, not decoration: a badge sits on the slot
+   fill, and some pairings collide — the neutral count on the dark posted green,
+   the loss badge on the at-risk rose. The ring detaches the badge from any
+   fill. It is a border rather than a box-shadow because html2canvas, which
+   draws the PNG and image-PDF exports, ignores box-shadow. */
 .slot-count {
-    width: 16px;
+    min-width: 16px;
     height: 16px;
+    padding: 0 2px;
+    border: 1px solid rgba(255, 255, 255, 0.85);
     border-radius: 999px;
     color: #fff;
     font-size: 9px;
@@ -1734,7 +1751,7 @@
     overflow: hidden;
 }
 
-.note-title { text-align: center; font-weight: 900; color: #1d4ed8; font-size: 11px; margin-bottom: 2px; }
+.note-title { text-align: center; font-weight: 900; color: #145a4b; font-size: 11px; margin-bottom: 2px; }
 .note-content ul { margin: 0; padding-left: 16px; font-size: 10px; line-height: 1.35; }
 
 .legend-band {

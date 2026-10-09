@@ -154,11 +154,19 @@ export const ORG_DESIGN = {
 
 // Status → slot appearance. `bucket` is the normalised status; the renderer
 // colours a slot by the bucket that dominates it on the side being shown.
+//
+// Teal / rose / amber / grey, deliberately not the purple-navy-pale-blue of the
+// decks this renderer was ported from — same semantics, different signature.
+// The four fills are checked two ways and both matter: every `fg` clears WCAG
+// 4.5:1 on its own `bg` (5.8–12.4), and adjacent fills stay apart under
+// deuteranopia and tritanopia (worst pair ΔE 17.1, normal vision 18.9), so the
+// amber and the grey can't collapse into each other the way the pale blue and
+// pale grey they replace did (ΔE 4.8). Re-check both if you change one.
 export const STATUS_COLORS = {
-    risk: {bg: '#b14cff', fg: '#ffffff', label: 'At risk'},
-    posted: {bg: '#0b2a63', fg: '#ffffff', label: 'New position'},
-    selection: {bg: '#cfeaff', fg: '#0b1220', label: 'In selection'},
-    mapped: {bg: '#eeeeee', fg: '#111827', label: 'Mapped / no change'},
+    risk: {bg: '#b23a52', fg: '#ffffff', label: 'At risk'},
+    posted: {bg: '#15614f', fg: '#ffffff', label: 'New position'},
+    selection: {bg: '#e8b55c', fg: '#3d2a05', label: 'In selection'},
+    mapped: {bg: '#eaecef', fg: '#1f2937', label: 'Mapped / no change'},
 };
 
 // The slide canvas. 1280×720 is the 16:9 geometry the Apps Script decks use,

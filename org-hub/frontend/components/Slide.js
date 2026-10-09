@@ -210,12 +210,16 @@ function Legend({mode, countMode}) {
                         <span>{label}</span>
                     </span>
                 ))}
+                {/* These read the same variables the badges do. Hardcoding them
+                    is how a legend ends up claiming a colour the slide stopped
+                    using. */}
                 <span className="leg-item">
-                    <span className="leg-dot" style={{background: '#1d4ed8'}} />
+                    <span className="leg-dot" style={{background: 'var(--count-bg)'}} />
                     <span>{countLabel}</span>
                 </span>
                 <span className="leg-item">
-                    <span className="leg-dot" style={{background: mode === 'current' ? '#ef4444' : '#22c55e'}} />
+                    <span className="leg-dot"
+                        style={{background: mode === 'current' ? 'var(--diff-neg)' : 'var(--diff-pos)'}} />
                     <span>{mode === 'current' ? 'Decreased' : 'Increased'}</span>
                 </span>
             </div>
