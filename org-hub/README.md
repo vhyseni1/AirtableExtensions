@@ -22,7 +22,7 @@ Navigation is a persistent left sidebar, grouped by who is asking:
 ```
 Overview     ─┬─ Executive brief      the CEO screen: one-line summary + what needs you
               └─ Org health           spans, layers, vacancy, breakdowns
-Organisation ─┬─ Stacked org           the deck: DLT bands → org clusters → position slots,
+Organisation ─┬─ Stacked org           the deck: tier bands → org clusters → position slots,
             │                        current pass then future pass
             ├─ Current vs future     the same bands, both states side by side
             ├─ Position view         Workday-style: one person in focus, reports below
@@ -64,7 +64,7 @@ dimension configured in `dashboardDimensions`. Exports a summary CSV or a PNG.
 
 ### Stacked org
 
-The deck renderer. Each slide is a fixed 1280×720 canvas: a DLT level band per
+The deck renderer. Each slide is a fixed 1280×720 canvas: a management-tier band per
 row, supervisory-org clusters inside it, and position slots stacked three to a
 column. Slot colour is the status bucket (at risk, in selection, mapped, newly
 posted); the badge is the headcount, with a red `−N` on the current side and a
@@ -76,7 +76,7 @@ Every current slide is emitted before every future slide, so the deck reads as
 the real canvas height, so a level band that doesn't fit continues on the next
 page under a repeated label rather than pushing a near-empty page.
 
-Filter by the **DLT ladder** — a hierarchical tree from the top of the house
+Filter by the **management ladder** — a hierarchical tree from the top of the house
 down to each slide, with partial selection shown as an indeterminate checkbox.
 Toggle **Headcount / FTE**, show or hide the notes band, cycle the zoom, and
 export the whole deck as a **16:9 PDF, one slide per page**, a PNG, or the KPIs
@@ -171,14 +171,14 @@ hide themselves and the shell falls back to the position view.
 | --- | --- | --- |
 | `tableName` | the deck's source table | `Org Design Data` |
 | `slideTitleField` | groups rows into slides — one deck page per value | `Slide Title` |
-| `sectionNameField` / `sectionLevelField` | the head-bar label and the DLT label above the level column | `Section Name` / `Section Level` |
-| `levelField` | the row's DLT level — one band per value | `Level` |
+| `sectionNameField` / `sectionLevelField` | the head-bar label and the tier label above the level column | `Section Name` / `Section Level` |
+| `levelField` | the row's management tier — one band per value | `Level` |
 | `orgField` | supervisory organization — one cluster per value | `Supervisory Organization` |
 | `positionField` | the position name on the slot | `Position Name` |
 | `currentField` / `futureField` | headcount on each side of the change | `Current HC` / `Future HC` |
 | `stackField` | `Current` / `Future` / blank — which side a row counts on | `Stack` |
 | `statusField` | Mapped / Selection / Posted / At risk → slot colour + KPI columns | `Status` |
-| `dltFields` | the DLT ladder, top-down — powers the hierarchical filter | `DLT`, `DLT-1` … `DLT-6` |
+| `tierFields` | the management ladder, top-down — powers the hierarchical filter | `DLT`, `DLT-1` … `DLT-6` |
 | `notesTableName` | optional per-slide subtitle and commentary | `Org Design Notes` |
 
 **A blank `Stack` means the row counts on both sides.** That is how the source
@@ -187,6 +187,15 @@ decks encode "unchanged", and dropping those rows would empty the deck.
 Status values are bucketed leniently — the same normalisation the Apps Script
 uses, so `Potentially at risk`, `To be posted` and `In selection process` all
 land correctly without having to clean the source data first.
+
+### Tier labels
+
+The app shows **Level 1, Level 2, …** wherever the data says `DLT`, `DLT-1`, …
+That is a display mapping in `TIER` (`frontend/config.js`) — the columns and
+values in the source table are untouched, so renaming needs no data change and
+no re-import. A value the rules don't match passes through unchanged, so a base
+that already says `Level 3` keeps saying it. Set `rules: []` to turn the
+mapping off entirely.
 
 Two differences from the Apps Script, both deliberate:
 
@@ -250,7 +259,7 @@ frontend/
     Controls.js         filter, search, export menu, toggle
     PersonCard.js       the Workday card + its two section layouts
     Slide.js            the deck primitives: slot, cluster, level band, slide
-    FilterTree.js       the hierarchical DLT filter
+    FilterTree.js       the hierarchical tier filter
     StackedTree.js      the box-tree renderer: pan/zoom, connectors, histogram
   views/
     StackedDeck.js  Dashboard.js  PositionChart.js

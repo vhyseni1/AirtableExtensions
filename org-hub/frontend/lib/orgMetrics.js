@@ -5,7 +5,7 @@
 // number on a slide can never disagree — they are the same aggregation.
 //
 // One subtlety worth stating up front: an org appears on several slides (a
-// DLT-1 function slide and again on its DLT-2 detail slide). Summing slides
+// function slide and again on its own detail slide). Summing slides
 // would multiply-count it. Everything here therefore aggregates over the
 // DEDUPLICATED set of (org, position, country) slots, keyed the same way the
 // model keys them.

@@ -4,7 +4,7 @@
 // Shape, outermost first:
 //
 //   slide   one deck page, grouped by Slide Title
-//    └ level    one band per DLT level, labelled on the left
+//    └ level    one band per management tier, labelled on the left
 //       └ org      one cluster per supervisory organization
 //          └ slot     one position (+ country), carrying current & future counts
 //
@@ -43,7 +43,7 @@ export function bucketForStatus(raw) {
 // ─── Config resolution ───────────────────────────────────────────────────────
 
 export function resolveOrgDesignConfig(table, ORG_DESIGN) {
-    const dltFields = (ORG_DESIGN.dltFields || [])
+    const tierFields = (ORG_DESIGN.tierFields || [])
         .map(name => ({name, field: findFieldByName(table, name)}))
         .filter(d => d.field);
     return {
@@ -60,7 +60,7 @@ export function resolveOrgDesignConfig(table, ORG_DESIGN) {
         stackField: findFieldByName(table, ORG_DESIGN.stackField),
         statusField: findFieldByName(table, ORG_DESIGN.statusField),
         positionIdField: findFieldByName(table, ORG_DESIGN.positionIdField),
-        dltFields,
+        tierFields,
     };
 }
 
@@ -108,10 +108,10 @@ const emptySlot = (pos, country, posId) => ({
 export function buildStackedModel(records, cfg, notesMap = {}) {
     const {slideTitleField, sectionNameField, sectionLevelField, levelField,
         orgField, positionField, currentField, futureField, fteField,
-        countryField, stackField, statusField, positionIdField, dltFields} = cfg;
+        countryField, stackField, statusField, positionIdField, tierFields} = cfg;
 
     if (!slideTitleField || !levelField || !orgField || !positionField) {
-        return {slides: [], dltLabels: [], unresolved: true};
+        return {slides: [], tierLabels: [], unresolved: true};
     }
 
     const bySlide = new Map();
@@ -140,8 +140,8 @@ export function buildStackedModel(records, cfg, notesMap = {}) {
         const futureFte = future > 0 ? fteRaw : 0;
 
         const bucket = bucketForStatus(readText(record, statusField));
-        const dltPath = {};
-        dltFields.forEach(d => { dltPath[d.name] = readText(record, d.field).trim(); });
+        const tierPath = {};
+        tierFields.forEach(d => { tierPath[d.name] = readText(record, d.field).trim(); });
 
         const sKey = normName(slideTitle);
         if (!bySlide.has(sKey)) {
@@ -149,7 +149,7 @@ export function buildStackedModel(records, cfg, notesMap = {}) {
                 slideTitle,
                 sectionName: readText(record, sectionNameField).trim(),
                 sectionLevel: readText(record, sectionLevelField).trim(),
-                dltPath,
+                tierPath,
                 levels: new Map(),
                 records: [],
             });
@@ -164,7 +164,7 @@ export function buildStackedModel(records, cfg, notesMap = {}) {
         const lvl = slide.levels.get(lKey);
 
         const oKey = normName(org);
-        if (!lvl.orgs.has(oKey)) lvl.orgs.set(oKey, {org, dltPath, slots: new Map()});
+        if (!lvl.orgs.has(oKey)) lvl.orgs.set(oKey, {org, tierPath, slots: new Map()});
         const orgObj = lvl.orgs.get(oKey);
 
         const pKey = slotKey(pos, country);
@@ -201,13 +201,13 @@ export function buildStackedModel(records, cfg, notesMap = {}) {
     // Materialise the maps into sorted arrays and roll totals up each level.
     const slides = [...bySlide.values()].map(slide => {
         const levels = [...slide.levels.values()]
-            .sort((a, b) => dltRank(a.level) - dltRank(b.level) || a.level.localeCompare(b.level))
+            .sort((a, b) => tierRank(a.level) - tierRank(b.level) || a.level.localeCompare(b.level))
             .map(lvl => ({
                 level: lvl.level,
                 orgs: [...lvl.orgs.values()]
                     .map(o => ({
                         org: o.org,
-                        dltPath: o.dltPath,
+                        tierPath: o.tierPath,
                         slots: [...o.slots.values()].sort((a, b) => a.pos.localeCompare(b.pos)),
                     }))
                     .sort((a, b) => a.org.localeCompare(b.org)),
@@ -233,19 +233,20 @@ export function buildStackedModel(records, cfg, notesMap = {}) {
             slideTitle: slide.slideTitle,
             sectionName: slide.sectionName,
             sectionLevel: slide.sectionLevel,
-            dltPath: slide.dltPath,
+            tierPath: slide.tierPath,
             notes: notesMap[normName(slide.slideTitle)] || null,
             levels,
             totals,
         };
     }).sort((a, b) => a.slideTitle.localeCompare(b.slideTitle));
 
-    const dltLabels = dltFields.map(d => d.name);
-    return {slides, dltLabels, unresolved: false};
+    const tierLabels = tierFields.map(d => d.name);
+    return {slides, tierLabels, unresolved: false};
 }
 
-// "DLT" ranks above "DLT-1", which ranks above "DLT-2", …
-export function dltRank(label) {
+// A bare tier ranks above a numbered one, and lower numbers rank higher:
+// "DLT"/"Level 1" above "DLT-1"/"Level 2", and so on.
+export function tierRank(label) {
     const m = String(label || '').match(/(\d+)/);
     return m ? parseInt(m[1], 10) : 0;
 }
@@ -483,16 +484,16 @@ export function paginateLevels(slideLevels, mode) {
     return pages;
 }
 
-// ─── Filter tree (DLT → DLT-1 → … → supervisory org) ─────────────────────────
+// ─── Filter tree (tier by tier, down to the supervisory org) ────────────────
 //
-// One node per distinct value at each DLT level, nested by the path the rows
+// One node per distinct value at each tier, nested by the path the rows
 // actually take. Leaves are slide titles, which is what the filter selects.
 
-export function buildFilterTree(slides, dltLabels) {
+export function buildFilterTree(slides, tierLabels) {
     const root = {label: '', children: new Map(), slideTitles: new Set()};
     slides.forEach(slide => {
-        const path = dltLabels
-            .map(l => (slide.dltPath && slide.dltPath[l] ? slide.dltPath[l].trim() : ''))
+        const path = tierLabels
+            .map(l => (slide.tierPath && slide.tierPath[l] ? slide.tierPath[l].trim() : ''))
             .filter(Boolean);
         let node = root;
         node.slideTitles.add(slide.slideTitle);
@@ -500,7 +501,7 @@ export function buildFilterTree(slides, dltLabels) {
             if (!node.children.has(value)) {
                 node.children.set(value, {
                     label: value,
-                    level: dltLabels[depth],
+                    level: tierLabels[depth],
                     children: new Map(),
                     slideTitles: new Set(),
                 });

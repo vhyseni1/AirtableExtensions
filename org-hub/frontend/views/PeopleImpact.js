@@ -9,7 +9,7 @@ import {StatTile, BarList, Bridge, DonutRing} from '../components/Charts';
 import {ExportMenu} from '../components/Controls';
 import {peopleImpact, fmtNum} from '../lib/orgMetrics';
 import {toCSV, downloadText} from '../lib/exports';
-import {VIZ} from '../config';
+import {VIZ, tierLabel, TIER} from '../config';
 
 const S = VIZ.status;
 
@@ -161,9 +161,9 @@ export default function PeopleImpact({model}) {
                     />
 
                     <BarList
-                        title="Impact by management layer"
+                        title={`Impact by ${TIER.noun.toLowerCase()}`}
                         subtitle="Which tiers absorb the change"
-                        rows={toStacked(m.byLevel)}
+                        rows={toStacked(m.byLevel).map(r => ({...r, label: tierLabel(r.label)}))}
                         legend={legend}
                         limit={8}
                     />

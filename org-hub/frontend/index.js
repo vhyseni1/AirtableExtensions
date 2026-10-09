@@ -2,7 +2,7 @@
 // picture: a dashboard, two org-chart renderers, and the underlying data.
 //
 //   Dashboard   — headcount, vacancy, span of control, layers, breakdowns
-//   Org charts  — Stacked org     the Apps Script deck: DLT bands of
+//   Org charts  — Stacked org     the Apps Script deck: tier bands of
 //                                 supervisory-org clusters of position slots,
 //                                 current pass then future pass
 //                 Current vs future  the same bands rendered side by side
@@ -282,11 +282,11 @@ function OrgDesignBody({table, notesMap, render}) {
         [records, key, notesMap],
     );
 
-    // The grid wants plain fields; dltFields is an array of {name, field}.
+    // The grid wants plain fields; tierFields is an array of {name, field}.
     const resolvedForGrid = useMemo(() => {
         const out = {...cfg};
-        delete out.dltFields;
-        cfg.dltFields.forEach(d => { out[d.name] = d.field; });
+        delete out.tierFields;
+        cfg.tierFields.forEach(d => { out[d.name] = d.field; });
         return out;
     }, [cfg]);
 

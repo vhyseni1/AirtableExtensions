@@ -86,12 +86,16 @@ If your import drops it, the field still resolves.
    | `FTE` | Number (1 decimal) | |
    | `Stack` | Single select | `Current`, `Future` — **blank is meaningful**: the row counts on both sides |
    | `Status` | Single select | `Mapped`, `In selection process`, `Posted`, `At risk` |
-   | `Level`, `Section Level` | Single select | `DLT`, `DLT-1`, `DLT-2`, `DLT-3` |
+   | `Level`, `Section Level` | Single select | `DLT`, `DLT-1`, `DLT-2`, `DLT-3` — the app displays these as Level 1–4 |
    | `Slide Title`, `Section Name`, `Supervisory Organization`, `DLT`…`DLT-6` | Single line text | |
 
    No link fields — this table is deliberately flat. `DLT`…`DLT-6` describe the
    **slide's** place in the ladder (blank below its own level), which is what the
    hierarchical filter nests on; they are not the row's own lineage.
+
+   The column names stay as they are. The app relabels them for display —
+   `DLT` reads as **Level 1**, `DLT-1` as **Level 2**, and so on — via `TIER` in
+   `frontend/config.js`. Rename the labels there, not the data.
 
 ### 4. Org Design Notes
 

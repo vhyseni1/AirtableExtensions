@@ -1,4 +1,4 @@
-// The hierarchical DLT filter — DLT → DLT-1 → … → slide.
+// The hierarchical tier filter — top of the house, down tier by tier, to a slide.
 //
 // Selection is tracked as a set of slide titles (the leaves). Checking a
 // branch selects every slide under it; a branch shows indeterminate when only
@@ -6,6 +6,7 @@
 // silently rounded to on or off.
 
 import {useState, useMemo, useCallback, useRef, useEffect} from 'react';
+import {tierLabel} from '../config';
 
 function Node({node, selected, onToggle, depth}) {
     const [open, setOpen] = useState(depth < 1);
@@ -43,7 +44,7 @@ function Node({node, selected, onToggle, depth}) {
                         onChange={() => onToggle(node.slideTitles, !all)}
                     />
                     <span className="ft-text">{node.label}</span>
-                    {node.level && <span className="ft-level">{node.level}</span>}
+                    {node.level && <span className="ft-level">{tierLabel(node.level)}</span>}
                     <span className="ft-count">{total}</span>
                 </label>
             </div>

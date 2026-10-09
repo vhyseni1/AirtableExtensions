@@ -1,5 +1,5 @@
 // The slide primitives shared by the two stacked views: a position slot, an
-// org cluster, a DLT level band, and the slide chrome (title bar, KPI table,
+// org cluster, a tier band, and the slide chrome (title bar, KPI table,
 // notes band, legend).
 //
 // The 1280×720 geometry and the three-slots-per-column packing are ported from
@@ -10,7 +10,7 @@ import {
     slotMatchesMode, slotValue, slotBase, slotBucket,
     clusterWidth, layoutOrgRows, computeKpis, computePageKpis, LAYOUT,
 } from '../lib/stacked';
-import {STATUS_COLORS} from '../config';
+import {STATUS_COLORS, tierLabel} from '../config';
 
 function fmtCount(v, countMode) {
     const n = Number(v || 0);
@@ -122,7 +122,7 @@ export function LevelBand({levelObj, mode, countMode, onOpen}) {
         <>
             {rows.map((row, i) => (
                 <div className="level-row" key={i}>
-                    <div className="dlt-label"><span>{levelObj.level}</span></div>
+                    <div className="tier-label"><span>{tierLabel(levelObj.level)}</span></div>
                     <div className="side-area">
                         <div className="cluster-row">
                             {row.map((d, j) => (
@@ -256,7 +256,7 @@ export function Slide({slide, pageLevels, mode, countMode, pageNum, totalPages, 
 
                     <div className="content-band">
                         <div className="matrix-head">
-                            <div className="dlt-head">{slide.sectionLevel || ''}</div>
+                            <div className="tier-head">{tierLabel(slide.sectionLevel)}</div>
                             <div className="headbar">
                                 <div className="headbar-left">
                                     {mode === 'current' ? 'Current: ' : 'Future: '}
@@ -313,7 +313,7 @@ export function ComparisonSlide({slide, pageLevels, countMode, pageNum, totalPag
 
                     <div className="content-band">
                         <div className="matrix-head matrix-head-split">
-                            <div className="dlt-head">{slide.sectionLevel || ''}</div>
+                            <div className="tier-head">{tierLabel(slide.sectionLevel)}</div>
                             <div className="headbar">
                                 <span className="total-badge">{fmtCount(curTotal, countMode)}</span>
                                 <div className="headbar-left">
@@ -330,7 +330,7 @@ export function ComparisonSlide({slide, pageLevels, countMode, pageNum, totalPag
                         <div className="levels">
                             {levels.map((lv, i) => (
                                 <div className="level-row level-row-split" key={`${lv.level}-${i}`}>
-                                    <div className="dlt-label"><span>{lv.level}</span></div>
+                                    <div className="tier-label"><span>{tierLabel(lv.level)}</span></div>
                                     {['current', 'future'].map(mode => (
                                         <div className="side-area" key={mode}>
                                             {layoutOrgRows(

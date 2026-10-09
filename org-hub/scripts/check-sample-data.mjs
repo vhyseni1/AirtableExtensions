@@ -93,7 +93,7 @@ const colorUtils = {getHexForColor: () => null, shouldUseLightTextOnColor: () =>
 
 // ─── Load ────────────────────────────────────────────────────────────────────
 
-const {PEOPLE, SUP_ORG, ORG_DESIGN} = await import('../frontend/config.js');
+const {PEOPLE, SUP_ORG, ORG_DESIGN, tierLabel} = await import('../frontend/config.js');
 const {resolvePeopleConfig, buildOrg, depthByNode} = await import('../frontend/lib/people.js');
 const {resolveSupOrgConfig, buildSupOrgTree} = await import('../frontend/lib/suporg.js');
 const {
@@ -199,8 +199,8 @@ const notesTable = makeTable('Org Design Notes', notesRows, {primary: 'Slide'});
 
 const designCfg = resolveOrgDesignConfig(designTable, ORG_DESIGN);
 for (const [key, value] of Object.entries(designCfg)) {
-    if (key === 'dltFields') {
-        check('design config: DLT ladder resolves', value.length >= 2, `${value.length} levels`);
+    if (key === 'tierFields') {
+        check('design config: tier ladder resolves', value.length >= 2, `${value.length} tiers`);
         continue;
     }
     check(`design config: ${key} resolves`, !!value);
@@ -266,7 +266,7 @@ check('design: pagination covers every org exactly once', paginationOk);
 check('design: deck paginates to a sensible page count',
     pageCount >= model.slides.length * 2, `${pageCount} pages`);
 
-const filterTree = buildFilterTree(model.slides, model.dltLabels);
+const filterTree = buildFilterTree(model.slides, model.tierLabels);
 check('design: filter tree has a single root', filterTree.length === 1,
     filterTree.map(n => n.label).join(', '));
 check('design: filter tree root covers every slide',
@@ -306,6 +306,22 @@ const orgDrift = Object.keys(filledByOrg).filter(org => {
 check('cross-check: deck current headcount matches filled positions per org',
     orgDrift.length === 0,
     orgDrift.map(o => `${o}: ${Math.round((deckCurrentByOrg[o] || 0) / slidesPerOrg[o].size)} vs ${filledByOrg[o]}`).join('; '));
+
+// ─── Tier labels ─────────────────────────────────────────────────────────────
+
+check('tier labels: DLT maps to Level 1', tierLabel('DLT') === 'Level 1', tierLabel('DLT'));
+check('tier labels: DLT-1 maps to Level 2', tierLabel('DLT-1') === 'Level 2', tierLabel('DLT-1'));
+check('tier labels: DLT-6 maps to Level 7', tierLabel('DLT-6') === 'Level 7', tierLabel('DLT-6'));
+check('tier labels: an unmatched value passes through',
+    tierLabel('Band A') === 'Band A' && tierLabel('Level 3') === 'Level 3');
+check('tier labels: blank stays blank', tierLabel('') === '' && tierLabel(null) === '');
+
+// Every tier value in the data must relabel — a value that falls through would
+// print raw DLT text on a slide.
+const tierValues = [...new Set(designRows.flatMap(r => [r.Level, r['Section Level']]))].filter(Boolean);
+const unmapped = tierValues.filter(v => tierLabel(v) === v);
+check('tier labels: every tier value in the data is relabelled',
+    unmapped.length === 0, unmapped.join(', '));
 
 console.log(`\n${failures.length === 0 ? 'All checks passed.' : `${failures.length} check(s) failed.`}`);
 process.exit(failures.length === 0 ? 0 : 1);

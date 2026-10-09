@@ -22,7 +22,7 @@ import {SLIDE, WORKS_COUNCIL} from '../config';
 const ZOOMS = [0.5, 0.65, 0.8, 1];
 
 export default function StackedDeck({model, variant}) {
-    const {slides, dltLabels} = model;
+    const {slides, tierLabels} = model;
     const [countMode, setCountMode] = useState('hc');
     const [showNotes, setShowNotes] = useState(true);
     const [zoom, setZoom] = useState(0.65);
@@ -31,7 +31,7 @@ export default function StackedDeck({model, variant}) {
     const deckRef = useRef(null);
 
     const allSlideTitles = useMemo(() => slides.map(s => s.slideTitle), [slides]);
-    const tree = useMemo(() => buildFilterTree(slides, dltLabels), [slides, dltLabels]);
+    const tree = useMemo(() => buildFilterTree(slides, tierLabels), [slides, tierLabels]);
 
     // An empty selection means "everything" — the filter starts unfiltered and
     // clearing it returns to that, rather than blanking the deck.

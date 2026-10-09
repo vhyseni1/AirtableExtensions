@@ -111,8 +111,9 @@ export const SCOPING_COLORS = {
 //
 //   slideTitleField  : groups rows into slides (one deck page per value).
 //   sectionNameField / sectionLevelField : the slide's section header and the
-//                      DLT label printed above the level column.
-//   levelField       : the row's DLT level (e.g. "DLT-2") — one band per value.
+//                      tier label printed above the level column.
+//   levelField       : the row's management tier (e.g. "DLT-2") — one band per
+//                      value, displayed through TIER below.
 //   orgField         : supervisory organization → one cluster inside the band.
 //   positionField    : the position name printed on the slot.
 //   currentField / futureField : headcount on each side of the change.
@@ -122,7 +123,9 @@ export const SCOPING_COLORS = {
 //                      Blank means the row counts on both sides.
 //   statusField      : Mapped / Selection / Posted / At risk. Drives the slot
 //                      colour and the four KPI columns.
-//   dltFields        : the DLT ladder, top-down. Powers the hierarchical filter.
+//   tierFields       : the management ladder, top-down. Powers the hierarchical
+//                      filter. These are the COLUMN NAMES in the source table;
+//                      what the app displays is set by TIER below.
 //
 export const ORG_DESIGN = {
     tableName: 'Org Design Data',
@@ -139,7 +142,7 @@ export const ORG_DESIGN = {
     stackField: 'Stack',
     statusField: 'Status',
     positionIdField: 'Position ID',
-    dltFields: ['DLT', 'DLT-1', 'DLT-2', 'DLT-3', 'DLT-4', 'DLT-5', 'DLT-6'],
+    tierFields: ['DLT', 'DLT-1', 'DLT-2', 'DLT-3', 'DLT-4', 'DLT-5', 'DLT-6'],
 
     // Optional per-slide commentary, keyed by slide title.
     notesTableName: 'Org Design Notes',
@@ -191,7 +194,7 @@ export const VIZ = {
 // ─── Savings model ───────────────────────────────────────────────────────────
 //
 // Demo assumptions. Fully-loaded annual cost per FTE by country, scaled by a
-// seniority multiplier per DLT level, plus the one-off costs of executing the
+// seniority multiplier per management tier, plus the one-off costs of executing
 // change. Every number here is an input to the Savings view and is shown to the
 // user as an assumption — nothing is hidden inside the maths.
 export const RATE_CARD = {
@@ -201,7 +204,8 @@ export const RATE_CARD = {
         CHE: 168000, DEU: 132000, ESP: 96000, IRL: 118000,
         POL: 74000, SGP: 121000, GBR: 128000, USA: 156000,
     },
-    // Seniority multiplier on the country rate, keyed by the row's DLT level.
+    // Seniority multiplier on the country rate, keyed by the row's RAW tier
+    // value as it appears in the data — not its display label.
     levelUplift: {'DLT': 2.4, 'DLT-1': 1.9, 'DLT-2': 1.5, 'DLT-3': 1.15},
     defaultUplift: 1.0,
     // One-off cost of executing the change.
@@ -308,3 +312,34 @@ export const CONVERSATION_STATUS = {
 // A fixed spine the milestones hang off, so the executive brief can show where
 // the programme is without inventing dates.
 export const PHASES = ['Design', 'Consultation', 'Selection', 'Transition', 'Close'];
+
+// ─── Tier labels ─────────────────────────────────────────────────────────────
+//
+// DISPLAY ONLY. The source data keeps whatever its columns and values are
+// called; this is what the app prints. "DLT" is one client's term for a
+// leadership tier — most organisations say "Level", counting the top of the
+// house as Level 1 — so DLT becomes Level 1, DLT-1 becomes Level 2, and so on.
+//
+// Renaming here needs no change to the data and no re-import. To stop
+// relabelling entirely, set `rules: []` and raw values pass through.
+export const TIER = {
+    noun: 'Level',
+    rules: [
+        // Order matters: the numbered form is tried before the bare one, or
+        // "DLT-2" would match the /^DLT/ rule and lose its number.
+        {match: /^DLT-(\d+)$/i, label: n => `Level ${Number(n) + 1}`},
+        {match: /^DLT$/i, label: () => 'Level 1'},
+    ],
+};
+
+// Map a raw tier value to its display label. Anything the rules don't match is
+// passed through unchanged — a base that already says "Level 3" keeps saying it.
+export function tierLabel(raw) {
+    const value = String(raw == null ? '' : raw).trim();
+    if (!value) return '';
+    for (const rule of TIER.rules) {
+        const m = value.match(rule.match);
+        if (m) return rule.label(m[1]);
+    }
+    return value;
+}

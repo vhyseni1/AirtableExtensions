@@ -1350,7 +1350,7 @@
     --slide-zoom: 0.65;
     --slide-w: 1280px;
     --slide-h: 720px;
-    --dlt-w: 40px;
+    --tier-w: 40px;
     --main-w: 1178px;
     --side-w: 578px;
     --org-col-w: 180px;
@@ -1437,14 +1437,14 @@
 
 .matrix-head {
     display: grid;
-    grid-template-columns: var(--dlt-w) var(--main-w);
+    grid-template-columns: var(--tier-w) var(--main-w);
     column-gap: 14px;
     margin-bottom: 8px;
 }
 
-.matrix-head-split { grid-template-columns: var(--dlt-w) var(--side-w) var(--side-w); }
+.matrix-head-split { grid-template-columns: var(--tier-w) var(--side-w) var(--side-w); }
 
-.dlt-head { font-size: 13px; font-weight: 900; color: #1d4ed8; padding-top: 6px; }
+.tier-head { font-size: 13px; font-weight: 900; color: #1d4ed8; padding-top: 6px; }
 
 .headbar {
     height: 44px;
@@ -1545,14 +1545,14 @@
 
 .level-row {
     display: grid;
-    grid-template-columns: var(--dlt-w) var(--main-w);
+    grid-template-columns: var(--tier-w) var(--main-w);
     column-gap: 14px;
     align-items: flex-start;
 }
 
-.level-row-split { grid-template-columns: var(--dlt-w) var(--side-w) var(--side-w); }
+.level-row-split { grid-template-columns: var(--tier-w) var(--side-w) var(--side-w); }
 
-.dlt-label {
+.tier-label {
     font-size: 13px;
     font-weight: 900;
     color: #1d4ed8;
@@ -1719,7 +1719,7 @@
 
 .notes-band {
     display: grid;
-    grid-template-columns: var(--dlt-w) 1fr 1fr;
+    grid-template-columns: var(--tier-w) 1fr 1fr;
     column-gap: 14px;
     height: 78px;
     margin-top: 8px;

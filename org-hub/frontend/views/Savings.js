@@ -10,7 +10,7 @@ import {StatTile, BarList, Bridge} from '../components/Charts';
 import {ExportMenu} from '../components/Controls';
 import {savings, fmtMoney, fmtNum} from '../lib/orgMetrics';
 import {toCSV, downloadText} from '../lib/exports';
-import {VIZ, RATE_CARD} from '../config';
+import {VIZ, RATE_CARD, tierLabel} from '../config';
 
 export default function Savings({model}) {
     const m = useMemo(() => savings(model), [model]);
@@ -31,7 +31,8 @@ export default function Savings({model}) {
             const rows = [
                 ['Default cost per FTE', RATE_CARD.defaultCostPerFte],
                 ...Object.entries(RATE_CARD.byCountry).map(([k, v]) => [`Cost per FTE · ${k}`, v]),
-                ...Object.entries(RATE_CARD.levelUplift).map(([k, v]) => [`Seniority uplift · ${k}`, v]),
+                ...Object.entries(RATE_CARD.levelUplift)
+                    .map(([k, v]) => [`Seniority uplift · ${tierLabel(k)}`, v]),
                 ['Severance (months)', RATE_CARD.severanceMonths],
                 ['Recruitment cost per hire', RATE_CARD.recruitmentCostPerHire],
                 ['Transition cost per FTE', RATE_CARD.transitionCostPerFte],
@@ -176,7 +177,7 @@ export default function Savings({model}) {
                             <span className="assumption-label">Seniority uplift</span>
                             <span className="assumption-value">
                                 {Object.entries(RATE_CARD.levelUplift)
-                                    .map(([k, v]) => `${k} ×${v}`).join(' · ')}
+                                    .map(([k, v]) => `${tierLabel(k)} ×${v}`).join(' · ')}
                             </span>
                         </div>
                         <div className="assumption">
