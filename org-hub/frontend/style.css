@@ -1350,9 +1350,16 @@
     --slide-zoom: 0.65;
     --slide-w: 1280px;
     --slide-h: 720px;
-    --tier-w: 40px;
-    --main-w: 1178px;
-    --side-w: 578px;
+    /* The tier column must fit the widest tier label on one line. "Level 7"
+       measures 40.1px at 13px/900 — it overflowed a 40px column by a hair,
+       which is why renaming DLT-n to Level n made the label wrap. 52px leaves
+       headroom for a wider system font. Widening it takes 12px out of the
+       content columns below so the 1280px canvas still adds up; LAYOUT.sideW
+       and LAYOUT.splitSideW in lib/stacked.js mirror these and must move with
+       them, or pagination will measure against a width the slide doesn't have. */
+    --tier-w: 52px;
+    --main-w: 1166px;
+    --side-w: 572px;
     --org-col-w: 180px;
     --slot-h: 48px;
     --slot-gap: 6px;
@@ -2312,6 +2319,11 @@
     gap: 14px;
     height: 210px;
     align-items: end;
+    /* The value mark sits ABOVE the point it labels, and the tallest bar's
+       point is the top of the plot — so without this the mark is drawn outside
+       the chart and lands on the panel subtitle. Reserve its height here
+       (border-box, so the chart keeps its 210px footprint). */
+    padding-top: 22px;
 }
 
 .bridge-col { display: flex; flex-direction: column; height: 100%; }

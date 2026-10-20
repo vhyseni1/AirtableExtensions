@@ -342,7 +342,8 @@ export const LAYOUT = {
     clusterGap: 8, colW: 180, colGap: 10, levelGap: 10,
     // A single-side slide gives the clusters the full content width; the
     // side-by-side slide splits it, so its rows wrap sooner.
-    sideW: 1178, splitSideW: 578,
+    // Mirror --main-w / --side-w in style.css; see the note on --tier-w there.
+    sideW: 1166, splitSideW: 572,
     availH: 450,
 };
 
