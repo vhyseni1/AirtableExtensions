@@ -10,10 +10,11 @@ things that used to be separate deployments:
 | `../Posorgchart` | the **position view** — Workday-style focus + direct reports |
 | `../org_chart` | the **supervisory org tree** — the collapsible box hierarchy |
 
-**Everything is read-only.** Cards and rows open the underlying Airtable
-record; nothing writes back. (The standalone `org_chart` block supports
-drag-to-reparent; that was deliberately not carried over — this extension is
-for visibility.)
+**Almost everything is read-only.** Cards and rows open the underlying Airtable
+record. The one exception is **drag-to-re-report** on the position view and the
+people tree: dragging a card onto another person changes who that position
+reports to, and writes it back. Every other view, including the supervisory-org
+tree, only reads.
 
 ## Views
 
@@ -93,7 +94,8 @@ pagination accounts for whichever side is taller.
 
 The focused person sits at the top; their direct reports appear as a grid of
 cards below. Click a report to make it the new focus; climb back with the
-breadcrumb or the **↑ manager** button. Search jumps to anyone by name, title,
+breadcrumb or the **↑ manager** button. **Drag any card onto another person** to
+make them its new manager — see [Changing reporting lines](#changing-reporting-lines). Search jumps to anyone by name, title,
 or department. Filter by **Manager** or **Organization** (mutually exclusive —
 each gives an unambiguous board). Toggle avatars and the employee-decision
 chip. Export a crisp **vector PDF** (drawn with jsPDF primitives, not a
@@ -112,7 +114,8 @@ open the offending record.
 
 The same stacked renderer driven by the reporting hierarchy instead of
 supervisory orgs — the whole management chain on one canvas. Any manager can be
-picked as the root, so a large org can be sliced to one branch.
+picked as the root, so a large org can be sliced to one branch. Cards drag to
+re-report here too, on the same rules as the position view.
 
 ### Data
 
@@ -205,6 +208,34 @@ Two differences from the Apps Script, both deliberate:
 - **No client logo on the slide.** Add one in `components/Slide.js` if you want
   it; it is not baked in.
 
+### Changing reporting lines
+
+Dragging a card onto another person on the position view or the people tree
+rewrites that position's manager. Two details matter:
+
+**It writes two fields, not one.** The hierarchy resolves a manager from
+`managerIdField` *first* and only falls back to `parentLinkField` (see "The
+hierarchy is resolved in this order" above). Writing just the link would leave
+the old manager id in place, the tree would rebuild exactly as it was, and the
+card would appear to snap back. So one drop sets both: the link to the new
+manager's record, and the manager-id text to the new manager's **employee id**.
+When the new manager has no employee id the manager-id field is blanked rather
+than left stale, so resolution falls through to the link.
+
+**A lookup cannot be written.** `parentLinkField` may be a lookup, which is
+computed. Then the manager-id field carries the change alone — which is what
+resolution reads first anyway. If the link is a lookup *and* the manager-id
+field is also non-writable, the drop is refused with that reason rather than
+appearing to work.
+
+Drops that would break the tree are refused before any write: onto yourself,
+onto your own descendant (which would make a loop), or onto the manager you
+already report to. Airtable's own permissions are checked too, and a refusal
+shows the reason Airtable gives.
+
+The supervisory-org tree is deliberately **not** draggable — it nests
+organizations, not reporting lines.
+
 ### Per-leader scoping
 
 Set `leaderEmailField` **or** `visibleLeadersField` and each signed-in leader
@@ -250,6 +281,7 @@ frontend/
   config.js             every field/table name lives here
   lib/
     fields.js           defensive cell reading + field resolution
+    reparent.js         the one write path: validate a drop, build the update
     people.js           the people org model (tree, totals, scoping)
     suporg.js           the supervisory-org model (tree, conflict detection)
     stacked.js          the deck model: slides → levels → orgs → slots,
@@ -257,6 +289,7 @@ frontend/
     exports.js          PNG / vector PDF / 16:9 slide PDF / CSV
   components/
     Controls.js         filter, search, export menu, toggle
+    Reparent.js         drag state machine + the result toast
     PersonCard.js       the Workday card + its two section layouts
     Slide.js            the deck primitives: slot, cluster, level band, slide
     FilterTree.js       the hierarchical tier filter

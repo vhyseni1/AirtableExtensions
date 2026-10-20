@@ -2085,11 +2085,18 @@
 
 .dashboard-scroll { padding: 20px; background: transparent; }
 
+/* Vertical rhythm belongs to the container, not to each block inside it.
+   Previously only .tile-row carried a bottom margin, so a bare .panel followed
+   by anything sat flush against it — visible in Works Council between the
+   obligations table and the country breakdown, and in three other views. Spacing
+   every direct child here means a new block is spaced correctly by default
+   instead of needing its own margin. */
+.dashboard-scroll > * + * { margin-top: 16px; }
+
 .tile-row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(178px, 1fr));
     gap: 12px;
-    margin-bottom: 16px;
 }
 
 .tile {
@@ -2395,7 +2402,11 @@
 
 /* ─── Works council table & timeline ──────────────────────────────────────── */
 
-.wc-table-wrap { overflow-x: auto; margin: 0 -18px -18px; padding: 0 18px 4px; }
+/* The negative margins let the table go edge to edge inside the panel. The
+   bottom one cancels the panel's own 18px padding, so the padding here is what
+   keeps the last row off the panel border — at 4px it read as no padding at
+   all. */
+.wc-table-wrap { overflow-x: auto; margin: 0 -18px -18px; padding: 0 18px 14px; }
 .wc-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
 
 .wc-table th {
@@ -3203,3 +3214,119 @@
 .upcoming-mgr, .upcoming-type { color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sentiment { display: inline-flex; align-items: center; gap: 6px; }
 .sentiment-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DRAG TO RE-REPORT
+   The one write path in the app. Feedback has to be unambiguous: what is in
+   hand, where it may land, and where it may not.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.person-card[draggable='true'],
+.org-card[draggable='true'] { cursor: grab; }
+
+/* The card in hand. Dimming alone would read the same as a forbidden target,
+   so it also carries a dashed outline: "this is the one you're moving". */
+[data-drag='source'] {
+    opacity: 0.55;
+    cursor: grabbing;
+    outline: 2px dashed var(--ink-3, #8a97ad);
+    outline-offset: -2px;
+}
+
+/* A legal target, while hovered. The ring is drawn inside the card so the
+   board's geometry doesn't shift as you drag across it. */
+[data-drop='ok'] {
+    box-shadow: inset 0 0 0 2px var(--brand, #3b5bdb), 0 6px 18px rgba(59, 91, 219, 0.18);
+    border-color: transparent !important;
+}
+
+/* Own subtree: dropping here would make a loop. Dimmed rather than ringed, so
+   "not allowed" reads differently from "allowed" at a glance. */
+[data-drop='forbidden'] { opacity: 0.4; }
+
+/* While a drag is live, soften everything so the targets stand out. */
+.board-scroll.is-dragging .person-card:not([data-drop='ok']):not([data-drag='source']) {
+    transition: opacity 0.12s var(--ease);
+}
+
+.reparent-hint {
+    font-size: 10.5px;
+    color: var(--ink-3);
+    padding: 3px 9px;
+    border: 1px dashed var(--line-1);
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.reparent-toast {
+    position: absolute;
+    left: 50%;
+    bottom: 18px;
+    transform: translateX(-50%);
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    max-width: min(560px, calc(100% - 36px));
+    padding: 10px 12px 10px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--line-1);
+    background: var(--surface, #fff);
+    box-shadow: var(--lift-3, 0 10px 30px rgba(11, 18, 32, 0.16));
+    font-size: 11.5px;
+    color: var(--ink-1);
+    animation: toast-rise 0.18s var(--ease) both;
+}
+
+@keyframes toast-rise {
+    from { opacity: 0; transform: translate(-50%, 8px); }
+    to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.reparent-icon {
+    flex: 0 0 auto;
+    width: 17px;
+    height: 17px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 900;
+    color: #fff;
+}
+
+.reparent-toast.is-ok  .reparent-icon { background: #15803d; }
+.reparent-toast.is-err .reparent-icon { background: #c92a2a; }
+.reparent-toast.is-err { border-color: #f0c2c2; }
+
+.reparent-text { flex: 1; min-width: 0; line-height: 1.35; }
+
+.reparent-close {
+    flex: 0 0 auto;
+    border: none;
+    background: transparent;
+    font-size: 15px;
+    line-height: 1;
+    color: var(--ink-3);
+    cursor: pointer;
+    padding: 0 2px;
+}
+
+.reparent-close:hover { color: var(--ink-1); }
+
+.reparent-spinner {
+    width: 13px;
+    height: 13px;
+    border: 2px solid var(--line-1);
+    border-top-color: var(--brand, #3b5bdb);
+    border-radius: 999px;
+    animation: reparent-spin 0.7s linear infinite;
+}
+
+@keyframes reparent-spin { to { transform: rotate(360deg); } }
+
+/* The export renderers walk the live DOM, so drag affordances must not appear
+   in a PNG or PDF. */
+.exporting .reparent-toast,
+.exporting .reparent-hint { display: none !important; }

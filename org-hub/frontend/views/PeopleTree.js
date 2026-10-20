@@ -3,11 +3,13 @@
 // when you want the whole management chain on one canvas instead of the
 // one-manager-at-a-time position view.
 //
-// Read-only.
+// Read-only except for one thing: a card can be dragged onto another to change
+// who it reports to.
 
 import {useState, useRef, useMemo, useCallback} from 'react';
 import {expandRecord} from '@airtable/blocks/interface/ui';
 import StackedTree from '../components/StackedTree';
+import {useReparent, ReparentToast, ReparentHint} from '../components/Reparent';
 import {ExportMenu, ToggleSwitch, CheckboxFilter} from '../components/Controls';
 import {exportPNG, exportImagePDF} from '../lib/exports';
 import {colorFromString} from '../lib/fields';
@@ -35,12 +37,13 @@ function toTreeNode(node, nodeMap, seen) {
     };
 }
 
-export default function PeopleTree({org}) {
+export default function PeopleTree({org, cfg, table}) {
     const {nodeMap, rootIds, totals} = org;
     const [depth, setDepth] = useState(2);
     const [showHistogram, setShowHistogram] = useState(false);
     const [rootFilter, setRootFilter] = useState(() => new Set());
     const boardRef = useRef(null);
+    const dnd = useReparent(table, cfg, nodeMap);
 
     // Any manager can act as the tree root, so a large org can be sliced to one
     // branch instead of rendering thousands of cards at once.
@@ -96,6 +99,7 @@ export default function PeopleTree({org}) {
                     )}
                 </div>
                 <div className="toolbar-right">
+                    <ReparentHint enabled={dnd.enabled} />
                     <span className="toolbar-label">Depth:</span>
                     {[1, 2, 3, 99].map(d => (
                         <button
@@ -122,7 +126,9 @@ export default function PeopleTree({org}) {
                 depth={depth}
                 showHistogram={showHistogram}
                 boardRef={boardRef}
+                dnd={dnd}
             />
+            <ReparentToast status={dnd.status} busy={dnd.busy} onDismiss={dnd.dismiss} />
         </div>
     );
 }

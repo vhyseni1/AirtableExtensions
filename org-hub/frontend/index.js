@@ -489,7 +489,7 @@ function OrgHub({
                 />
             );
         }
-        if (key === 'people-tree') return <PeopleTree org={org} />;
+        if (key === 'people-tree') return <PeopleTree org={org} cfg={cfg} table={peopleTable} />;
         if (key === 'suporg') return <SupOrgSection table={supOrgTable} view="chart" />;
         if (key === 'suporg-data') return <SupOrgSection table={supOrgTable} view="data" />;
         if (key === 'people-data') {
@@ -499,7 +499,7 @@ function OrgHub({
             );
         }
         return (
-            <PositionChart org={org} cfg={cfg}
+            <PositionChart org={org} cfg={cfg} table={peopleTable}
                 decisionFieldPresent={!!cfg.employeeDecisionField} />
         );
     };

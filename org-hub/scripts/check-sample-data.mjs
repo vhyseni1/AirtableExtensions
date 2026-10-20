@@ -100,6 +100,8 @@ const {
     resolveOrgDesignConfig, resolveNotesConfig, buildNotesMap, buildStackedModel,
     paginateLevels, buildFilterTree, computeKpis, bucketForStatus,
 } = await import('../frontend/lib/stacked.js');
+const {collectSubtreeIds, canReparent, reparentFields, wouldStick} =
+    await import('../frontend/lib/reparent.js');
 
 const peopleRows = parseCSV(readFileSync(join(dataDir, 'Employees & Positions.csv'), 'utf8'));
 const soRows = parseCSV(readFileSync(join(dataDir, 'Supervisory Organizations.csv'), 'utf8'));
@@ -322,6 +324,76 @@ const tierValues = [...new Set(designRows.flatMap(r => [r.Level, r['Section Leve
 const unmapped = tierValues.filter(v => tierLabel(v) === v);
 check('tier labels: every tier value in the data is relabelled',
     unmapped.length === 0, unmapped.join(', '));
+
+// ─── Reparenting (drag to change a reporting line) ──────────────────────────
+//
+// The write path has one failure mode worth pinning down: buildOrg resolves a
+// manager from the manager-id TEXT field before the link field, so an update
+// that moves only the link is silently undone on the next rebuild.
+
+const F_LINK = {id: 'fldLink', type: 'multipleRecordLinks'};
+const F_MGRID = {id: 'fldMgrId', type: 'singleLineText'};
+const F_EMPID = {id: 'fldEmpId', type: 'singleLineText'};
+const F_LOOKUP = {id: 'fldLookup', type: 'multipleLookupValues'};
+
+// Stand-in for an Airtable record: answers by field id.
+const rpRec = (id, empId) => ({
+    id,
+    getCellValue: f => (f.id === 'fldEmpId' ? empId : null),
+    getCellValueAsString: f => (f.id === 'fldEmpId' ? empId : ''),
+});
+const rpNode = (id, empId, parentId, childIds = []) => ({
+    id, parentId, childIds, displayName: id, record: rpRec(id, empId),
+});
+
+// ceo → vp → mgr → ic
+const rpMap = {
+    ceo: rpNode('ceo', 'E1', null, ['vp']),
+    vp: rpNode('vp', 'E2', 'ceo', ['mgr']),
+    mgr: rpNode('mgr', 'E3', 'vp', ['ic']),
+    ic: rpNode('ic', 'E4', 'mgr', []),
+};
+
+check('reparent: subtree includes self and all descendants',
+    [...collectSubtreeIds(rpMap, 'vp')].sort().join(',') === 'ic,mgr,vp');
+check('reparent: cannot report to yourself', !canReparent(rpMap, 'mgr', 'mgr').ok);
+check('reparent: cannot report to your own descendant (would loop)',
+    !canReparent(rpMap, 'vp', 'ic').ok);
+check('reparent: refuses a move that changes nothing', !canReparent(rpMap, 'ic', 'mgr').ok);
+check('reparent: a genuine move up the tree is allowed', canReparent(rpMap, 'ic', 'ceo').ok);
+check('reparent: moving a whole subtree sideways is allowed', canReparent(rpMap, 'mgr', 'ceo').ok);
+
+// The central one: BOTH fields must move, or the change does not stick.
+const rpCfg = {parentField: F_LINK, managerIdField: F_MGRID, employeeIdField: F_EMPID};
+const rpBoth = reparentFields(rpCfg, rpMap.ceo);
+check('reparent: writes the link field',
+    Array.isArray(rpBoth.fldLink) && rpBoth.fldLink[0].id === 'ceo');
+check('reparent: writes the manager employee id, not the record id',
+    rpBoth.fldMgrId === 'E1', String(rpBoth.fldMgrId));
+check('reparent: blanks the manager id when the new manager has none',
+    reparentFields(rpCfg, rpNode('tmp', '', null)).fldMgrId === '');
+
+// A lookup parent field is computed, so only the manager id can carry it.
+const rpLookup = reparentFields(
+    {parentField: F_LOOKUP, managerIdField: F_MGRID, employeeIdField: F_EMPID}, rpMap.ceo);
+check('reparent: never tries to write a computed lookup parent field',
+    !('fldLookup' in rpLookup) && rpLookup.fldMgrId === 'E1', JSON.stringify(rpLookup));
+check('reparent: returns null when no field can carry the change',
+    reparentFields({parentField: F_LOOKUP, managerIdField: null, employeeIdField: F_EMPID},
+        rpMap.ceo) === null);
+
+// A link-only write while a non-writable manager id still holds a value is
+// exactly the silent-revert case.
+const rpStaleChild = {...rpMap.ic, record: {
+    id: 'ic',
+    getCellValue: f => (f.id === 'fldLookup' ? 'E3' : null),
+    getCellValueAsString: f => (f.id === 'fldLookup' ? 'E3' : ''),
+}};
+check('reparent: detects a move the stale manager id would override',
+    !wouldStick({parentField: F_LINK, managerIdField: F_LOOKUP, employeeIdField: F_EMPID},
+        rpStaleChild, {fldLink: [{id: 'ceo'}]}));
+check('reparent: a write that includes the manager id always sticks',
+    wouldStick(rpCfg, rpMap.ic, rpBoth));
 
 console.log(`\n${failures.length === 0 ? 'All checks passed.' : `${failures.length} check(s) failed.`}`);
 process.exit(failures.length === 0 ? 0 : 1);

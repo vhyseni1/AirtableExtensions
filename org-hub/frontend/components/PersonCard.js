@@ -8,7 +8,7 @@ import {colorFromString, initials} from '../lib/fields';
 // avatar toggle, which is prop-drilled). Always false during export.
 export const DecisionContext = createContext(false);
 
-export function PersonCard({node, variant, directs, total, statusColor, showAvatar, onDrill, onOpen}) {
+export function PersonCard({node, variant, directs, total, statusColor, showAvatar, onDrill, onOpen, dnd}) {
     const showDecision = useContext(DecisionContext);
     const drillable = variant === 'report' && directs > 0;
     const cls = ['person-card', `person-card-${variant}`, 'clickable'];
@@ -17,15 +17,21 @@ export function PersonCard({node, variant, directs, total, statusColor, showAvat
     if (statusColor) cls.push('has-accent');
     // Reports drill into their own subtree; the focus card opens the record.
     const onClick = variant === 'report' ? () => onDrill(node.id) : () => onOpen(node);
-    const title = variant === 'report'
-        ? `Drill into ${node.displayName}`
-        : `Open ${node.displayName} in Airtable`;
+    const dragProps = dnd ? dnd.cardProps(node.id) : {};
+    const title = dnd && dnd.enabled
+        ? (variant === 'report'
+            ? `Drill into ${node.displayName} · drag onto a manager to re-report`
+            : `Open ${node.displayName} in Airtable · drop a card here to re-report`)
+        : (variant === 'report'
+            ? `Drill into ${node.displayName}`
+            : `Open ${node.displayName} in Airtable`);
     return (
         <div
             className={cls.join(' ')}
             style={statusColor ? {'--card-accent': statusColor} : undefined}
             onClick={onClick}
             title={title}
+            {...dragProps}
         >
             {showAvatar && (
                 <div
@@ -69,7 +75,7 @@ export function PersonCard({node, variant, directs, total, statusColor, showAvat
 }
 
 // A manager + their direct reports (used by the Manager filter view).
-export function ManagerSection({node, nodeMap, totals, statusColors, showAvatar, onDrill, onOpen}) {
+export function ManagerSection({node, nodeMap, totals, statusColors, showAvatar, onDrill, onOpen, dnd}) {
     const children = node.childIds.map(id => nodeMap[id]).filter(Boolean);
     return (
         <div className="manager-section">
@@ -82,6 +88,7 @@ export function ManagerSection({node, nodeMap, totals, statusColors, showAvatar,
                 showAvatar={showAvatar}
                 onDrill={onDrill}
                 onOpen={onOpen}
+                dnd={dnd}
             />
             {children.length > 0 && (
                 <>
@@ -98,6 +105,7 @@ export function ManagerSection({node, nodeMap, totals, statusColors, showAvatar,
                                 showAvatar={showAvatar}
                                 onDrill={onDrill}
                                 onOpen={onOpen}
+                                dnd={dnd}
                             />
                         ))}
                     </div>
@@ -108,7 +116,7 @@ export function ManagerSection({node, nodeMap, totals, statusColors, showAvatar,
 }
 
 // An organization + the positions in it (used by the Organization filter view).
-export function OrgSection({org, members, totals, statusColors, showAvatar, onDrill, onOpen}) {
+export function OrgSection({org, members, totals, statusColors, showAvatar, onDrill, onOpen, dnd}) {
     return (
         <div className="manager-section">
             <div className="org-header">
@@ -129,6 +137,7 @@ export function OrgSection({org, members, totals, statusColors, showAvatar, onDr
                         showAvatar={showAvatar}
                         onDrill={onDrill}
                         onOpen={onOpen}
+                        dnd={dnd}
                     />
                 ))}
             </div>

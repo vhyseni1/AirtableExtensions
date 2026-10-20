@@ -9,10 +9,11 @@ import {CheckboxFilter, SearchBox, ExportMenu} from '../components/Controls';
 import {
     DecisionContext, PersonCard, ManagerSection, OrgSection,
 } from '../components/PersonCard';
+import {useReparent, ReparentToast, ReparentHint} from '../components/Reparent';
 import {exportPNG, exportVectorPDF} from '../lib/exports';
 import {ancestorChain} from '../lib/people';
 
-export default function PositionChart({org, cfg, decisionFieldPresent}) {
+export default function PositionChart({org, cfg, table, decisionFieldPresent}) {
     const {nodeMap, rootIds, totals, statusColors} = org;
     const [focusIdState, setFocusIdState] = useState(null);
     const [managerFilter, setManagerFilter] = useState(() => new Set());
@@ -20,6 +21,10 @@ export default function PositionChart({org, cfg, decisionFieldPresent}) {
     const [showAvatars, setShowAvatars] = useState(true);
     const [showDecision, setShowDecision] = useState(true);
     const boardRef = useRef(null);
+
+    // Drag a card onto a manager to change who it reports to. Writes to the
+    // people table; no-ops into a disabled state if the table is read-only.
+    const dnd = useReparent(table, cfg, nodeMap);
 
     const hasStatus = Object.keys(statusColors).length > 0;
 
@@ -180,6 +185,7 @@ export default function PositionChart({org, cfg, decisionFieldPresent}) {
                         )}
                     </div>
                     <div className="toolbar-right">
+                        <ReparentHint enabled={dnd.enabled} />
                         {hasStatus && (
                             <div className="legend">
                                 {Object.entries(statusColors).map(([label, color]) => (
@@ -226,7 +232,7 @@ export default function PositionChart({org, cfg, decisionFieldPresent}) {
                 )}
 
                 {/* Board */}
-                <div className="board-scroll">
+                <div className={`board-scroll${dnd.dragging ? ' is-dragging' : ''}`}>
                     {orgActive ? (
                         <div className="board board-filtered" ref={boardRef}>
                             {selectedOrgs.length === 0 && (
@@ -242,6 +248,7 @@ export default function PositionChart({org, cfg, decisionFieldPresent}) {
                                     showAvatar={showAvatars}
                                     onDrill={drillFromFilter}
                                     onOpen={openRecord}
+                                    dnd={dnd}
                                 />
                             ))}
                         </div>
@@ -260,6 +267,7 @@ export default function PositionChart({org, cfg, decisionFieldPresent}) {
                                     showAvatar={showAvatars}
                                     onDrill={drillFromFilter}
                                     onOpen={openRecord}
+                                    dnd={dnd}
                                 />
                             ))}
                         </div>
@@ -285,6 +293,7 @@ export default function PositionChart({org, cfg, decisionFieldPresent}) {
                                     showAvatar={showAvatars}
                                     onDrill={drill}
                                     onOpen={openRecord}
+                                    dnd={dnd}
                                 />
                             </div>
 
@@ -306,6 +315,7 @@ export default function PositionChart({org, cfg, decisionFieldPresent}) {
                                                 showAvatar={showAvatars}
                                                 onDrill={drill}
                                                 onOpen={openRecord}
+                                                dnd={dnd}
                                             />
                                         ))}
                                     </div>
@@ -316,6 +326,7 @@ export default function PositionChart({org, cfg, decisionFieldPresent}) {
                         </div>
                     )}
                 </div>
+                <ReparentToast status={dnd.status} busy={dnd.busy} onDismiss={dnd.dismiss} />
             </div>
         </DecisionContext.Provider>
     );

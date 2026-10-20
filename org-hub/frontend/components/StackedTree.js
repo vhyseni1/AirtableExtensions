@@ -215,10 +215,14 @@ function usePanZoom(viewportRef) {
 
 // ─── Cards & recursive nodes ─────────────────────────────────────────────────
 
-function TreeCard({node, depth, onOpen}) {
+function TreeCard({node, depth, onOpen, dnd}) {
+    // `dnd` is absent on the supervisory-org tree, which stays read-only — that
+    // board reparents organizations, not reporting lines.
+    const dragProps = dnd ? dnd.cardProps(node.id) : {};
     return (
         <div
             className="org-card"
+            {...dragProps}
             data-node-id={node.id}
             data-depth={depth}
             data-weight={node.weight || 0}
@@ -228,7 +232,9 @@ function TreeCard({node, depth, onOpen}) {
                 background: node.bgColor || '#ffffff',
             }}
             onClick={e => { e.stopPropagation(); onOpen(node); }}
-            title={`Open ${node.title} in Airtable`}
+            title={dnd && dnd.enabled
+                ? `Open ${node.title} in Airtable · drag onto a manager to re-report`
+                : `Open ${node.title} in Airtable`}
         >
             <div className="org-card-name">{node.title}</div>
             {node.subtitle && <div className="org-card-meta">{node.subtitle}</div>}
@@ -243,7 +249,7 @@ function TreeCard({node, depth, onOpen}) {
     );
 }
 
-function TreeNode({node, defaultExpanded, depth, onToggle, onOpen}) {
+function TreeNode({node, defaultExpanded, depth, onToggle, onOpen, dnd}) {
     const [expanded, setExpanded] = useState(depth < defaultExpanded);
     const hasChildren = node.children.length > 0;
 
@@ -254,7 +260,7 @@ function TreeNode({node, defaultExpanded, depth, onToggle, onOpen}) {
 
     return (
         <li>
-            <TreeCard node={node} depth={depth} onOpen={onOpen} />
+            <TreeCard node={node} depth={depth} onOpen={onOpen} dnd={dnd} />
             {hasChildren && (
                 <button
                     className="toggle-btn"
@@ -274,6 +280,7 @@ function TreeNode({node, defaultExpanded, depth, onToggle, onOpen}) {
                             depth={depth + 1}
                             onToggle={onToggle}
                             onOpen={onOpen}
+                            dnd={dnd}
                         />
                     ))}
                 </ul>
@@ -284,7 +291,7 @@ function TreeNode({node, defaultExpanded, depth, onToggle, onOpen}) {
 
 // ─── Public component ────────────────────────────────────────────────────────
 
-export default function StackedTree({roots, onOpen, depth, showHistogram, boardRef}) {
+export default function StackedTree({roots, onOpen, depth, showHistogram, boardRef, dnd}) {
     const [lineVersion, setLineVersion] = useState(0);
     const viewportRef = useRef(null);
     const wrapperRef = useRef(null);
@@ -358,6 +365,7 @@ export default function StackedTree({roots, onOpen, depth, showHistogram, boardR
                                 depth={0}
                                 onToggle={redrawLines}
                                 onOpen={onOpen}
+                                dnd={dnd}
                             />
                         ))}
                     </ul>
