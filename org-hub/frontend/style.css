@@ -3342,3 +3342,88 @@
    in a PNG or PDF. */
 .exporting .reparent-toast,
 .exporting .reparent-hint { display: none !important; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FINANCIALS — cash curve, scenario table, baseline comparison
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.cash-curve {
+    position: relative;
+    height: 170px;
+    margin-top: 4px;
+}
+
+/* preserveAspectRatio is none, so the stroke would stretch with the box; the
+   paths carry vector-effect to hold their width. */
+.cash-curve svg { display: block; width: 100%; height: 100%; overflow: visible; }
+
+.cc-payback {
+    position: absolute;
+    top: -2px;
+    transform: translateX(-50%);
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--brand, #3b5bdb);
+    color: #fff;
+    font-size: 9.5px;
+    font-weight: 700;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+/* Invisible per-month hover targets, laid over the plot. */
+.cc-hit-row { position: absolute; inset: 0; display: flex; }
+.cc-hit { flex: 1; cursor: crosshair; }
+
+.cc-axis {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 5px;
+    font-size: 9.5px;
+    color: var(--ink-3);
+}
+
+.cc-readout { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.cc-readout-month { font-size: 9.5px; color: var(--ink-3); }
+.cc-readout-value { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.cc-readout-value.pos { color: #0f7a42; }
+.cc-readout-value.neg { color: #b42318; }
+
+.scenario-table .scenario-name { display: block; font-weight: 700; color: var(--ink-1); }
+.scenario-table .scenario-note { display: block; font-size: 9.5px; color: var(--ink-3); margin-top: 1px; }
+.scenario-table td.pos { color: #0f7a42; }
+.scenario-table td.neg { color: #b42318; }
+
+.compare-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+
+.compare-table th {
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--line-1);
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+}
+
+.compare-table td { padding: 8px; border-bottom: 1px solid var(--line-2, #f1f5f9); }
+.compare-table tr:last-child td { border-bottom: none; }
+.compare-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.compare-table .strong { font-weight: 700; color: var(--ink-1); }
+.compare-table .compare-label { color: var(--ink-2); }
+
+.delta-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.delta-chip.good { background: #e7f5ec; color: #0f7a42; }
+.delta-chip.bad  { background: #fdecec; color: #b42318; }
+.delta-chip.flat { background: #eef1f6; color: var(--ink-2); }
+.delta-pct { font-size: 9.5px; font-weight: 600; opacity: 0.8; }

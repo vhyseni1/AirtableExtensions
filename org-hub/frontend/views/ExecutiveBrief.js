@@ -6,8 +6,9 @@
 // when nothing is.
 
 import {useMemo} from 'react';
-import {StatTile, BarList, Bridge} from '../components/Charts';
+import {StatTile, BarList, Bridge, CashCurve, CompareTable} from '../components/Charts';
 import {peopleImpact, savings, worksCouncil, fmtMoney, fmtNum} from '../lib/orgMetrics';
+import {baselineVsScenario, cashflow, fmtMonths} from '../lib/finance';
 import {VIZ, RAG_COLORS} from '../config';
 
 const S = VIZ.status;
@@ -92,6 +93,11 @@ export default function ExecutiveBrief({model, programme, conversations, orgHeal
         [impact, money, wc, programme, conversations],
     );
 
+    // Today against the designed target state, and when the money actually
+    // arrives — the two questions that follow the headline.
+    const compare = useMemo(() => baselineVsScenario(impact, money), [impact, money]);
+    const flow = useMemo(() => cashflow(money), [money]);
+
     const changePct = impact.totals.current
         ? Math.abs(impact.netChange / impact.totals.current) * 100 : 0;
 
@@ -159,7 +165,7 @@ export default function ExecutiveBrief({model, programme, conversations, orgHeal
                     <StatTile
                         label="Annual benefit"
                         value={fmtMoney(money.grossAnnual)}
-                        sub={`payback ${money.paybackMonths == null ? 'n/a' : `${money.paybackMonths.toFixed(0)} mo`}`}
+                        sub={`payback ${fmtMonths(flow.paybackMonths)}`}
                         tone="good"
                         accent={VIZ.positive}
                     />
@@ -187,6 +193,26 @@ export default function ExecutiveBrief({model, programme, conversations, orgHeal
                             accent={programme.ragCounts.Red ? VIZ.negative : VIZ.positive}
                         />
                     )}
+                </div>
+
+                <div className="panel-grid">
+                    <CompareTable
+                        title="Baseline vs scenario"
+                        subtitle="Where the organisation is today, and where this design takes it"
+                        rows={compare}
+                        baselineLabel="Today"
+                        scenarioLabel="Designed"
+                        formatMoney={fmtMoney}
+                        formatCount={fmtNum}
+                    />
+                    <CashCurve
+                        title="When the benefit arrives"
+                        subtitle={`Cumulative position; break-even at ${fmtMonths(flow.paybackMonths)}`}
+                        months={flow.months}
+                        paybackMonths={flow.paybackMonths}
+                        horizonMonths={flow.horizonMonths}
+                        format={fmtMoney}
+                    />
                 </div>
 
                 <div className="panel-grid">

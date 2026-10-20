@@ -226,6 +226,57 @@ export const RATE_CARD = {
     transitionCostPerFte: 3500,
 };
 
+// ─── Financial model (cash flow, NPV, scenarios) ─────────────────────────────
+//
+// The savings model above answers "what does the target state cost?". This one
+// answers "when do we actually see it, and what is it worth today?" — which is
+// the question a CFO asks second.
+//
+// Everything here is a demo assumption and is shown to the user as one. Nothing
+// is buried inside the arithmetic.
+export const FINANCE = {
+    horizonMonths: 36,
+    // Annual discount rate for NPV. Monthly rate is derived from it, compounded,
+    // not divided by twelve.
+    discountRateAnnual: 0.08,
+
+    // Benefits do not land the day the design is signed. Headcount leaves over a
+    // period, so the run-rate saving ramps in linearly between these two months
+    // and is only fully realised after the second.
+    benefitRampStartMonth: 3,
+    benefitRampEndMonth: 12,
+    // One-off costs are committed earlier than the benefits arrive — that gap is
+    // the whole reason payback is not instant.
+    oneOffSpreadMonths: 9,
+
+    // Illustrative variations on the SAME design, not separately designed
+    // options: each scales the modelled change so a reader can see which lever
+    // moves payback. `scope` scales the headcount reduction (and with it the
+    // run-rate saving and severance); `ramp` shifts how fast it lands;
+    // `severanceFactor` models a cheaper or costlier exit route.
+    variants: [
+        {key: 'designed', label: 'As designed', scope: 1.0, rampShiftMonths: 0, severanceFactor: 1.0,
+            note: 'The design as it stands in the deck'},
+        {key: 'phased', label: 'Phased over 2 years', scope: 1.0, rampShiftMonths: 9, severanceFactor: 1.0,
+            note: 'Same end state, landing nine months later'},
+        {key: 'attrition', label: 'Attrition-led', scope: 0.75, rampShiftMonths: 12, severanceFactor: 0.35,
+            note: 'Three quarters of the reduction, mostly unreplaced leavers'},
+        {key: 'deeper', label: 'Deeper reduction', scope: 1.25, rampShiftMonths: 0, severanceFactor: 1.0,
+            note: 'A quarter more again, same timetable'},
+    ],
+
+    // One-at-a-time swings on the inputs the result is most exposed to. Each is
+    // applied to the designed case and reported as its effect on net year one.
+    sensitivities: [
+        // Labels are short on purpose: they render in a narrow fixed column
+        // alongside the ± figure, and a longer one is simply truncated.
+        {key: 'costPerFte', label: 'Cost/FTE', delta: 0.10},
+        {key: 'severanceMonths', label: 'Severance', delta: 0.33},
+        {key: 'scope', label: 'Scope', delta: 0.20},
+        {key: 'ramp', label: 'Timing', delta: 0.50},
+    ],
+};
+
 // ─── Works council / employee representation ─────────────────────────────────
 //
 // Which body must be consulted per country, how much notice it needs, and when

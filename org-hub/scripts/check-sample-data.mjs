@@ -102,6 +102,10 @@ const {
 } = await import('../frontend/lib/stacked.js');
 const {collectSubtreeIds, canReparent, reparentFields, wouldStick} =
     await import('../frontend/lib/reparent.js');
+const {monthlyRate, benefitFraction, cashflow, crossingMonth, baselineVsScenario,
+    variant, variants, sensitivity} = await import('../frontend/lib/finance.js');
+const {FINANCE} = await import('../frontend/config.js');
+const {savings, peopleImpact} = await import('../frontend/lib/orgMetrics.js');
 
 const peopleRows = parseCSV(readFileSync(join(dataDir, 'Employees & Positions.csv'), 'utf8'));
 const soRows = parseCSV(readFileSync(join(dataDir, 'Supervisory Organizations.csv'), 'utf8'));
@@ -394,6 +398,122 @@ check('reparent: detects a move the stale manager id would override',
         rpStaleChild, {fldLink: [{id: 'ceo'}]}));
 check('reparent: a write that includes the manager id always sticks',
     wouldStick(rpCfg, rpMap.ic, rpBoth));
+
+// ─── Financial model ────────────────────────────────────────────────────────
+
+const near = (a, b, tol = 1e-6) => Math.abs(a - b) <= tol;
+
+// Monthly rate must compound to the annual one, not be a twelfth of it.
+check('finance: monthly rate compounds to the annual rate',
+    near(Math.pow(1 + monthlyRate(0.08), 12) - 1, 0.08, 1e-9),
+    (Math.pow(1 + monthlyRate(0.08), 12) - 1).toFixed(9));
+check('finance: monthly rate is NOT annual/12',
+    monthlyRate(0.08) < 0.08 / 12, monthlyRate(0.08).toFixed(6));
+
+// The benefit ramp.
+check('finance: no benefit before the ramp starts', benefitFraction(1, 3, 12) === 0);
+check('finance: full benefit after the ramp ends', benefitFraction(99, 3, 12) === 1);
+check('finance: ramp is linear at its midpoint',
+    near(benefitFraction(7.5, 3, 12), 0.5), String(benefitFraction(7.5, 3, 12)));
+
+// A clean case with known arithmetic: 1.2m/yr benefit, 600k one-off.
+const fx = cashflow({grossAnnual: 1200000, oneOff: 600000});
+check('finance: cash flow runs the whole horizon',
+    fx.months.length === FINANCE.horizonMonths, String(fx.months.length));
+check('finance: one-off is fully charged and no more',
+    near(fx.months.reduce((n, r) => n + r.cost, 0), 600000, 1e-6));
+check('finance: benefit never exceeds the annual run-rate in a month',
+    fx.months.every(r => r.benefit <= 1200000 / 12 + 1e-9));
+check('finance: cumulative equals the running sum of net',
+    near(fx.months[fx.months.length - 1].cumulative,
+        fx.months.reduce((n, r) => n + r.net, 0), 1e-6));
+check('finance: the position starts negative (cost lands before benefit)',
+    fx.months[0].cumulative < 0, fx.months[0].cumulative.toFixed(0));
+
+// The point of the whole module: phasing makes payback LATER than the
+// run-rate shortcut claims. If this ever inverts, the model is flattering.
+check('finance: phased payback is later than the naive run-rate payback',
+    fx.paybackMonths > fx.naivePaybackMonths,
+    `${fx.paybackMonths.toFixed(1)} vs ${fx.naivePaybackMonths.toFixed(1)}`);
+
+// NPV must sit below the undiscounted total but stay positive here.
+check('finance: NPV is less than the undiscounted cumulative',
+    fx.npv < fx.cumulativeAtHorizon, `${Math.round(fx.npv)} < ${Math.round(fx.cumulativeAtHorizon)}`);
+check('finance: a zero discount rate makes NPV equal the cumulative',
+    near(cashflow({grossAnnual: 1200000, oneOff: 600000}, {discountRateAnnual: 0}).npv,
+        fx.cumulativeAtHorizon, 1e-6));
+
+// A design that saves nothing can never pay back.
+const noSave = cashflow({grossAnnual: 0, oneOff: 500000});
+check('finance: no benefit means no payback', noSave.paybackMonths === null);
+check('finance: no benefit means no naive payback either', noSave.naivePaybackMonths === null);
+
+check('finance: crossing month is null when the series never turns positive',
+    crossingMonth([{month: 1, cumulative: -5}, {month: 2, cumulative: -3}]) === null);
+check('finance: crossing month interpolates within the month',
+    near(crossingMonth([{month: 1, cumulative: -10}, {month: 2, cumulative: 10}]), 1.5),
+    String(crossingMonth([{month: 1, cumulative: -10}, {month: 2, cumulative: 10}])));
+
+// Baseline comparison must report real deltas against the impact totals.
+const cmpImpact = {totals: {current: 100, future: 80}};
+const cmpMoney = {currentCost: 10000000, futureCost: 8000000};
+const cmp = baselineVsScenario(cmpImpact, cmpMoney);
+check('finance: comparison reports the position delta',
+    cmp[0].delta === -20 && near(cmp[0].deltaPct, -20), JSON.stringify(cmp[0].delta));
+check('finance: comparison reports cost per position on both sides',
+    near(cmp[2].baseline, 100000) && near(cmp[2].scenario, 100000),
+    `${cmp[2].baseline} / ${cmp[2].scenario}`);
+
+// Scenario variants.
+const vMoney = {grossAnnual: 1200000, severance: 400000, recruitment: 150000,
+    transition: 50000, oneOff: 600000};
+const vs = variants(vMoney);
+check('finance: every configured variant is modelled',
+    vs.length === FINANCE.variants.length, String(vs.length));
+const designed = vs.find(v => v.key === 'designed');
+const phased = vs.find(v => v.key === 'phased');
+const deeper = vs.find(v => v.key === 'deeper');
+const attrition = vs.find(v => v.key === 'attrition');
+check('finance: the designed variant reproduces the unscaled benefit',
+    near(designed.grossAnnual, 1200000));
+check('finance: delaying the ramp pushes payback out, benefit unchanged',
+    near(phased.grossAnnual, designed.grossAnnual)
+        && phased.paybackMonths > designed.paybackMonths,
+    `${phased.paybackMonths.toFixed(1)} vs ${designed.paybackMonths.toFixed(1)}`);
+check('finance: delaying the ramp lowers NPV', phased.npv < designed.npv);
+check('finance: a deeper cut raises the benefit and the severance together',
+    deeper.grossAnnual > designed.grossAnnual && deeper.severance > designed.severance);
+check('finance: attrition-led costs less to execute than the designed case',
+    attrition.oneOff < designed.oneOff,
+    `${Math.round(attrition.oneOff)} < ${Math.round(designed.oneOff)}`);
+check('finance: scaling scope leaves recruitment and transition alone',
+    near(deeper.oneOff - deeper.severance, designed.oneOff - designed.severance, 1e-6));
+
+// Sensitivity.
+const sens = sensitivity(vMoney);
+check('finance: every configured sensitivity is modelled',
+    sens.length === FINANCE.sensitivities.length, String(sens.length));
+check('finance: sensitivities are ordered by exposure, biggest first',
+    sens.every((r, i) => i === 0 || sens[i - 1].swing >= r.swing));
+check('finance: every sensitivity brackets the base case',
+    sens.every(r => r.worst <= r.base + 1e-6 && r.best >= r.base - 1e-6));
+check('finance: a swing is a real span, not zero',
+    sens.every(r => r.swing > 0));
+
+// Net year one is reported in two places (a tile and the scenario table) and
+// must come from one source. The run-rate shortcut is a different, flattering
+// number; pin the gap so the two cannot silently diverge again.
+const nyFlow = cashflow({grossAnnual: 1200000, oneOff: 600000});
+check('finance: net year one equals the first twelve months of the flow',
+    near(nyFlow.netYearOne, nyFlow.months.slice(0, 12).reduce((n, r) => n + r.net, 0), 1e-9));
+check('finance: net year one is worse than the run-rate shortcut',
+    nyFlow.netYearOne < 1200000 - 600000,
+    `${Math.round(nyFlow.netYearOne)} < ${1200000 - 600000}`);
+check('finance: the designed variant reports the same net year one as its flow',
+    near(designed.netYearOne, designed.flow.netYearOne, 1e-9));
+check('finance: cost per position is marked neutral, not a failure',
+    baselineVsScenario({totals: {current: 100, future: 80}},
+        {currentCost: 1e7, futureCost: 8e6})[2].neutral === true);
 
 console.log(`\n${failures.length === 0 ? 'All checks passed.' : `${failures.length} check(s) failed.`}`);
 process.exit(failures.length === 0 ? 0 : 1);

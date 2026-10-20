@@ -6,15 +6,24 @@
 // steering committee.
 
 import {useMemo} from 'react';
-import {StatTile, BarList, Bridge} from '../components/Charts';
+import {StatTile, BarList, Bridge, CashCurve} from '../components/Charts';
 import {ExportMenu} from '../components/Controls';
 import {savings, fmtMoney, fmtNum} from '../lib/orgMetrics';
+import {cashflow, variants, sensitivity, fmtMonths} from '../lib/finance';
 import {toCSV, downloadText} from '../lib/exports';
-import {VIZ, RATE_CARD, tierLabel} from '../config';
+import {VIZ, RATE_CARD, FINANCE, tierLabel} from '../config';
 
 export default function Savings({model}) {
     const m = useMemo(() => savings(model), [model]);
     const money = v => fmtMoney(v);
+
+    // The run-rate number above is what the target state costs once we are in
+    // it. These three are what it is actually worth: when the benefit lands,
+    // what it is worth discounted, and how far the answer moves if the inputs
+    // are wrong.
+    const flow = useMemo(() => cashflow(m), [m]);
+    const scenarios = useMemo(() => variants(m), [m]);
+    const swings = useMemo(() => sensitivity(m), [m]);
 
     const exportItems = useMemo(() => [{
         label: 'CSV · savings by organisation',
@@ -88,16 +97,27 @@ export default function Savings({model}) {
                     />
                     <StatTile
                         label="Net year one"
-                        value={money(m.netYearOne)}
-                        sub={m.netYearOne >= 0 ? 'positive in year one' : 'investment year'}
-                        tone={m.netYearOne >= 0 ? 'good' : 'warn'}
-                        accent={m.netYearOne >= 0 ? VIZ.positive : VIZ.status.selection.color}
+                        value={money(flow.netYearOne)}
+                        sub={flow.netYearOne >= 0 ? 'positive in year one' : 'investment year'}
+                        tone={flow.netYearOne >= 0 ? 'good' : 'warn'}
+                        accent={flow.netYearOne >= 0 ? VIZ.positive : VIZ.status.selection.color}
                     />
                     <StatTile
                         label="Payback"
-                        value={m.paybackMonths == null ? '—' : `${m.paybackMonths.toFixed(1)} mo`}
-                        sub={m.paybackMonths == null ? 'design does not reduce cost' : 'to recover the one-off'}
+                        value={fmtMonths(flow.paybackMonths)}
+                        sub={flow.paybackMonths == null
+                            ? 'design does not reduce cost'
+                            : `vs ${fmtMonths(flow.naivePaybackMonths)} at full run-rate`}
                         accent={VIZ.magnitude}
+                    />
+                    <StatTile
+                        label={`NPV · ${FINANCE.horizonMonths / 12} years`}
+                        value={money(flow.npv)}
+                        sub={`discounted at ${(FINANCE.discountRateAnnual * 100).toFixed(0)}% a year`}
+                        tone={flow.npv >= 0 ? 'good' : 'critical'}
+                        accent={flow.npv >= 0 ? VIZ.positive : VIZ.negative}
+                        spark={flow.months.filter((_, i) => i % 3 === 0)
+                            .map(r => Math.max(0, r.cumulative))}
                     />
                     <StatTile
                         label="Run-rate cost"
@@ -155,6 +175,77 @@ export default function Savings({model}) {
                         format={signed}
                         rows={toSignedRows(m.byCountry)}
                         limit={10}
+                    />
+                </div>
+
+                <CashCurve
+                    title="Cumulative cash position"
+                    subtitle={`One-off cost lands first; the benefit ramps in from month ${FINANCE.benefitRampStartMonth} and is fully realised by month ${FINANCE.benefitRampEndMonth}`}
+                    months={flow.months}
+                    paybackMonths={flow.paybackMonths}
+                    horizonMonths={flow.horizonMonths}
+                    format={money}
+                />
+
+                <div className="panel-grid">
+                    <div className="panel-span-2">
+                        <div className="panel">
+                            <div className="panel-head">
+                                <div>
+                                    <div className="panel-title">Scenario comparison</div>
+                                    <div className="panel-sub">
+                                        Variations on the <em>same</em> design, not separately designed
+                                        options — each scales the modelled change to show which lever
+                                        moves the answer.
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="wc-table-wrap">
+                                <table className="wc-table scenario-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Scenario</th>
+                                            <th className="num">Annual benefit</th>
+                                            <th className="num">One-off</th>
+                                            <th className="num">Net year 1</th>
+                                            <th className="num">Payback</th>
+                                            <th className="num">NPV {FINANCE.horizonMonths / 12}y</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {scenarios.map(v => (
+                                            <tr key={v.key} className={v.key === 'designed' ? 'is-consult' : ''}>
+                                                <td>
+                                                    <span className="scenario-name">{v.label}</span>
+                                                    <span className="scenario-note">{v.note}</span>
+                                                </td>
+                                                <td className="num">{money(v.grossAnnual)}</td>
+                                                <td className="num">{money(v.oneOff)}</td>
+                                                <td className={`num ${v.netYearOne >= 0 ? 'pos' : 'neg'}`}>
+                                                    {signed(v.netYearOne)}
+                                                </td>
+                                                <td className="num">{fmtMonths(v.paybackMonths)}</td>
+                                                <td className={`num strong ${v.npv >= 0 ? 'pos' : 'neg'}`}>
+                                                    {signed(v.npv)}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <BarList
+                        title="What the answer is most exposed to"
+                        subtitle="Swing in net year one when one assumption moves, biggest first"
+                        format={money}
+                        rows={swings.map(sw => ({
+                            label: `${sw.label} ±${Math.round(sw.delta * 100)}%`,
+                            value: sw.swing,
+                            color: VIZ.status.selection.color,
+                        }))}
+                        limit={6}
                     />
                 </div>
 

@@ -284,3 +284,162 @@ export function useCountUp(value, duration = 900) {
     }, [value, duration]);
     return [shown, start];
 }
+
+// ─── Cash curve ──────────────────────────────────────────────────────────────
+//
+// Cumulative cash position over the horizon. The job is "above or below the
+// line, and when does it cross" — so the baseline is the zero line, the fill
+// diverges around it, and the crossing is marked rather than left to be read
+// off an axis. One series, so no legend: the title names it.
+//
+// The fill is split by a gradient with both stops at the zero offset rather
+// than by clipping two paths, so the boundary lands exactly on zero at any
+// aspect ratio.
+
+export function CashCurve({title, subtitle, months, paybackMonths, format = fmtNum, horizonMonths}) {
+    const id = useRef(`cc${Math.random().toString(36).slice(2, 9)}`).current;
+    const [hover, setHover] = useState(null);
+
+    if (!months || months.length === 0) {
+        return (
+            <div className="panel">
+                <div className="panel-head"><div><div className="panel-title">{title}</div></div></div>
+                <div className="panel-empty">No cash flow to show</div>
+            </div>
+        );
+    }
+
+    const W = 600, H = 170, PAD_L = 4, PAD_R = 4, PAD_T = 10, PAD_B = 4;
+    const n = months.length;
+    const values = months.map(m => m.cumulative);
+    const max = Math.max(...values, 0);
+    const min = Math.min(...values, 0);
+    const span = (max - min) || 1;
+
+    const x = i => PAD_L + (i / Math.max(1, n - 1)) * (W - PAD_L - PAD_R);
+    const y = v => PAD_T + (1 - (v - min) / span) * (H - PAD_T - PAD_B);
+    const zeroY = y(0);
+
+    const line = values.map((v, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    const area = `${line} L${x(n - 1).toFixed(1)},${zeroY.toFixed(1)} L${x(0).toFixed(1)},${zeroY.toFixed(1)} Z`;
+    const zeroOffset = `${(((zeroY - PAD_T) / (H - PAD_T - PAD_B)) * 100).toFixed(2)}%`;
+
+    const payX = paybackMonths != null && isFinite(paybackMonths)
+        ? x(Math.min(n - 1, Math.max(0, paybackMonths - 1))) : null;
+
+    const ticks = [12, 24, 36].filter(t => t <= (horizonMonths || n));
+    const point = hover != null ? months[hover] : months[n - 1];
+
+    return (
+        <div className="panel">
+            <div className="panel-head">
+                <div>
+                    <div className="panel-title">{title}</div>
+                    {subtitle && <div className="panel-sub">{subtitle}</div>}
+                </div>
+                <div className="cc-readout">
+                    <span className="cc-readout-month">Month {point.month}</span>
+                    <span className={`cc-readout-value ${point.cumulative >= 0 ? 'pos' : 'neg'}`}>
+                        {format(point.cumulative)}
+                    </span>
+                </div>
+            </div>
+
+            <div className="cash-curve">
+                <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img"
+                    aria-label={`${title}: cumulative position reaches ${format(values[n - 1])} by month ${n}`}>
+                    <defs>
+                        <linearGradient id={id} x1="0" y1={PAD_T} x2="0" y2={H - PAD_B}
+                            gradientUnits="userSpaceOnUse">
+                            <stop offset={zeroOffset} stopColor={VIZ.positive} stopOpacity="0.20" />
+                            <stop offset={zeroOffset} stopColor={VIZ.negative} stopOpacity="0.20" />
+                        </linearGradient>
+                    </defs>
+                    <path d={area} fill={`url(#${id})`} />
+                    <line x1={PAD_L} x2={W - PAD_R} y1={zeroY} y2={zeroY}
+                        stroke="#94a3b8" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+                    {payX != null && (
+                        <line x1={payX} x2={payX} y1={PAD_T} y2={H - PAD_B}
+                            stroke={VIZ.magnitude} strokeWidth="1" strokeDasharray="3 3"
+                            vectorEffect="non-scaling-stroke" />
+                    )}
+                    <path d={line} fill="none" stroke={VIZ.magnitude} strokeWidth="2"
+                        vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+                </svg>
+
+                {payX != null && (
+                    <span className="cc-payback" style={{left: `${(payX / W) * 100}%`}}>
+                        Payback · month {paybackMonths.toFixed(1)}
+                    </span>
+                )}
+
+                {/* Hover targets: one per month, invisible, wider than the mark. */}
+                <div className="cc-hit-row">
+                    {months.map((m, i) => (
+                        <span key={m.month} className="cc-hit"
+                            onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}
+                            title={`Month ${m.month}: ${format(m.cumulative)}`} />
+                    ))}
+                </div>
+            </div>
+
+            <div className="cc-axis">
+                <span>Month 1</span>
+                {ticks.map(t => <span key={t}>{t}</span>)}
+            </div>
+        </div>
+    );
+}
+
+// ─── Baseline vs scenario ────────────────────────────────────────────────────
+//
+// Three rows in three different units, so a table rather than a chart — a
+// shared axis would be meaningless across a headcount and two currencies.
+
+export function CompareTable({title, subtitle, rows, baselineLabel, scenarioLabel, formatMoney, formatCount}) {
+    return (
+        <div className="panel">
+            <div className="panel-head">
+                <div>
+                    <div className="panel-title">{title}</div>
+                    {subtitle && <div className="panel-sub">{subtitle}</div>}
+                </div>
+            </div>
+            <table className="compare-table">
+                <thead>
+                    <tr>
+                        <th />
+                        <th className="num">{baselineLabel}</th>
+                        <th className="num">{scenarioLabel}</th>
+                        <th className="num">Change</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.map(r => {
+                        const fmt = r.kind === 'money' ? formatMoney : formatCount;
+                        // Down is good for cost and headcount in a reduction, so
+                        // the tone follows the direction, not the sign.
+                        const tone = (r.neutral || r.delta === 0)
+                            ? 'flat' : (r.delta < 0 ? 'good' : 'bad');
+                        return (
+                            <tr key={r.key}>
+                                <td className="compare-label">{r.label}</td>
+                                <td className="num">{fmt(r.baseline)}</td>
+                                <td className="num strong">{fmt(r.scenario)}</td>
+                                <td className="num">
+                                    <span className={`delta-chip ${tone}`}>
+                                        {r.delta > 0 ? '+' : r.delta < 0 ? '−' : ''}{fmt(Math.abs(r.delta))}
+                                        <span className="delta-pct">
+                                            {r.deltaPct > 0 ? '+' : r.deltaPct < 0 ? '−' : ''}
+                                            {Math.abs(r.deltaPct).toFixed(1)}%
+                                        </span>
+                                    </span>
+                                </td>
+                            </tr>
+                        );
+                    })}
+                </tbody>
+            </table>
+        </div>
+    );
+}

@@ -32,7 +32,7 @@ Organisation ─┬─ Stacked org           the deck: tier bands → org cluste
 Impact       ─┬─ People impact        headcount bridge, status split, breakdowns
               ├─ Employee conversations   who owes a conversation, and who has had one
               └─ Works council        consultation obligations + the export ceremony
-Finance      ─── Savings & payback    cost bridge, one-off, payback, assumptions
+Finance      ─── Savings & payback    cost bridge, cash flow, scenarios, sensitivity
 Delivery     ─── Programme plan       milestones, workstream RAG, what is late
 Data         ─┬─ Org design data
               ├─ Employees & positions
@@ -208,6 +208,44 @@ Two differences from the Apps Script, both deliberate:
 - **No client logo on the slide.** Add one in `components/Slide.js` if you want
   it; it is not baked in.
 
+### Financials
+
+Two views carry money: the executive brief leads with **baseline vs scenario**
+and when the benefit arrives; **Savings & payback** carries the full model.
+
+`savings()` answers *what does the target state cost once we are in it* — a
+run-rate. That is the right number for the bridge and the wrong one for a CFO,
+because it assumes the change is already finished. `lib/finance.js` answers the
+next two questions off a **monthly cash flow** instead:
+
+- **Benefits ramp.** Nothing lands on day one. The saving ramps in linearly
+  between `benefitRampStartMonth` and `benefitRampEndMonth`; the one-off cost
+  is committed over `oneOffSpreadMonths`, starting immediately. That gap is the
+  entire reason payback is not instant.
+- **Payback is read off the cumulative series**, not computed as
+  `oneOff / (grossAnnual / 12)`. The shortcut assumes full run-rate from month
+  one and flatters the answer — on the sample data it says 18.8 months where
+  the phased figure is 25.8. The view shows both, so the difference is visible
+  rather than quietly corrected.
+- **NPV** discounts each month at a rate *compounded* from the annual one, not
+  the annual rate divided by twelve.
+- **Net year one** is the first twelve months of the actual flow. It is shown
+  in two places and comes from one source; a test pins them together.
+
+**Scenario comparison** varies the *same* design — it is not four separately
+designed target states, and the view says so. `scope` scales the reduction (and
+the severance with it, since fewer exits cost less to execute, while
+recruitment and transition are untouched because they attach to the new roles);
+`rampShiftMonths` moves how fast it lands; `severanceFactor` models a cheaper
+exit route. On the sample data "phased over two years" has a *negative* NPV —
+the same end state, nine months later, is worth less than doing nothing.
+
+**Sensitivity** swings one assumption at a time and ranks by the swing in net
+year one, biggest first — that is the assumption worth arguing about.
+
+Every input lives in `FINANCE` and `RATE_CARD` in `config.js` and is printed in
+the view. These are demo assumptions, not actuals.
+
 ### Changing reporting lines
 
 Dragging a card onto another person on the position view or the people tree
@@ -282,6 +320,7 @@ frontend/
   lib/
     fields.js           defensive cell reading + field resolution
     reparent.js         the one write path: validate a drop, build the update
+    finance.js          cash flow, NPV, payback, scenarios, sensitivity
     people.js           the people org model (tree, totals, scoping)
     suporg.js           the supervisory-org model (tree, conflict detection)
     stacked.js          the deck model: slides → levels → orgs → slots,
