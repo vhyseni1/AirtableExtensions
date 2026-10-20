@@ -376,6 +376,20 @@ export const CONVERSATION_STATUS = {
 // the programme is without inventing dates.
 export const PHASES = ['Design', 'Consultation', 'Selection', 'Transition', 'Close'];
 
+// ─── Table inventory ─────────────────────────────────────────────────────────
+//
+// Every table the extension looks for, in one list, so the Diagnostics view
+// reports exactly what the shell looks up rather than a second copy that can
+// drift out of step.
+export const TABLES = [
+    {key: 'people', label: 'Position view, people tree, org health', name: PEOPLE.tableName},
+    {key: 'design', label: 'Deck, impact, savings, works council', name: ORG_DESIGN.tableName},
+    {key: 'notes', label: 'Slide notes (optional)', name: ORG_DESIGN.notesTableName},
+    {key: 'suporg', label: 'Supervisory tree', name: SUP_ORG.tableName},
+    {key: 'programme', label: 'Programme plan', name: PROGRAMME.tableName},
+    {key: 'conversations', label: 'Employee conversations', name: CONVERSATIONS.tableName},
+];
+
 // ─── Tier labels ─────────────────────────────────────────────────────────────
 //
 // DISPLAY ONLY. The source data keeps whatever its columns and values are

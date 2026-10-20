@@ -35,6 +35,7 @@ import PositionChart from './views/PositionChart';
 import SupOrgChart from './views/SupOrgChart';
 import PeopleTree from './views/PeopleTree';
 import DataTable from './views/DataTable';
+import Diagnostics from './views/Diagnostics';
 import StackedDeck from './views/StackedDeck';
 import PeopleImpact from './views/PeopleImpact';
 import Savings from './views/Savings';
@@ -109,6 +110,16 @@ const NAV = [
             {key: 'suporg-data', label: 'Supervisory orgs', icon: '▦', needs: 'suporg'},
         ],
     },
+    {
+        key: 'setup',
+        label: 'Setup',
+        items: [
+            // Deliberately has no `needs`: this is the view that explains why
+            // the others are disabled, so it must survive every table being
+            // absent.
+            {key: 'diagnostics', label: 'Diagnostics', icon: '⚙'},
+        ],
+    },
 ];
 
 const ALL_ITEMS = NAV.flatMap(section => section.items);
@@ -142,7 +153,8 @@ function Sidebar({view, setView, collapsed, setCollapsed, availability, badges})
                                     className={`sidebar-item${view === item.key ? ' active' : ''}${ok ? '' : ' disabled'}`}
                                     onClick={() => ok && setView(item.key)}
                                     disabled={!ok}
-                                    title={ok ? item.label : `${item.label} — needs the ${item.needs} table`}
+                                    title={ok ? item.label
+                                        : `${item.label} — needs the ${item.needs} table. Open Setup › Diagnostics to see why.`}
                                 >
                                     <span className="sidebar-icon">{item.icon}</span>
                                     {!collapsed && <span className="sidebar-label">{item.label}</span>}
@@ -315,13 +327,23 @@ function OrgHubApp() {
     const programmeTable = useMemo(() => optionalTable(PROGRAMME.tableName), [optionalTable]);
     const conversationsTable = useMemo(() => optionalTable(CONVERSATIONS.tableName), [optionalTable]);
 
+    // No people table means the menu never renders, so Diagnostics would be
+    // unreachable exactly when it is most needed. Say the same thing here.
     if (!peopleTable) {
+        const seen = (base && base.tables) || [];
         return (
             <div className="app-root">
                 <Notice tone="error">
                     {PEOPLE.tableName
-                        ? `Table "${PEOPLE.tableName}" not found. Check tableName in frontend/config.js, or configure a table in the Data panel.`
-                        : 'No table found. Configure a table in the Data panel.'}
+                        ? `Table "${PEOPLE.tableName}" not found.`
+                        : 'No table found.'}
+                    {' '}This extension can currently see{' '}
+                    {seen.length === 0
+                        ? 'no tables at all'
+                        : `${seen.length} table${seen.length !== 1 ? 's' : ''}: ${seen.map(t => t.name).join(', ')}`}.
+                    {' '}Adding a table to the base is not the same as giving it to the extension —
+                    each one has to be added as a data source in the interface designer. If the name
+                    above differs from the table you meant, change tableName in frontend/config.js.
                 </Notice>
             </div>
         );
@@ -329,6 +351,7 @@ function OrgHubApp() {
 
     return (
         <OrgHub
+            base={base}
             peopleTable={peopleTable}
             supOrgTable={supOrgTable}
             designTable={designTable}
@@ -397,7 +420,7 @@ function ConversationsLoader({table, owed, children}) {
 }
 
 function OrgHub({
-    peopleTable, supOrgTable, designTable, notesTable,
+    base, peopleTable, supOrgTable, designTable, notesTable,
     programmeTable, conversationsTable, view, setView, collapsed, setCollapsed,
 }) {
     const {org, cfg, records, noView, viewerEmail} = usePeopleOrg(peopleTable);
@@ -489,6 +512,7 @@ function OrgHub({
                 />
             );
         }
+        if (key === 'diagnostics') return <Diagnostics base={base} peopleTable={peopleTable} />;
         if (key === 'people-tree') return <PeopleTree org={org} cfg={cfg} table={peopleTable} />;
         if (key === 'suporg') return <SupOrgSection table={supOrgTable} view="chart" />;
         if (key === 'suporg-data') return <SupOrgSection table={supOrgTable} view="data" />;

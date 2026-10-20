@@ -41,7 +41,15 @@ Data         ─┬─ Org design data
 
 A menu item whose optional table is missing is shown **disabled with the reason**
 rather than hidden — a demo that quietly loses half its menu looks broken rather
-than unconfigured.
+than unconfigured. **Setup › Diagnostics** is always reachable, even when every
+optional table is absent, and reports which tables the extension can actually
+see and what each configured name resolved to.
+
+> **Adding a table to the base is not the same as giving it to the extension.**
+> An interface extension reads only the tables configured as its data sources,
+> so a table can be fully imported and still be invisible here. If most of the
+> menu is disabled and only the people views work, that is almost always why —
+> open Diagnostics to confirm before changing any config.
 
 The five chart views read **two different shapes of data**, and that is the
 thing to understand before configuring anything:
@@ -334,6 +342,7 @@ frontend/
     FilterTree.js       the hierarchical tier filter
     StackedTree.js      the box-tree renderer: pan/zoom, connectors, histogram
   views/
+    Diagnostics.js  what the extension can see, and why a view is disabled
     StackedDeck.js  Dashboard.js  PositionChart.js
     SupOrgChart.js  PeopleTree.js  DataTable.js
 ```
