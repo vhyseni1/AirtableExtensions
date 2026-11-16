@@ -226,7 +226,31 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
     const rowCount = parsed?.rows.length ?? 0;
     const matchedCount = mapping?.matched.length ?? 0;
 
-    const buildRecords = (strict: boolean): ReadonlyArray<{fields: Record<string, unknown>}> => {
+    // Select fields whose incoming values aren't existing options. An interface
+    // extension cannot create options, so these values can't be written — the
+    // base field must be single-line text, or the options added in the base.
+    const selectWarnings = useMemo(() => {
+        if (!parsed || !mapping) return [] as {field: string; values: string[]}[];
+        const headerIndex = new Map<string, number>();
+        parsed.headers.forEach((h, i) => headerIndex.set(h, i));
+        const out: {field: string; values: string[]}[] = [];
+        for (const {header, field} of mapping.matched) {
+            if (field.type !== 'singleSelect' && field.type !== 'multipleSelects') continue;
+            const idx = headerIndex.get(header);
+            if (idx === undefined) continue;
+            const missing = new Set<string>();
+            for (const cells of parsed.rows) {
+                const raw = (cells[idx] ?? '').trim();
+                if (!raw) continue;
+                const parts = field.type === 'multipleSelects' ? raw.split(/[,;]/).map(s => s.trim()).filter(Boolean) : [raw];
+                for (const p of parts) if (matchOption(field, p) === null) missing.add(p);
+            }
+            if (missing.size) out.push({field: field.name, values: [...missing]});
+        }
+        return out;
+    }, [parsed, mapping]);
+
+    const buildRecords = (): ReadonlyArray<{fields: Record<string, unknown>}> => {
         if (!parsed || !mapping) return [];
         const headerIndex = new Map<string, number>();
         parsed.headers.forEach((h, i) => headerIndex.set(h, i));
@@ -235,7 +259,7 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
             for (const {header, field} of mapping.matched) {
                 const idx = headerIndex.get(header);
                 if (idx === undefined) continue;
-                const val = coerce(field, cells[idx] ?? '', strict);
+                const val = coerce(field, cells[idx] ?? '', true);
                 if (val !== undefined) fields[field.name] = val;
             }
             // Default Validation Status to Pending when not supplied.
@@ -249,10 +273,7 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
 
     const runImport = async () => {
         if (!table) return;
-        // Permissive first (creates missing options); strict is the per-row
-        // fallback that only uses existing options.
-        const records = buildRecords(false);
-        const strictRecords = buildRecords(true);
+        const records = buildRecords();
         if (records.length === 0) return;
         setPhase('importing');
         setProgress(0);
@@ -265,31 +286,27 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
                 await table.createRecordsAsync(chunk);
                 created += chunk.length;
             } catch (batchErr) {
-                // Batch is all-or-nothing; retry each row, then retry strict.
-                for (let j = 0; j < chunk.length; j++) {
-                    const rec = chunk[j]!;
+                for (const rec of chunk) {
                     try {
                         await table.createRecordsAsync([rec]);
                         created += 1;
-                    } catch {
-                        try {
-                            await table.createRecordsAsync([strictRecords[i + j]!]);
-                            created += 1;
-                        } catch (rowErr) {
-                            failed += 1;
-                            if (!firstError) firstError = rowErr instanceof Error ? rowErr.message : String(rowErr);
-                        }
+                    } catch (rowErr) {
+                        failed += 1;
+                        if (!firstError) firstError = rowErr instanceof Error ? rowErr.message : String(rowErr);
                     }
                 }
                 void batchErr;
             }
             setProgress(created);
         }
+        const warnMsg = selectWarnings.length
+            ? `Some single-select fields couldn't take all values (the extension can't add options): ${selectWarnings.map(w => `${w.field} (${w.values.length})`).join(', ')}. Make these fields single-line text in the base to keep every value.`
+            : '';
         if (failed > 0) {
-            setResult({created, message: `${failed} row${failed === 1 ? '' : 's'} could not be imported. First error: ${firstError}`});
+            setResult({created, message: `${failed} row${failed === 1 ? '' : 's'} failed. ${firstError}${warnMsg ? ' · ' + warnMsg : ''}`});
             setPhase(created > 0 ? 'done' : 'error');
         } else {
-            setResult({created});
+            setResult({created, message: warnMsg || undefined});
             setPhase('done');
         }
         if (created > 0) onImported?.();
@@ -387,6 +404,17 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
                                         <Row label="Ignored columns" value={mapping.ignored.join(', ')} muted />
                                     ) : null}
                                 </div>
+                            ) : null}
+
+                            {selectWarnings.length > 0 ? (
+                                <Banner tone="warn">
+                                    <strong>{selectWarnings.map(w => w.field).join(', ')}</strong>{' '}
+                                    {selectWarnings.length === 1 ? 'is a single-select' : 'are single-selects'} with values that aren&apos;t
+                                    existing options ({selectWarnings.map(w => `${w.field}: ${w.values.length}`).join(', ')}). An
+                                    extension can&apos;t add options, so those values will import blank. Change{' '}
+                                    {selectWarnings.length === 1 ? 'this field' : 'these fields'} to <strong>Single line text</strong> in
+                                    the base to keep every value.
+                                </Banner>
                             ) : null}
 
                             {phase === 'error' ? (
