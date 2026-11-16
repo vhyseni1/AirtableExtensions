@@ -5,6 +5,8 @@ import {type Impact} from '../../utils/schema';
 const RADIUS = {card: 16, inner: 12, pill: 980};
 const SHADOW = {card: '0 1px 2px rgba(2,35,102,0.04), 0 8px 24px -12px rgba(2,35,102,0.16)'};
 
+const REVIEW_GRID_URL = 'https://airtable.com/appNBuEitKHz7OyM7/pagZnlBdjiAQT6W8L';
+
 interface Props {
     records: Impact[];
     onImport?: () => void;
@@ -53,7 +55,10 @@ export function ReviewView({records, onImport}: Props) {
                     dashboard.
                 </p>
 
-                <div style={{display: 'flex', gap: tokens.space.sm, flexWrap: 'wrap', marginTop: tokens.space.lg}}>
+                <div style={{display: 'flex', gap: tokens.space.md, flexWrap: 'wrap', alignItems: 'center', marginTop: tokens.space.lg}}>
+                    <a href={REVIEW_GRID_URL} target="_blank" rel="noopener noreferrer" style={linkBtn}>
+                        Open the Review grid ↗
+                    </a>
                     <Stat label="Pending" value={counts.Pending} tone="pending" />
                     <Stat label="Reviewed" value={counts.Reviewed} tone="reviewed" />
                     <Stat label="Discarded" value={counts.Discarded} tone="muted" />
@@ -63,7 +68,10 @@ export function ReviewView({records, onImport}: Props) {
             <div style={{...card, padding: `${tokens.space.xl} ${tokens.space.xxl}`}}>
                 <span style={eyebrow}>How to review</span>
                 <ol style={{margin: '10px 0 0', paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13.5, color: tokens.colors.textMuted, lineHeight: 1.6}}>
-                    <li>Open the <strong>Review grid</strong> and work the <strong>lowest-confidence</strong> rows first.</li>
+                    <li>
+                        Open the <a href={REVIEW_GRID_URL} target="_blank" rel="noopener noreferrer" style={{color: tokens.colors.accent, fontWeight: 600}}>Review grid</a> and work the{' '}
+                        <strong>lowest-confidence</strong> rows first.
+                    </li>
                     <li>Check each row against its Source Quote and correct anything the model got wrong.</li>
                     <li>
                         Set <strong>Validation Status → Reviewed</strong>. Select the cell and <strong>drag the fill handle</strong> down
@@ -111,4 +119,16 @@ const primaryBtn: React.CSSProperties = {
     fontSize: 13,
     fontWeight: 700,
     cursor: 'pointer',
+};
+const linkBtn: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: '9px 18px',
+    borderRadius: RADIUS.pill,
+    background: tokens.colors.accent,
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: 700,
+    textDecoration: 'none',
+    boxShadow: SHADOW.card,
 };
