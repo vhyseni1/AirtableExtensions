@@ -321,14 +321,14 @@ function navItem(on: boolean): React.CSSProperties {
         fontSize: 12.5,
         fontWeight: 600,
         letterSpacing: '0.01em',
-        border: `1px solid ${on ? '#0A0D14' : tokens.colors.rule}`,
+        border: `1px solid ${on ? 'rgba(255,255,255,0.55)' : '#0A0D14'}`,
         borderRadius: 10,
-        background: on ? '#0A0D14' : '#FFFFFF',
-        color: on ? '#FFFFFF' : tokens.colors.text,
+        background: '#0A0D14',
+        color: '#FFFFFF',
         cursor: 'pointer',
         textDecoration: 'none',
         whiteSpace: 'nowrap',
-        transition: 'background 140ms ease, color 140ms ease, border-color 140ms ease',
+        transition: 'border-color 140ms ease',
     };
 }
 
@@ -345,22 +345,20 @@ function TopNav({
     onHelp: () => void;
 }) {
     return (
-        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: tokens.space.md, flexWrap: 'wrap'}}>
-            <nav style={{display: 'flex', gap: tokens.space.sm, flexWrap: 'wrap'}}>
-                <button type="button" onClick={() => onSection('import')} style={navItem(section === 'import')}>
-                    Import Data <span aria-hidden style={{opacity: 0.55}}>›</span>
-                </button>
-                <a href={reviewUrl} target="_top" rel="noopener" style={navItem(false)}>
-                    Review Data <span aria-hidden style={{opacity: 0.55}}>›</span>
-                </a>
-                <button type="button" onClick={() => onSection('dashboards')} style={navItem(section === 'dashboards')}>
-                    Dashboards <span aria-hidden style={{opacity: 0.55}}>›</span>
-                </button>
-            </nav>
+        <nav style={{display: 'flex', justifyContent: 'flex-end', gap: tokens.space.sm, flexWrap: 'wrap'}}>
+            <button type="button" onClick={() => onSection('import')} style={navItem(section === 'import')}>
+                Import Data <span aria-hidden style={{opacity: 0.6}}>›</span>
+            </button>
+            <a href={reviewUrl} target="_top" rel="noopener" style={navItem(false)}>
+                Review Data <span aria-hidden style={{opacity: 0.6}}>›</span>
+            </a>
+            <button type="button" onClick={() => onSection('dashboards')} style={navItem(section === 'dashboards')}>
+                Dashboards <span aria-hidden style={{opacity: 0.6}}>›</span>
+            </button>
             <button type="button" onClick={onHelp} title="How the Control Tower works" style={navItem(false)}>
                 Guide
             </button>
-        </div>
+        </nav>
     );
 }
 
