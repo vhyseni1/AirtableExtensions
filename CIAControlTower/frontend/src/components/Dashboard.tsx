@@ -9,6 +9,7 @@ import {DiagnosticGrid} from './DiagnosticGrid';
 import {FilterBar} from './FilterBar';
 import {HeadlineBar, type DrillSpec} from './HeadlineBar';
 import {HeatMap} from './HeatMap';
+import {HelpGuide} from './HelpGuide';
 import {NarrativeMode} from './NarrativeMode';
 import {DrillSheet} from './primitives/DrillSheet';
 import {EmptyState} from './primitives/EmptyState';
@@ -89,10 +90,17 @@ function DashboardBody({tableName}: {tableName: string}) {
     const [activeDrill, setActiveDrill] = useState<ActiveDrill | null>(null);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [narrative, setNarrative] = useState(false);
+    const [help, setHelp] = useState(false);
     const [tab, setTab] = useState<TabKey>('overview');
 
     const filtered = useFilteredImpacts(impacts, filter);
     const aggregations = useAggregations(filtered, impacts);
+
+    const reviewedCount = useMemo(
+        () => impacts.filter(r => r.validationStatus === 'Reviewed').length,
+        [impacts],
+    );
+    const hasReviewedData = reviewedCount > 0;
 
     const openRecord = useCallback(
         (id: string) => {
@@ -164,27 +172,36 @@ function DashboardBody({tableName}: {tableName: string}) {
             >
                 <Masthead
                     onNarrative={() => setNarrative(true)}
+                    onHelp={() => setHelp(true)}
                     runCount={aggregations.runs.length}
                     tab={tab}
                     onTabChange={setTab}
                 />
-                <HeadlineBar
-                    filtered={filtered}
-                    aggregations={aggregations}
-                    activeDrill={(activeDrill?.key as DrillSpec['key']) ?? null}
-                    onDrill={handleDrillFromTile}
-                />
-                <FilterBar
-                    filter={filter}
-                    onChange={setFilter}
-                    runs={aggregations.runs}
-                    roles={aggregations.roles}
-                    freshness={freshness}
-                />
+                {hasReviewedData && tab !== 'adddata' ? (
+                    <>
+                        <HeadlineBar
+                            filtered={filtered}
+                            aggregations={aggregations}
+                            activeDrill={(activeDrill?.key as DrillSpec['key']) ?? null}
+                            onDrill={handleDrillFromTile}
+                        />
+                        <FilterBar
+                            filter={filter}
+                            onChange={setFilter}
+                            runs={aggregations.runs}
+                            roles={aggregations.roles}
+                            freshness={freshness}
+                        />
+                    </>
+                ) : null}
             </div>
 
             {tab === 'adddata' ? (
                 <AddDataView />
+            ) : impacts.length === 0 ? (
+                <HelpGuide mode="no-data" />
+            ) : !hasReviewedData ? (
+                <HelpGuide mode="awaiting-review" totalCount={impacts.length} reviewedCount={reviewedCount} />
             ) : filtered.length === 0 ? (
                 <div style={{padding: tokens.space.xxl, background: tokens.colors.bgPanel, border: `1px solid ${tokens.colors.rule}`, borderRadius: tokens.radius.md}}>
                     <EmptyState line="No reviewed impacts match the current filter. Try widening the lens." />
@@ -247,17 +264,21 @@ function DashboardBody({tableName}: {tableName: string}) {
             {narrative ? (
                 <NarrativeMode aggregations={aggregations} onClose={() => setNarrative(false)} />
             ) : null}
+
+            {help ? <HelpGuide mode="modal" onClose={() => setHelp(false)} /> : null}
         </div>
     );
 }
 
 function Masthead({
     onNarrative,
+    onHelp,
     runCount,
     tab,
     onTabChange,
 }: {
     onNarrative: () => void;
+    onHelp: () => void;
     runCount: number;
     tab: TabKey;
     onTabChange: (t: TabKey) => void;
@@ -329,6 +350,25 @@ function Masthead({
             >
                 <Tabs active={tab} onChange={onTabChange} dark />
                 <span aria-hidden style={{width: 1, height: 22, background: 'rgba(255,255,255,0.25)'}} />
+                <button
+                    type="button"
+                    onClick={onHelp}
+                    title="How the Control Tower works"
+                    style={{
+                        padding: '6px 14px',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        letterSpacing: '0.08em',
+                        textTransform: 'uppercase',
+                        border: '1px solid rgba(255,255,255,0.4)',
+                        borderRadius: tokens.radius.sm,
+                        background: 'rgba(255,255,255,0.16)',
+                        color: '#FFFFFF',
+                        cursor: 'pointer',
+                    }}
+                >
+                    ? Help
+                </button>
                 <button
                     type="button"
                     onClick={onNarrative}
