@@ -331,15 +331,37 @@ interface Stage {
     n: string;
     title: string;
     body: string;
+    where: string;
+    detail: string;
     actor: 'auto' | 'you';
 }
 
 const STAGES: ReadonlyArray<Stage> = [
-    {n: '01', title: 'Capture', actor: 'auto', body: 'Workshops and sessions produce raw material — transcripts, notes, flip charts, KDI, Lucid boards.'},
-    {n: '02', title: 'Extract', actor: 'you', body: 'You run two prompts in Google Notebook to generate and clean structured impact rows.'},
-    {n: '03', title: 'Upload', actor: 'you', body: 'You paste the rows via a Google Sheet into the Upload & review tab.'},
-    {n: '04', title: 'Review', actor: 'you', body: 'You validate each row and mark it Reviewed.'},
-    {n: '05', title: 'Visualise', actor: 'auto', body: 'Reviewed rows flow into the dashboard, ready to act on.'},
+    {
+        n: '01', title: 'Capture', actor: 'auto', where: 'Workshops & sessions',
+        body: 'Raw material — transcripts, notes, flip charts, KDI, Lucid boards.',
+        detail: 'Facilitators capture everything raw during the sessions. Nothing is structured yet.',
+    },
+    {
+        n: '02', title: 'Extract', actor: 'you', where: 'Google Notebook',
+        body: 'Run two prompts to generate and clean structured rows.',
+        detail: 'Upload the sources to Google Notebook, then run the two prompts below — one to enumerate every impact, one to clean, split and consolidate. Use the exact same file names in both.',
+    },
+    {
+        n: '03', title: 'Upload', actor: 'you', where: 'Google Sheet → Airtable',
+        body: 'Paste the rows via a Google Sheet into the Upload & review tab.',
+        detail: 'Paste the final table into a Google Sheet first to lock the structure, then copy it into the Upload & review source data tab. Rows arrive as Pending.',
+    },
+    {
+        n: '04', title: 'Review', actor: 'you', where: 'Airtable · Upload & review tab',
+        body: 'Validate each row and mark it Reviewed.',
+        detail: 'Check each row (lowest confidence first) against its Source Quote and set Validation Status to Reviewed. Discard bad rows.',
+    },
+    {
+        n: '05', title: 'Visualise', actor: 'auto', where: 'This dashboard',
+        body: 'Reviewed rows flow into the dashboard, ready to act on.',
+        detail: 'The moment a row is Reviewed it populates every view — headline tiles, heat maps, flows and radars.',
+    },
 ];
 
 function ProcessOverview() {
@@ -378,13 +400,103 @@ function ProcessOverview() {
                                 <span style={{fontFamily: tokens.fonts.serif, fontWeight: 600, fontSize: 15, color: tokens.colors.text}}>
                                     {s.title}
                                 </span>
+                                <span
+                                    style={{
+                                        alignSelf: 'center',
+                                        fontFamily: tokens.fonts.mono,
+                                        fontSize: 10,
+                                        fontWeight: 600,
+                                        color: tokens.colors.accentDeep,
+                                        background: tokens.colors.ruleSoft,
+                                        padding: '2px 8px',
+                                        borderRadius: RADIUS.pill,
+                                        whiteSpace: 'nowrap',
+                                    }}
+                                >
+                                    {s.where}
+                                </span>
                                 <span style={{fontSize: 12, color: tokens.colors.textMuted, lineHeight: 1.5}}>{s.body}</span>
                             </div>
                         </div>
                     ))}
                 </div>
             </DiagramFrame>
+
+            <ProcessDetail />
         </Section>
+    );
+}
+
+/** Specific, step-by-step breakdown beneath the rail — including where each
+ *  step happens and the two prompts that run in the Extract step. */
+function ProcessDetail() {
+    return (
+        <div style={{display: 'flex', flexDirection: 'column'}}>
+            {STAGES.map((s, i) => {
+                const last = i === STAGES.length - 1;
+                const you = s.actor === 'you';
+                return (
+                    <div key={s.n} style={{display: 'grid', gridTemplateColumns: '30px 1fr', columnGap: tokens.space.md}}>
+                        <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
+                            <span
+                                style={{
+                                    width: 28,
+                                    height: 28,
+                                    flexShrink: 0,
+                                    borderRadius: '50%',
+                                    border: you ? 'none' : `1.5px solid ${tokens.colors.accentTint}`,
+                                    background: you ? tokens.colors.accent : tokens.colors.bgPanel,
+                                    color: you ? '#FFFFFF' : tokens.colors.accent,
+                                    boxShadow: you ? '0 3px 9px -2px rgba(11,65,205,0.4)' : SHADOW.raised,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontFamily: tokens.fonts.mono,
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                }}
+                            >
+                                {s.n}
+                            </span>
+                            {!last ? <span style={{flex: 1, width: 2, background: tokens.colors.rule, minHeight: 14}} /> : null}
+                        </div>
+                        <div style={{paddingBottom: last ? 0 : tokens.space.lg}}>
+                            <div style={{display: 'flex', alignItems: 'center', gap: tokens.space.sm, flexWrap: 'wrap'}}>
+                                <span style={{fontFamily: tokens.fonts.serif, fontWeight: 600, fontSize: 15, color: tokens.colors.text}}>
+                                    {s.title}
+                                </span>
+                                <span
+                                    style={{
+                                        fontFamily: tokens.fonts.mono,
+                                        fontSize: 10,
+                                        fontWeight: 600,
+                                        color: tokens.colors.accentDeep,
+                                        background: tokens.colors.ruleSoft,
+                                        padding: '2px 8px',
+                                        borderRadius: RADIUS.pill,
+                                    }}
+                                >
+                                    {s.where}
+                                </span>
+                            </div>
+                            <p style={{margin: '4px 0 0', fontSize: 13, color: tokens.colors.textMuted, lineHeight: 1.6}}>{s.detail}</p>
+
+                            {s.title === 'Extract' ? (
+                                <div style={{marginTop: tokens.space.sm, display: 'flex', flexDirection: 'column', gap: tokens.space.sm}}>
+                                    <NotebookLink />
+                                    <Callout tone="warn" label="Use the same file names throughout">
+                                        The names in the generation prompt, the name the critique prompt points at, and the sources in
+                                        Notebook must be <strong>identical</strong>, or impacts go missing.
+                                    </Callout>
+                                    <PromptBlock label="Generation prompt" text={GENERATION_PROMPT} />
+                                    <PromptBlock label="Critique prompt" text={CRITIQUE_PROMPT} />
+                                </div>
+                            ) : null}
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
     );
 }
 
