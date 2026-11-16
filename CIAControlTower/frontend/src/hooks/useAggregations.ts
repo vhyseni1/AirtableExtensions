@@ -30,7 +30,24 @@ export interface DashboardAggregations {
     runs: string[];
     roles: string[];
     personas: string[];
+    /** Distinct affiliate values present in the data (data-driven, not hard-coded). */
+    affiliates: string[];
+    /** Distinct Business_Archetype values present in the data. */
+    archetypes: string[];
     delta: ReturnType<typeof deltaBetweenRuns> | null;
+}
+
+function distinct(values: Iterable<string>): string[] {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const v of values) {
+        const t = v.trim();
+        if (t && !seen.has(t)) {
+            seen.add(t);
+            out.push(t);
+        }
+    }
+    return out.sort((a, b) => a.localeCompare(b));
 }
 
 export function useAggregations(filtered: Impact[], all: Impact[]): DashboardAggregations {
@@ -38,6 +55,8 @@ export function useAggregations(filtered: Impact[], all: Impact[]): DashboardAgg
         const runs = listRuns(all);
         const roles = listRoles(all);
         const personas = listPersonas(all);
+        const affiliates = distinct(all.map(r => r.affiliate ?? '').filter(Boolean));
+        const archetypes = distinct(all.flatMap(r => r.businessArchetypes));
         let delta: ReturnType<typeof deltaBetweenRuns> | null = null;
         if (runs.length >= 2) {
             const currentRun = runs[0];
@@ -59,6 +78,8 @@ export function useAggregations(filtered: Impact[], all: Impact[]): DashboardAgg
             runs,
             roles,
             personas,
+            affiliates,
+            archetypes,
             delta,
         };
     }, [filtered, all]);

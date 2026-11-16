@@ -1,7 +1,6 @@
 import {useEffect, useMemo, useState} from 'react';
 import {tokens} from '../../styles/tokens';
 import {
-    AFFILIATES,
     CHANGE_CATEGORIES,
     type Impact,
 } from '../../utils/schema';
@@ -116,7 +115,8 @@ function AffiliateRiskPanel({filtered, onDrill}: Props) {
             '% Lower confidence',
         ];
         const out: RadarSeries[] = [];
-        AFFILIATES.forEach((aff, idx) => {
+        const affs = Array.from(new Set(filtered.map(r => r.affiliate).filter((a): a is string => !!a))).sort();
+        affs.forEach((aff, idx) => {
             const subset = filtered.filter(r => r.affiliate === aff);
             if (subset.length === 0) return;
             const n = subset.length;

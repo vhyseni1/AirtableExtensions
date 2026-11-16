@@ -6,8 +6,6 @@ import {
     type ImpactFilter,
 } from '../hooks/useFilteredImpacts';
 import {
-    AFFILIATES,
-    BUSINESS_ARCHETYPES,
     CHANGE_IMPACTS,
     TAGS,
     type BusinessArchetype,
@@ -20,6 +18,8 @@ interface Props {
     onChange: (next: FilterState) => void;
     runs: string[];
     roles: string[];
+    affiliates: string[];
+    archetypes: string[];
     freshness: string | null;
 }
 
@@ -36,7 +36,7 @@ const segmentBtn = (active: boolean): React.CSSProperties => ({
     transition: 'background 120ms ease',
 });
 
-export function FilterBar({filter, onChange, runs, roles, freshness}: Props) {
+export function FilterBar({filter, onChange, runs, roles, affiliates, archetypes, freshness}: Props) {
     const isDefault =
         filter.sourceRuns.length === 0 &&
         filter.affiliate === DEFAULT_FILTER.affiliate &&
@@ -47,7 +47,7 @@ export function FilterBar({filter, onChange, runs, roles, freshness}: Props) {
 
     const runOptions: DropdownOption[] = runs.map(r => ({value: r, label: r}));
     const roleOptions: DropdownOption[] = roles.map(r => ({value: r, label: r}));
-    const archetypeOptions: DropdownOption[] = BUSINESS_ARCHETYPES.map(a => ({value: a, label: a}));
+    const archetypeOptions: DropdownOption[] = archetypes.map(a => ({value: a, label: a}));
     const tagOptions: DropdownOption[] = TAGS.map(t => ({value: t, label: t, swatch: tagColor(t)}));
 
     return (
@@ -88,7 +88,7 @@ export function FilterBar({filter, onChange, runs, roles, freshness}: Props) {
                     }}
                 >
                     <option value="All">All</option>
-                    {AFFILIATES.map(a => (
+                    {affiliates.map(a => (
                         <option key={a} value={a}>
                             {a}
                         </option>

@@ -143,8 +143,13 @@ export const CHANGE_CATEGORIES = [
 ] as const;
 export type ChangeCategory = (typeof CHANGE_CATEGORIES)[number];
 
+/**
+ * Affiliate and Business_Archetype are free-form: real bases use different
+ * regional codes (E-L, APAC, US, China, …) and archetype labels. These lists
+ * are only reference defaults — actual values are sourced from the data.
+ */
 export const AFFILIATES = ['Global', 'DE', 'UK', 'FR', 'ES', 'IT', 'CA', 'BR'] as const;
-export type Affiliate = (typeof AFFILIATES)[number];
+export type Affiliate = string;
 
 export const BUSINESS_ARCHETYPES = [
     'i8 First Mover',
@@ -153,7 +158,7 @@ export const BUSINESS_ARCHETYPES = [
     'i7',
     'Global Function',
 ] as const;
-export type BusinessArchetype = (typeof BUSINESS_ARCHETYPES)[number];
+export type BusinessArchetype = string;
 
 export const CHANGE_IMPACTS = ['High', 'Medium', 'Low'] as const;
 export type ChangeImpact = (typeof CHANGE_IMPACTS)[number];

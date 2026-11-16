@@ -232,6 +232,8 @@ function DashboardBody({tableName}: {tableName: string}) {
                             onChange={setFilter}
                             runs={aggregations.runs}
                             roles={aggregations.roles}
+                            affiliates={aggregations.affiliates}
+                            archetypes={aggregations.archetypes}
                             freshness={freshness}
                         />
                     </>

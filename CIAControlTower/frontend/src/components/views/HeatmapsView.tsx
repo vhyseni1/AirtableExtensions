@@ -1,7 +1,5 @@
 import {tokens} from '../../styles/tokens';
 import {
-    AFFILIATES,
-    BUSINESS_ARCHETYPES,
     CHANGE_CATEGORIES,
     type Impact,
 } from '../../utils/schema';
@@ -68,7 +66,6 @@ export function HeatmapsView({filtered, onDrill}: Props) {
                     records={filtered}
                     rowKey={r => r.affiliate ?? null}
                     colKey={r => (r.changeComponent?.trim() ? r.changeComponent : null)}
-                    rowOrder={AFFILIATES}
                     rowLabel="Affiliate"
                     colLabel="Change_Component"
                     onDrill={onDrill}
@@ -85,7 +82,6 @@ export function HeatmapsView({filtered, onDrill}: Props) {
                     records={flattenByArchetype(filtered)}
                     rowKey={r => r.role || null}
                     colKey={r => (r.changeComponent?.trim() ? r.changeComponent : null)}
-                    rowOrder={BUSINESS_ARCHETYPES}
                     rowLabel="Archetype"
                     colLabel="Change_Component"
                     onDrill={(records, title) => onDrill(dedupeById(records), title)}

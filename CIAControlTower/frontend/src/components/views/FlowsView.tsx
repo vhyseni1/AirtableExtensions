@@ -1,7 +1,5 @@
 import {sevColor, tagColor, tokens} from '../../styles/tokens';
 import {
-    AFFILIATES,
-    BUSINESS_ARCHETYPES,
     CHANGE_CATEGORIES,
     CHANGE_IMPACTS,
     type Impact,
@@ -18,7 +16,6 @@ export function FlowsView({filtered, onDrill}: Props) {
     const affiliate: SankeyDimension = {
         label: 'Affiliate',
         extract: r => r.affiliate ?? null,
-        order: AFFILIATES,
     };
     const categoryCol: SankeyDimension = {
         label: 'Change_Category',
@@ -46,7 +43,6 @@ export function FlowsView({filtered, onDrill}: Props) {
     const archetypeCol: SankeyDimension = {
         label: 'Business_Archetype',
         extract: r => r.businessArchetypes[0] ?? null,
-        order: BUSINESS_ARCHETYPES,
     };
 
     const tagFlattened = flattenByTag(filtered);

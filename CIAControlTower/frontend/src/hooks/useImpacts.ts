@@ -2,10 +2,8 @@ import {useBase, useRecords} from '@airtable/blocks/interface/ui';
 import {useMemo} from 'react';
 import {
     ACCESSIBLE_FIELD_CANDIDATES,
-    BUSINESS_ARCHETYPES,
     CHANGE_CATEGORIES,
     CHANGE_IMPACTS,
-    AFFILIATES,
     CONFIDENCES,
     CREATED_FIELD_CANDIDATES,
     ECL_STREAMS,
@@ -15,8 +13,6 @@ import {
     TABLE_NAME,
     TAGS,
     VALIDATION_STATUSES,
-    type Affiliate,
-    type BusinessArchetype,
     type ChangeCategory,
     type ChangeImpact,
     type Confidence,
@@ -59,6 +55,12 @@ function normalizeMany<T extends string>(raw: string, allow: ReadonlyArray<T>): 
         if ((allow as ReadonlyArray<string>).includes(part)) out.push(part as T);
     }
     return out;
+}
+
+/** Split a comma-separated cell into trimmed, non-empty values — no allowlist. */
+function freeFormMany(raw: string): string[] {
+    if (!raw) return [];
+    return raw.split(',').map(s => s.trim()).filter(Boolean);
 }
 
 function safeStr(rec: AirtableRecord, field: string, present: ReadonlySet<string>): string {
@@ -135,12 +137,20 @@ function buildImpact(
         recordNumber: recordNumberOf(rec, resolved.id, present),
         validationStatus: normalizeOne<ValidationStatus>(str('validationStatus'), VALIDATION_STATUSES),
         sourceRun: str('sourceRun').trim(),
-        businessArchetypes: normalizeMany<BusinessArchetype>(str('businessArchetypes'), BUSINESS_ARCHETYPES),
-        affiliate: normalizeOne<Affiliate>(str('affiliate'), AFFILIATES),
+        // Free-form: keep whatever the data provides, split multi-values on commas.
+        businessArchetypes: freeFormMany(str('businessArchetypes')),
+        affiliate: (() => {
+            const v = str('affiliate').trim();
+            return v ? v : null;
+        })(),
         role: str('role').trim(),
         persona: (() => {
+            // Prefer an explicit Persona value; otherwise fall back to the first
+            // Business_Archetype so archetype-based panels still populate.
             const v = str('persona').trim();
-            return v ? v : null;
+            if (v) return v;
+            const arch = freeFormMany(str('businessArchetypes'));
+            return arch[0] ?? null;
         })(),
         changeCategory: normalizeOne<ChangeCategory>(str('changeCategory'), CHANGE_CATEGORIES),
         changeComponent: str('changeComponent').trim(),
