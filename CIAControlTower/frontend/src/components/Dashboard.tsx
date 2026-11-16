@@ -30,10 +30,12 @@ import {Tabs, type TabKey} from './Tabs';
 import {FlowsView} from './views/FlowsView';
 import {HeatmapsView} from './views/HeatmapsView';
 import {RadarsView} from './views/RadarsView';
-import {ReviewView} from './views/ReviewView';
 import {WaterfallsView} from './views/WaterfallsView';
 
-type Section = 'import' | 'review' | 'dashboards';
+type Section = 'import' | 'dashboards';
+
+/** Native Airtable Review grid — opened in a new tab from the top nav. */
+const REVIEW_GRID_URL = 'https://airtable.com/appNBuEitKHz7OyM7/pagZnlBdjiAQT6W8L';
 
 interface ActiveDrill {
     title: string;
@@ -206,6 +208,7 @@ function DashboardBody({tableName}: {tableName: string}) {
                 <Masthead
                     section={section}
                     onSection={setSection}
+                    reviewUrl={REVIEW_GRID_URL}
                     onNarrative={() => setNarrative(true)}
                     onHelp={() => setHelp(true)}
                     runCount={aggregations.runs.length}
@@ -231,9 +234,7 @@ function DashboardBody({tableName}: {tableName: string}) {
             </div>
 
             {section === 'import' ? (
-                <ImportPanel tableName={tableName} onReview={() => setSection('review')} />
-            ) : section === 'review' ? (
-                <ReviewView records={visibleImpacts} onImport={() => setSection('import')} />
+                <ImportPanel tableName={tableName} reviewUrl={REVIEW_GRID_URL} />
             ) : visibleImpacts.length === 0 ? (
                 <HelpGuide mode="no-data" accessControlled={accessControlled} onImport={() => setSection('import')} />
             ) : !hasReviewedData ? (
@@ -306,21 +307,33 @@ function DashboardBody({tableName}: {tableName: string}) {
     );
 }
 
-const SECTIONS: ReadonlyArray<{key: Section; label: string}> = [
-    {key: 'import', label: 'Import Data'},
-    {key: 'review', label: 'Review Data'},
-    {key: 'dashboards', label: 'Dashboards'},
-];
+function navItem(on: boolean): React.CSSProperties {
+    return {
+        padding: '7px 16px',
+        fontSize: 11,
+        fontWeight: 700,
+        letterSpacing: '0.06em',
+        textTransform: 'uppercase',
+        border: 'none',
+        borderRadius: tokens.radius.sm,
+        background: on ? '#FFFFFF' : 'transparent',
+        color: on ? tokens.colors.accentDeep : 'rgba(255,255,255,0.9)',
+        cursor: 'pointer',
+        transition: 'background 140ms ease, color 140ms ease',
+    };
+}
 
 function Masthead({
     section,
     onSection,
+    reviewUrl,
     onNarrative,
     onHelp,
     runCount,
 }: {
     section: Section;
     onSection: (s: Section) => void;
+    reviewUrl: string;
     onNarrative: () => void;
     onHelp: () => void;
     runCount: number;
@@ -391,31 +404,15 @@ function Masthead({
                 }}
             >
                 <nav style={{display: 'flex', gap: 4, padding: 4, background: 'rgba(255,255,255,0.14)', borderRadius: tokens.radius.md}}>
-                    {SECTIONS.map(s => {
-                        const on = s.key === section;
-                        return (
-                            <button
-                                key={s.key}
-                                type="button"
-                                onClick={() => onSection(s.key)}
-                                style={{
-                                    padding: '7px 16px',
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                    letterSpacing: '0.06em',
-                                    textTransform: 'uppercase',
-                                    border: 'none',
-                                    borderRadius: tokens.radius.sm,
-                                    background: on ? '#FFFFFF' : 'transparent',
-                                    color: on ? tokens.colors.accentDeep : 'rgba(255,255,255,0.9)',
-                                    cursor: 'pointer',
-                                    transition: 'background 140ms ease, color 140ms ease',
-                                }}
-                            >
-                                {s.label}
-                            </button>
-                        );
-                    })}
+                    <button type="button" onClick={() => onSection('import')} style={navItem(section === 'import')}>
+                        Import Data
+                    </button>
+                    <a href={reviewUrl} target="_blank" rel="noopener noreferrer" style={{...navItem(false), textDecoration: 'none'}}>
+                        Review Data ↗
+                    </a>
+                    <button type="button" onClick={() => onSection('dashboards')} style={navItem(section === 'dashboards')}>
+                        Dashboards
+                    </button>
                 </nav>
                 <span aria-hidden style={{width: 1, height: 22, background: 'rgba(255,255,255,0.25)'}} />
                 <button

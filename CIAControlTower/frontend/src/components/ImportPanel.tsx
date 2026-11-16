@@ -111,7 +111,7 @@ function coerce(type: string, raw: string): unknown | undefined {
     }
 }
 
-export function ImportPanel({tableName, onImported, onReview}: {tableName: string; onImported?: () => void; onReview?: () => void}) {
+export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: string; onImported?: () => void; reviewUrl?: string}) {
     const base = useBase() as unknown as {getTableByNameIfExists(name: string): LiveTable | null};
     const table = base.getTableByNameIfExists(tableName);
 
@@ -232,7 +232,11 @@ export function ImportPanel({tableName, onImported, onReview}: {tableName: strin
                             </Banner>
                             <div style={{display: 'flex', gap: tokens.space.sm}}>
                                 <button type="button" onClick={reset} style={secondaryBtn}>Import more</button>
-                                {onReview ? <button type="button" onClick={onReview} style={primaryBtn}>Go to Review Data</button> : null}
+                                {reviewUrl ? (
+                                    <a href={reviewUrl} target="_blank" rel="noopener noreferrer" style={{...primaryBtn, display: 'inline-flex', alignItems: 'center', textDecoration: 'none'}}>
+                                        Open the Review grid ↗
+                                    </a>
+                                ) : null}
                             </div>
                         </>
                     ) : (
