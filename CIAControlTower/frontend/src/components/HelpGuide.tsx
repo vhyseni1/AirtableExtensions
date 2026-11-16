@@ -336,8 +336,8 @@ interface Stage {
 
 const STAGES: ReadonlyArray<Stage> = [
     {n: '01', title: 'Capture', actor: 'auto', body: 'Workshops and sessions produce raw material — transcripts, notes, flip charts, KDI, Lucid boards.'},
-    {n: '02', title: 'Extract', actor: 'auto', body: 'An LLM turns that raw material into structured impact rows.'},
-    {n: '03', title: 'Upload', actor: 'you', body: 'You paste those rows into the Upload & review tab.'},
+    {n: '02', title: 'Extract', actor: 'you', body: 'You run two prompts in Google Notebook to generate and clean structured impact rows.'},
+    {n: '03', title: 'Upload', actor: 'you', body: 'You paste the rows via a Google Sheet into the Upload & review tab.'},
     {n: '04', title: 'Review', actor: 'you', body: 'You validate each row and mark it Reviewed.'},
     {n: '05', title: 'Visualise', actor: 'auto', body: 'Reviewed rows flow into the dashboard, ready to act on.'},
 ];
@@ -435,25 +435,199 @@ function AccessSection() {
     );
 }
 
+const NOTEBOOK_URL = 'https://notebook.google.com/notebook/9e6d2a8a-378a-4220-94b1-e879a0f96c11';
+
+const GENERATION_PROMPT = `Pass 1 — Enumerate every impact. Walk the source (FILE NAMES) slide-by-slide, frame-by-frame, and sticky-cluster-by-sticky-cluster. Do not skip frames labeled "OPEN QUESTIONS", "BACKLOG", "HOMEWORK", "AGREED CHANGES", or individual comment stickies — these contain 5-10 high-priority impacts that standard scanners miss.
+
+For each candidate impact, check:
+- Multiple Roles affected? (Each canonical Role = ONE row)
+- Regional / Affiliate split? (Each region/affiliate = ONE row)
+- Structural change AND explicit emotional/sentiment quote? (TWO rows: Structural + Mindset)
+- Meta-observation about a Role? (e.g. "we underestimate GMM capacity" = standalone Engagement & Communication or Mindset row)
+
+Pass 2 — For each enumerated impact, generate one or more rows strictly following Framework v3.6 rules and canonical allowlists.
+
+Output the table only.`;
+
+const CRITIQUE_PROMPT = `Review the extracted table against source: FILE NAME.pdf
+
+Identify and resolve in-place:
+- Rows missing Description_As-Is: Populate ONLY if explicit baseline evidence exists in source. Never infer or invent.
+- Incorrect Affiliate: Ensure canonical regional codes (APAC, LATAM, EMEA, E-L, US, China, DE, FR, etc.) are preserved. Use "Global" ONLY for enterprise-wide or cross-org scope.
+- Unsplit Rows: Ensure impacts affecting multiple Roles, regional splits, or structural+sentiment signals are split into separate standalone rows.
+- Omitted Impacts: Re-scan sticky note comments, "OPEN QUESTIONS", "HOMEWORK", and agenda frames for missing impacts.
+- System Names in Components: System names (e.g. navify, cobas smart e, Veeva, PowerBI, Google Sheets) belong in Description fields, NOT in Component. Replace with a canonical Component from the chosen Category.
+- Role & Component Alignment: Verify all Role and Component values strictly match the 23 Canonical Roles and 34 Canonical Components in v3.6.
+
+Output: ONE final consolidated table with ALL rows — corrected originals plus net-new — in the exact 22-column format. Renumber IDs sequentially from 1 (GAP-001, GAP-002...). Include uncorrected rows verbatim. Do NOT output a separate supplemental table.`;
+
 function UploadSection() {
     return (
         <Section
             eyebrow="Importing"
-            title="Bringing data in"
-            intro="To add your own data, open the “Upload & review source data” tab in Airtable."
+            title="From sources to Airtable"
+            intro="Five steps turn raw session files into rows in the Upload & review tab. Steps 2 and 3 are prompts you run in Google Notebook."
         >
             <Steps
                 items={[
-                    <>Open <strong>Google Notebook</strong>, or the LLM your change lead has designated, where your sessions were processed.</>,
-                    <><strong>Copy</strong> the structured impact rows it produced.</>,
-                    <>Switch to the <strong>“Upload &amp; review source data”</strong> tab and <strong>paste</strong> them in.</>,
-                    <>Each pasted row lands as a new record with its Validation Status set to <em>Pending</em>.</>,
+                    <>
+                        <strong>Upload your sources to Google Notebook</strong> (formerly NotebookLM) — transcripts, decks, boards,
+                        notes. <NotebookLink />
+                        <br />
+                        <span style={{color: tokens.colors.textFaint}}>Access is managed by your admin — request it if the notebook will not open.</span>
+                    </>,
+                    <>
+                        <strong>Run the generation prompt.</strong> Replace <Mono>FILE NAMES</Mono> with the exact names of your
+                        source files, then run it.
+                        <PromptBlock label="Generation prompt" text={GENERATION_PROMPT} />
+                    </>,
+                    <>
+                        <strong>Run the critique prompt</strong> to clean, split and consolidate. Point it at your exact source file
+                        name.
+                        <PromptBlock label="Critique prompt" text={CRITIQUE_PROMPT} />
+                    </>,
+                    <>
+                        <strong>Paste the final table into a Google Sheet first.</strong> This guarantees the structure survives —
+                        Notebook sometimes returns output that is not cleanly tabular, and the Sheet locks it into rows and columns.
+                    </>,
+                    <>
+                        <strong>Copy from the Sheet and paste into the</strong> <Mono>Upload &amp; review source data</Mono> tab in
+                        Airtable. Each row arrives with its Validation Status set to <em>Pending</em>.
+                    </>,
                 ]}
             />
-            <Callout tone="info" label="Note">
-                Pasting is the only manual step — field mapping and structure come from the LLM export your change lead configured.
+            <Callout tone="info" label="Why the Google Sheet">
+                It is an intermediary on purpose. Pasting Notebook output straight into Airtable can break the column structure; the
+                Sheet keeps every row and column intact before it reaches the base.
             </Callout>
         </Section>
+    );
+}
+
+function NotebookLink() {
+    return (
+        <a
+            href={NOTEBOOK_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                marginTop: 2,
+                padding: '4px 11px',
+                borderRadius: RADIUS.pill,
+                background: tokens.colors.accent,
+                color: '#FFFFFF',
+                fontSize: 12,
+                fontWeight: 600,
+                textDecoration: 'none',
+                boxShadow: SHADOW.raised,
+            }}
+        >
+            Open Google Notebook ↗
+        </a>
+    );
+}
+
+function Mono({children}: {children: ReactNode}) {
+    return (
+        <span
+            style={{
+                fontFamily: tokens.fonts.mono,
+                fontSize: 12,
+                fontWeight: 600,
+                color: tokens.colors.accentDeep,
+                background: tokens.colors.ruleSoft,
+                padding: '1px 6px',
+                borderRadius: 5,
+            }}
+        >
+            {children}
+        </span>
+    );
+}
+
+function PromptBlock({label, text}: {label: string; text: string}) {
+    const [copied, setCopied] = useState(false);
+    const copy = async () => {
+        try {
+            await navigator.clipboard.writeText(text);
+        } catch {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            try {
+                document.execCommand('copy');
+            } catch {
+                /* clipboard unavailable — text stays selectable in the block */
+            }
+            document.body.removeChild(ta);
+        }
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1600);
+    };
+    return (
+        <div
+            style={{
+                marginTop: tokens.space.sm,
+                background: tokens.colors.bgPanel,
+                borderRadius: RADIUS.inner,
+                boxShadow: SHADOW.raised,
+                overflow: 'hidden',
+            }}
+        >
+            <div
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: tokens.space.sm,
+                    padding: `${tokens.space.sm} ${tokens.space.md}`,
+                    background: tokens.colors.bgAlt,
+                }}
+            >
+                <span style={eyebrowStyle}>{label}</span>
+                <button
+                    type="button"
+                    onClick={copy}
+                    style={{
+                        padding: '5px 13px',
+                        borderRadius: RADIUS.pill,
+                        border: 'none',
+                        background: copied ? tokens.colors.sevLow : tokens.colors.accent,
+                        color: '#FFFFFF',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        letterSpacing: '0.02em',
+                        cursor: 'pointer',
+                        transition: 'background 160ms ease',
+                    }}
+                >
+                    {copied ? 'Copied' : 'Copy'}
+                </button>
+            </div>
+            <pre
+                className="cia-scroll"
+                style={{
+                    margin: 0,
+                    padding: tokens.space.md,
+                    maxHeight: 220,
+                    overflow: 'auto',
+                    fontFamily: tokens.fonts.mono,
+                    fontSize: 11.5,
+                    lineHeight: 1.55,
+                    color: tokens.colors.text,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                }}
+            >
+                {text}
+            </pre>
+        </div>
     );
 }
 
@@ -467,9 +641,10 @@ function ReviewSection() {
             <ValidationGate />
             <Steps
                 items={[
-                    <>Work through the records one by one, starting with the <strong>lowest-confidence</strong> ones — those are the most likely to need a correction.</>,
-                    <>Check the extracted fields against the Source Quote and fix anything the model got wrong.</>,
+                    <>Open the imported records and work through them one by one, starting with the <strong>lowest-confidence</strong> ones — those are the most likely to need a correction.</>,
+                    <>Check the extracted fields against the Source Quote and fix anything the model got wrong. Expand a record to see every field.</>,
                     <>Set <strong>Validation Status to Reviewed</strong> once you are satisfied. Set it to <em>Discarded</em> to drop a bad row.</>,
+                    <>As soon as a record flips to Reviewed it flows through to the dashboard — totals, heat maps, flows and radars populate automatically.</>,
                 ]}
             />
             <Callout tone="warn" label="Important">
@@ -658,9 +833,9 @@ function Steps({items}: {items: ReactNode[]}) {
                             </span>
                             {!last ? <span style={{flex: 1, width: 2, background: tokens.colors.rule, minHeight: 10}} /> : null}
                         </div>
-                        <span style={{fontSize: 13.5, color: tokens.colors.textMuted, lineHeight: 1.6, padding: `3px 0 ${last ? 0 : tokens.space.md}`}}>
+                        <div style={{fontSize: 13.5, color: tokens.colors.textMuted, lineHeight: 1.6, padding: `3px 0 ${last ? 0 : tokens.space.lg}`, minWidth: 0}}>
                             {it}
-                        </span>
+                        </div>
                     </li>
                 );
             })}
