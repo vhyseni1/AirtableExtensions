@@ -1,5 +1,5 @@
-import {useBase, useRecords} from '@airtable/blocks/interface/ui';
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {useBase} from '@airtable/blocks/interface/ui';
+import {useMemo, useState} from 'react';
 import {tokens} from '../styles/tokens';
 import {FIELD_CANDIDATES, FIELDS} from '../utils/schema';
 
@@ -14,13 +14,10 @@ const BATCH = 50;
 /** Field types this importer can write. Everything else (collaborators,
  *  links, lookups, formulas, computed) is left for Airtable to fill or set
  *  manually. */
-const LINK_TYPE = 'multipleRecordLinks';
-
 const SUPPORTED_TYPES = new Set([
     'singleLineText', 'multilineText', 'richText', 'email', 'url', 'phoneNumber', 'barcode',
     'number', 'percent', 'currency', 'duration', 'rating',
     'singleSelect', 'multipleSelects', 'checkbox', 'date', 'dateTime',
-    LINK_TYPE,
 ]);
 
 interface LiveField {
@@ -28,23 +25,12 @@ interface LiveField {
     name: string;
     type: string;
     isComputed: boolean;
-    options?: {choices?: ReadonlyArray<{name: string}>; linkedTableId?: string} | null;
-}
-interface LiveRecord {
-    id: string;
-    getCellValueAsString(name: string): string;
+    options?: {choices?: ReadonlyArray<{name: string}>} | null;
 }
 interface LiveTable {
-    id: string;
-    name: string;
-    primaryField: {id: string; name: string};
     fields: ReadonlyArray<LiveField>;
     hasPermissionToCreateRecords(records?: ReadonlyArray<{fields: Record<string, unknown>}>): boolean;
     createRecordsAsync(records: ReadonlyArray<{fields: Record<string, unknown>}>): Promise<string[]>;
-}
-interface LiveBase {
-    getTableByNameIfExists(name: string): LiveTable | null;
-    getTableByIdIfExists(id: string): LiveTable | null;
 }
 
 type Mode = 'paste' | 'file';
@@ -173,32 +159,13 @@ function coerce(field: LiveField, raw: string, strict: boolean): unknown | undef
         }
         case 'checkbox':
             return /^(true|yes|y|1|x|checked|done)$/i.test(v);
-        case LINK_TYPE:
-            return undefined; // linked records are resolved separately
         default:
             return v;
     }
 }
 
-/** Reads a linked table's records and reports a name→recordId map (by its
- *  primary field). Rendered once per linked table so the hook stays stable. */
-function LinkedTableLoader({table, onLoad}: {table: LiveTable; onLoad: (tableId: string, map: Map<string, string>) => void}) {
-    const records = useRecords(table as unknown as Parameters<typeof useRecords>[0]) as unknown as LiveRecord[] | null;
-    const primaryName = table.primaryField.name;
-    const tableId = table.id;
-    useEffect(() => {
-        const m = new Map<string, string>();
-        for (const r of records ?? []) {
-            const key = r.getCellValueAsString(primaryName).trim().toLowerCase();
-            if (key) m.set(key, r.id);
-        }
-        onLoad(tableId, m);
-    }, [records, primaryName, tableId, onLoad]);
-    return null;
-}
-
 export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: string; onImported?: () => void; reviewUrl?: string}) {
-    const base = useBase() as unknown as LiveBase;
+    const base = useBase() as unknown as {getTableByNameIfExists(name: string): LiveTable | null};
     const table = base.getTableByNameIfExists(tableName);
 
     const [mode, setMode] = useState<Mode>('paste');
@@ -255,30 +222,6 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
         [table],
     );
 
-    // Linked tables referenced by matched link fields (e.g. Role -> Roles).
-    const linkedTables = useMemo(() => {
-        const out = new Map<string, LiveTable>();
-        if (!mapping) return out;
-        for (const {field} of mapping.matched) {
-            if (field.type !== LINK_TYPE) continue;
-            const tid = field.options?.linkedTableId;
-            if (!tid || out.has(tid)) continue;
-            const t = base.getTableByIdIfExists(tid);
-            if (t) out.set(tid, t);
-        }
-        return out;
-    }, [mapping, base]);
-
-    // name->recordId maps for each linked table, kept in a ref so reads don't
-    // re-render, plus a readiness set so we don't import before they load.
-    const linkMapsRef = useRef<Record<string, Map<string, string>>>({});
-    const [readyTableIds, setReadyTableIds] = useState<Set<string>>(new Set());
-    const onLinkLoad = useCallback((tableId: string, map: Map<string, string>) => {
-        linkMapsRef.current[tableId] = map;
-        setReadyTableIds(prev => (prev.has(tableId) ? prev : new Set(prev).add(tableId)));
-    }, []);
-    const linksReady = [...linkedTables.keys()].every(tid => readyTableIds.has(tid));
-
     const canCreate = table ? table.hasPermissionToCreateRecords() : false;
     const rowCount = parsed?.rows.length ?? 0;
     const matchedCount = mapping?.matched.length ?? 0;
@@ -307,55 +250,7 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
         return out;
     }, [parsed, mapping]);
 
-    // Ensure every linked value exists as a record in its linked table,
-    // creating the missing ones. Returns the maps plus a diagnostic string so
-    // link problems are visible instead of silent.
-    const resolveLinks = async (): Promise<{maps: Record<string, Map<string, string>>; diag: string}> => {
-        const combined: Record<string, Map<string, string>> = {};
-        for (const [tid, m] of Object.entries(linkMapsRef.current)) combined[tid] = new Map(m);
-        if (!parsed || !mapping) return {maps: combined, diag: ''};
-        const headerIndex = new Map<string, number>();
-        parsed.headers.forEach((h, i) => headerIndex.set(h, i));
-        const notes: string[] = [];
-        for (const {header, field} of mapping.matched) {
-            if (field.type !== LINK_TYPE) continue;
-            const tid = field.options?.linkedTableId;
-            const linkedTable = tid ? linkedTables.get(tid) : null;
-            if (!tid || !linkedTable) {
-                notes.push(`${field.name}: linked table not readable from the extension`);
-                continue;
-            }
-            const map = combined[tid] ?? (combined[tid] = new Map());
-            const idx = headerIndex.get(header);
-            if (idx === undefined) continue;
-            const needed = new Map<string, string>(); // lowerKey -> original name
-            for (const cells of parsed.rows) {
-                const nameRaw = (cells[idx] ?? '').trim();
-                if (!nameRaw) continue;
-                const key = nameRaw.toLowerCase();
-                if (!map.has(key) && !needed.has(key)) needed.set(key, nameRaw);
-            }
-            const toCreate = [...needed.values()];
-            const primary = linkedTable.primaryField.name;
-            let createdHere = 0;
-            let err = '';
-            for (let i = 0; i < toCreate.length; i += BATCH) {
-                const chunk = toCreate.slice(i, i + BATCH);
-                try {
-                    const ids = await linkedTable.createRecordsAsync(chunk.map(n => ({fields: {[primary]: n}})));
-                    ids.forEach((id, j) => map.set(chunk[j]!.toLowerCase(), id));
-                    createdHere += chunk.length;
-                } catch (e) {
-                    if (!err) err = e instanceof Error ? e.message : String(e);
-                }
-            }
-            if (err) notes.push(`${linkedTable.name}: couldn't create ${toCreate.length - createdHere} role(s) — ${err}`);
-            else if (createdHere) notes.push(`${linkedTable.name}: created ${createdHere} new`);
-        }
-        return {maps: combined, diag: notes.join(' · ')};
-    };
-
-    const buildRecords = (links: Record<string, Map<string, string>>): ReadonlyArray<{fields: Record<string, unknown>}> => {
+    const buildRecords = (): ReadonlyArray<{fields: Record<string, unknown>}> => {
         if (!parsed || !mapping) return [];
         const headerIndex = new Map<string, number>();
         parsed.headers.forEach((h, i) => headerIndex.set(h, i));
@@ -364,13 +259,6 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
             for (const {header, field} of mapping.matched) {
                 const idx = headerIndex.get(header);
                 if (idx === undefined) continue;
-                if (field.type === LINK_TYPE) {
-                    const tid = field.options?.linkedTableId;
-                    const name = (cells[idx] ?? '').trim();
-                    const id = tid && name ? links[tid]?.get(name.toLowerCase()) : undefined;
-                    if (id) fields[field.name] = [{id}];
-                    continue;
-                }
                 const val = coerce(field, cells[idx] ?? '', true);
                 if (val !== undefined) fields[field.name] = val;
             }
@@ -385,14 +273,10 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
 
     const runImport = async () => {
         if (!table) return;
+        const records = buildRecords();
+        if (records.length === 0) return;
         setPhase('importing');
         setProgress(0);
-        const {maps: links, diag: linkDiag} = await resolveLinks();
-        const records = buildRecords(links);
-        if (records.length === 0) {
-            setPhase('edit');
-            return;
-        }
         let created = 0;
         let failed = 0;
         let firstError = '';
@@ -418,12 +302,11 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
         const warnMsg = selectWarnings.length
             ? `Some single-select fields couldn't take all values (the extension can't add options): ${selectWarnings.map(w => `${w.field} (${w.values.length})`).join(', ')}. Make these fields single-line text in the base to keep every value.`
             : '';
-        const parts = [linkDiag, warnMsg].filter(Boolean);
         if (failed > 0) {
-            setResult({created, message: [`${failed} row${failed === 1 ? '' : 's'} failed. ${firstError}`, ...parts].join(' · ')});
+            setResult({created, message: `${failed} row${failed === 1 ? '' : 's'} failed. ${firstError}${warnMsg ? ' · ' + warnMsg : ''}`});
             setPhase(created > 0 ? 'done' : 'error');
         } else {
-            setResult({created, message: parts.length ? parts.join(' · ') : undefined});
+            setResult({created, message: warnMsg || undefined});
             setPhase('done');
         }
         if (created > 0) onImported?.();
@@ -447,9 +330,6 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
 
     return (
         <div style={card}>
-            {[...linkedTables.values()].map(t => (
-                <LinkedTableLoader key={t.id} table={t} onLoad={onLinkLoad} />
-            ))}
             <div style={{padding: tokens.space.xxl, display: 'flex', flexDirection: 'column', gap: tokens.space.lg}}>
                 <div style={{display: 'flex', flexDirection: 'column', gap: 2}}>
                     <span style={eyebrow}>Import</span>
@@ -526,13 +406,6 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
                                 </div>
                             ) : null}
 
-                            {linkedTables.size > 0 ? (
-                                <Banner tone="info">
-                                    Linked fields ({[...linkedTables.values()].map(t => t.name).join(', ')}) will be matched to records in
-                                    those tables — any value that doesn&apos;t exist yet is created automatically, then linked.
-                                </Banner>
-                            ) : null}
-
                             {selectWarnings.length > 0 ? (
                                 <Banner tone="warn">
                                     <strong>{selectWarnings.map(w => w.field).join(', ')}</strong>{' '}
@@ -557,19 +430,14 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
 
                             <div style={{display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: tokens.space.sm}}>
                                 {raw ? <button type="button" onClick={reset} style={secondaryBtn} disabled={phase === 'importing'}>Clear</button> : null}
-                                {(() => {
-                                    const blocked = phase === 'importing' || rowCount === 0 || matchedCount === 0 || !linksReady;
-                                    return (
-                                        <button
-                                            type="button"
-                                            onClick={runImport}
-                                            disabled={blocked}
-                                            style={{...primaryBtn, opacity: blocked ? 0.5 : 1, cursor: blocked ? 'default' : 'pointer'}}
-                                        >
-                                            {phase === 'importing' ? 'Importing…' : !linksReady ? 'Loading links…' : `Import ${rowCount || ''} row${rowCount === 1 ? '' : 's'}`.trim()}
-                                        </button>
-                                    );
-                                })()}
+                                <button
+                                    type="button"
+                                    onClick={runImport}
+                                    disabled={phase === 'importing' || rowCount === 0 || matchedCount === 0}
+                                    style={{...primaryBtn, opacity: phase === 'importing' || rowCount === 0 || matchedCount === 0 ? 0.5 : 1, cursor: phase === 'importing' || rowCount === 0 || matchedCount === 0 ? 'default' : 'pointer'}}
+                                >
+                                    {phase === 'importing' ? 'Importing…' : `Import ${rowCount || ''} row${rowCount === 1 ? '' : 's'}`.trim()}
+                                </button>
                             </div>
                         </>
                     )}
