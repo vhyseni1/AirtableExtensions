@@ -19,6 +19,8 @@ export interface MetricResult {
 interface Cell {
     count: number;
     avgSev: number;
+    sevSum: number;
+    sevCount: number;
     records: Impact[];
 }
 
@@ -70,13 +72,15 @@ function build(
         }
         let cell = row.get(ck);
         if (!cell) {
-            cell = {count: 0, avgSev: 0, records: []};
+            cell = {count: 0, avgSev: 0, sevSum: 0, sevCount: 0, records: []};
             row.set(ck, cell);
         }
         cell.count += 1;
         cell.records.push(r);
         if (r.changeImpact) {
-            cell.avgSev = (cell.avgSev * (cell.count - 1) + CHANGE_IMPACT_WEIGHT[r.changeImpact as ChangeImpact]) / cell.count;
+            cell.sevSum += CHANGE_IMPACT_WEIGHT[r.changeImpact as ChangeImpact];
+            cell.sevCount += 1;
+            cell.avgSev = cell.sevSum / cell.sevCount;
         }
         rowTotals.set(rk, (rowTotals.get(rk) ?? 0) + 1);
         colTotals.set(ck, (colTotals.get(ck) ?? 0) + 1);

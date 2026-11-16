@@ -136,7 +136,7 @@ export function HeadlineBar({filtered, aggregations, activeDrill, onDrill}: Prop
                 d?.friction ?? null,
                 tokens.colors.tagFriction,
             )}
-            {tile('lowConfidence', 'Avg confidence', m.avgConfidencePct, '%', null, tokens.colors.accentSoft)}
+            {tile('lowConfidence', 'High confidence', m.avgConfidencePct, '%', null, tokens.colors.accentSoft)}
         </div>
     );
 }

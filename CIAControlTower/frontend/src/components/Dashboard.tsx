@@ -274,7 +274,7 @@ function DashboardBody({tableName}: {tableName: string}) {
             ) : tab === 'waterfalls' ? (
                 <WaterfallsView
                     filtered={filtered}
-                    allImpacts={impacts}
+                    allImpacts={visibleImpacts}
                     runs={aggregations.runs}
                     onDrill={handleDrillFromMatrix}
                 />
