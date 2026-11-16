@@ -367,7 +367,7 @@ function Masthead({
                         cursor: 'pointer',
                     }}
                 >
-                    ? Help
+                    Guide
                 </button>
                 <button
                     type="button"
