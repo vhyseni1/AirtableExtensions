@@ -144,14 +144,9 @@ function buildImpact(
             return v ? v : null;
         })(),
         role: str('role').trim(),
-        persona: (() => {
-            // Prefer an explicit Persona value; otherwise fall back to the first
-            // Business_Archetype so archetype-based panels still populate.
-            const v = str('persona').trim();
-            if (v) return v;
-            const arch = freeFormMany(str('businessArchetypes'));
-            return arch[0] ?? null;
-        })(),
+        // Persona isn't an input column; the "archetype" panels are driven by the
+        // first Business_Archetype value.
+        persona: freeFormMany(str('businessArchetypes'))[0] ?? null,
         changeCategory: normalizeOne<ChangeCategory>(str('changeCategory'), CHANGE_CATEGORIES),
         changeComponent: str('changeComponent').trim(),
         descriptionAsIs: str('descriptionAsIs'),
