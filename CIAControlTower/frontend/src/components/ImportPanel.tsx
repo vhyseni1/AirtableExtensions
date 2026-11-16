@@ -25,6 +25,7 @@ interface LiveField {
     name: string;
     type: string;
     isComputed: boolean;
+    options?: {choices?: ReadonlyArray<{name: string}>} | null;
 }
 interface LiveTable {
     fields: ReadonlyArray<LiveField>;
@@ -113,10 +114,20 @@ function parseMarkdownTable(text: string): Parsed {
 
 const normalize = (s: string): string => s.toLowerCase().replace(/[\s_\-()]+/g, '');
 
-function coerce(type: string, raw: string): unknown | undefined {
+/** Map an incoming select value to an EXISTING option name (case-insensitive).
+ *  Returns null when the option doesn't exist — writing a non-existent option
+ *  would make Airtable reject the whole batch, so we drop it instead. */
+function matchOption(field: LiveField, value: string): string | null {
+    const choices = field.options?.choices ?? null;
+    if (!choices) return value; // field allows free options (or none declared) — pass through
+    const hit = choices.find(c => c.name.toLowerCase() === value.toLowerCase());
+    return hit ? hit.name : null;
+}
+
+function coerce(field: LiveField, raw: string): unknown | undefined {
     const v = raw.trim();
     if (v === '') return undefined;
-    switch (type) {
+    switch (field.type) {
         case 'number':
         case 'percent':
         case 'currency':
@@ -125,10 +136,20 @@ function coerce(type: string, raw: string): unknown | undefined {
             const n = Number(v.replace(/[^0-9.-]/g, ''));
             return Number.isFinite(n) ? n : undefined;
         }
-        case 'singleSelect':
-            return {name: v};
-        case 'multipleSelects':
-            return v.split(/[,;]/).map(s => s.trim()).filter(Boolean).map(name => ({name}));
+        case 'singleSelect': {
+            const name = matchOption(field, v);
+            return name ? {name} : undefined;
+        }
+        case 'multipleSelects': {
+            const names = v
+                .split(/[,;]/)
+                .map(s => s.trim())
+                .filter(Boolean)
+                .map(s => matchOption(field, s))
+                .filter((s): s is string => !!s)
+                .map(name => ({name}));
+            return names.length ? names : undefined;
+        }
         case 'checkbox':
             return /^(true|yes|y|1|x|checked|done)$/i.test(v);
         default:
@@ -183,12 +204,13 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
             for (const {header, field} of mapping.matched) {
                 const idx = headerIndex.get(header);
                 if (idx === undefined) continue;
-                const val = coerce(field.type, cells[idx] ?? '');
+                const val = coerce(field, cells[idx] ?? '');
                 if (val !== undefined) fields[field.name] = val;
             }
             // Default Validation Status to Pending when not supplied.
             if (validationField && fields[validationField.name] === undefined) {
-                fields[validationField.name] = {name: 'Pending'};
+                const pending = matchOption(validationField, 'Pending');
+                if (pending) fields[validationField.name] = {name: pending};
             }
             return {fields};
         });
@@ -201,20 +223,36 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
         setPhase('importing');
         setProgress(0);
         let created = 0;
-        try {
-            for (let i = 0; i < records.length; i += BATCH) {
-                const chunk = records.slice(i, i + BATCH);
+        let failed = 0;
+        let firstError = '';
+        for (let i = 0; i < records.length; i += BATCH) {
+            const chunk = records.slice(i, i + BATCH);
+            try {
                 await table.createRecordsAsync(chunk);
                 created += chunk.length;
-                setProgress(created);
+            } catch (batchErr) {
+                // A batch fails all-or-nothing; retry row by row so good rows still land.
+                for (const rec of chunk) {
+                    try {
+                        await table.createRecordsAsync([rec]);
+                        created += 1;
+                    } catch (rowErr) {
+                        failed += 1;
+                        if (!firstError) firstError = rowErr instanceof Error ? rowErr.message : String(rowErr);
+                    }
+                }
+                void batchErr;
             }
+            setProgress(created);
+        }
+        if (failed > 0) {
+            setResult({created, message: `${failed} row${failed === 1 ? '' : 's'} could not be imported. First error: ${firstError}`});
+            setPhase(created > 0 ? 'done' : 'error');
+        } else {
             setResult({created});
             setPhase('done');
-            onImported?.();
-        } catch (e) {
-            setResult({created, message: e instanceof Error ? e.message : 'Import failed.'});
-            setPhase('error');
         }
+        if (created > 0) onImported?.();
     };
 
     const onFile = (file: File | undefined) => {
@@ -255,6 +293,7 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
                                 Pending. Go to <strong>Review Data</strong> to validate each one and set its Validation Status to
                                 Reviewed — that publishes it to the dashboard.
                             </Banner>
+                            {result?.message ? <Banner tone="warn">{result.message}</Banner> : null}
                             <div style={{display: 'flex', gap: tokens.space.sm}}>
                                 <button type="button" onClick={reset} style={secondaryBtn}>Import more</button>
                                 {reviewUrl ? (
