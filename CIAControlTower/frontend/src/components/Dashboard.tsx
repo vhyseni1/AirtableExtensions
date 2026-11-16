@@ -99,7 +99,7 @@ export function Dashboard() {
 }
 
 function DashboardBody({tableName}: {tableName: string}) {
-    const {recordsById, fieldsByName, fields, impacts, isReady, accessControlled} = useImpacts(tableName);
+    const {recordsById, fieldsByName, impacts, isReady, accessControlled} = useImpacts(tableName);
     const session = useSession();
     const [filter, setFilter] = useState<FilterState>(DEFAULT_FILTER);
     const [activeDrill, setActiveDrill] = useState<ActiveDrill | null>(null);
@@ -233,7 +233,7 @@ function DashboardBody({tableName}: {tableName: string}) {
             {section === 'import' ? (
                 <ImportPanel tableName={tableName} onReview={() => setSection('review')} />
             ) : section === 'review' ? (
-                <ReviewView records={visibleImpacts} recordsById={recordsById} fields={fields} onOpen={openRecord} onImport={() => setSection('import')} />
+                <ReviewView records={visibleImpacts} onImport={() => setSection('import')} />
             ) : visibleImpacts.length === 0 ? (
                 <HelpGuide mode="no-data" accessControlled={accessControlled} onImport={() => setSection('import')} />
             ) : !hasReviewedData ? (
