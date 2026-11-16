@@ -309,17 +309,21 @@ function DashboardBody({tableName}: {tableName: string}) {
 
 function navItem(on: boolean): React.CSSProperties {
     return {
-        padding: '7px 16px',
-        fontSize: 11,
-        fontWeight: 700,
-        letterSpacing: '0.06em',
-        textTransform: 'uppercase',
-        border: 'none',
-        borderRadius: tokens.radius.sm,
-        background: on ? '#FFFFFF' : 'transparent',
-        color: on ? tokens.colors.accentDeep : 'rgba(255,255,255,0.9)',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '8px 16px',
+        fontSize: 12.5,
+        fontWeight: 600,
+        letterSpacing: '0.01em',
+        border: on ? '1px solid rgba(255,255,255,0.5)' : '1px solid transparent',
+        borderRadius: 10,
+        background: on ? '#0A0D14' : 'rgba(10,13,20,0.55)',
+        color: '#FFFFFF',
         cursor: 'pointer',
-        transition: 'background 140ms ease, color 140ms ease',
+        textDecoration: 'none',
+        whiteSpace: 'nowrap',
+        transition: 'background 140ms ease, border-color 140ms ease',
     };
 }
 
@@ -403,15 +407,15 @@ function Masthead({
                     flexWrap: 'wrap',
                 }}
             >
-                <nav style={{display: 'flex', gap: 4, padding: 4, background: 'rgba(255,255,255,0.14)', borderRadius: tokens.radius.md}}>
+                <nav style={{display: 'flex', gap: tokens.space.sm}}>
                     <button type="button" onClick={() => onSection('import')} style={navItem(section === 'import')}>
-                        Import Data
+                        Import Data <span aria-hidden style={{opacity: 0.7}}>›</span>
                     </button>
-                    <a href={reviewUrl} target="_blank" rel="noopener noreferrer" style={{...navItem(false), textDecoration: 'none'}}>
-                        Review Data ↗
+                    <a href={reviewUrl} target="_top" rel="noopener" style={navItem(false)}>
+                        Review Data <span aria-hidden style={{opacity: 0.7}}>›</span>
                     </a>
                     <button type="button" onClick={() => onSection('dashboards')} style={navItem(section === 'dashboards')}>
-                        Dashboards
+                        Dashboards <span aria-hidden style={{opacity: 0.7}}>›</span>
                     </button>
                 </nav>
                 <span aria-hidden style={{width: 1, height: 22, background: 'rgba(255,255,255,0.25)'}} />
