@@ -1,7 +1,7 @@
 import {useBase} from '@airtable/blocks/interface/ui';
 import {useMemo, useState} from 'react';
 import {tokens} from '../styles/tokens';
-import {FIELDS} from '../utils/schema';
+import {FIELD_CANDIDATES, FIELDS} from '../utils/schema';
 
 const RADIUS = {card: 16, inner: 12, pill: 980};
 const SHADOW = {
@@ -170,18 +170,42 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
 
     const parsed = useMemo(() => (raw.trim() ? parseDelimited(raw) : null), [raw]);
 
-    // Map each header to a writable, supported field.
+    // Map each header to a writable, supported field — by exact name, and by
+    // candidate aliases (e.g. a "Workstream" header maps to an "ECL_Stream"
+    // field, and vice-versa).
     const mapping = useMemo(() => {
         if (!table || !parsed) return null;
         const writable = table.fields.filter(f => !f.isComputed && SUPPORTED_TYPES.has(f.type));
         const byNorm = new Map<string, LiveField>();
         for (const f of writable) byNorm.set(normalize(f.name), f);
+        // Alias: for each logical field, point every candidate spelling at the
+        // actual present field, so header and field names need not match exactly.
+        for (const candidates of Object.values(FIELD_CANDIDATES)) {
+            let present: LiveField | undefined;
+            for (const c of candidates) {
+                const hit = byNorm.get(normalize(c));
+                if (hit) {
+                    present = hit;
+                    break;
+                }
+            }
+            if (present) {
+                for (const c of candidates) {
+                    if (!byNorm.has(normalize(c))) byNorm.set(normalize(c), present);
+                }
+            }
+        }
         const matched: {header: string; field: LiveField}[] = [];
         const ignored: string[] = [];
+        const usedFieldIds = new Set<string>();
         parsed.headers.forEach(h => {
             const f = byNorm.get(normalize(h));
-            if (f) matched.push({header: h, field: f});
-            else if (h.trim()) ignored.push(h);
+            if (f && !usedFieldIds.has(f.id)) {
+                matched.push({header: h, field: f});
+                usedFieldIds.add(f.id);
+            } else if (h.trim()) {
+                ignored.push(h);
+            }
         });
         return {matched, ignored};
     }, [table, parsed]);
