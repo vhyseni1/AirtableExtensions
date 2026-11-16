@@ -167,6 +167,8 @@ export interface UseImpactsResult {
     impacts: Impact[];
     recordsById: ReadonlyMap<string, AirtableRecord>;
     fieldsByName: ReadonlyMap<string, AirtableField>;
+    /** Table fields in their native order (for the Airtable-style review grid). */
+    fields: ReadonlyArray<AirtableField>;
     missingFields: string[];
     isReady: boolean;
     /** True when the table has a Created and/or Accessible-by field, so per-user access applies. */
@@ -229,6 +231,7 @@ export function useImpacts(tableName: string = TABLE_NAME): UseImpactsResult {
         impacts,
         recordsById,
         fieldsByName,
+        fields: table ? table.fields : [],
         missingFields,
         isReady: !!table && !!records,
         accessControlled,
