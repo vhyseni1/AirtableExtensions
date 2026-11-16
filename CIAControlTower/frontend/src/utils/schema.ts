@@ -29,6 +29,28 @@ export const FIELDS = {
 export const REQUIRED_FIELD_LIST: ReadonlyArray<string> = Object.values(FIELDS);
 
 /**
+ * Optional access-control fields. When present in the table the dashboard
+ * enforces per-user access: a viewer sees a record only if they created it
+ * (Created) or were granted access to it (Accessible by). When NEITHER field
+ * exists, no gating is applied and the whole data set is shown. Names are
+ * matched case-insensitively against the first candidate that exists.
+ */
+export const CREATED_FIELD_CANDIDATES: ReadonlyArray<string> = [
+    'Created',
+    'Created By',
+    'Created by',
+    'Created_By',
+    'Creator',
+];
+export const ACCESSIBLE_FIELD_CANDIDATES: ReadonlyArray<string> = [
+    'Accessible by',
+    'Accessible By',
+    'Accessible_by',
+    'Accessible_By',
+    'Accessible',
+];
+
+/**
  * Persona values are auto-derived from Role in Airtable; the framework-listed
  * PJP/HCD/HSP/GSCL/CSR/Admin set is a starting reference only. Real bases
  * may surface different lookup values (e.g. "Primary Point of Contact",
@@ -107,6 +129,12 @@ export interface Impact {
     timeline: string;
     dependencies: string;
     notes: string;
+    /**
+     * Lower-cased collaborator ids and emails allowed to view this record —
+     * the creator plus anyone in "Accessible by". Empty when the table has no
+     * access fields (no gating). Used by the access filter in Dashboard.
+     */
+    accessKeys: string[];
 }
 
 export const CHANGE_IMPACT_WEIGHT: Record<ChangeImpact, number> = {High: 3, Medium: 2, Low: 1};

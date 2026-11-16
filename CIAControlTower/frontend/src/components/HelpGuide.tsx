@@ -10,6 +10,8 @@ interface Props {
     totalCount?: number;
     /** How many are already Reviewed. */
     reviewedCount?: number;
+    /** True when the table gates records by Created / Accessible-by. */
+    accessControlled?: boolean;
 }
 
 type ChapterKey = 'process' | 'data' | 'dashboards';
@@ -36,13 +38,15 @@ function defaultChapter(mode: GuideMode): ChapterKey {
  * as the empty state when a user has no visible data, and as a modal (Help
  * button) when they do.
  */
-export function HelpGuide({mode, onClose, totalCount = 0, reviewedCount = 0}: Props) {
+export function HelpGuide({mode, onClose, totalCount = 0, reviewedCount = 0, accessControlled = true}: Props) {
     const [chapter, setChapter] = useState<ChapterKey>(defaultChapter(mode));
     const active = CHAPTERS.find(c => c.key === chapter) ?? CHAPTERS[0]!;
 
     const body = (
         <div style={{display: 'flex', flexDirection: 'column', gap: tokens.space.xl}}>
-            {mode !== 'modal' ? <EmptyIntro mode={mode} totalCount={totalCount} reviewedCount={reviewedCount} /> : null}
+            {mode !== 'modal' ? (
+                <EmptyIntro mode={mode} totalCount={totalCount} reviewedCount={reviewedCount} accessControlled={accessControlled} />
+            ) : null}
 
             <ChapterNav chapters={CHAPTERS} active={chapter} onPick={setChapter} />
             <ChapterHeader chapter={active} />
@@ -51,7 +55,7 @@ export function HelpGuide({mode, onClose, totalCount = 0, reviewedCount = 0}: Pr
                 {chapter === 'process' ? <ProcessOverview /> : null}
                 {chapter === 'data' ? (
                     <>
-                        <AccessSection />
+                        {accessControlled ? <AccessSection /> : null}
                         <UploadSection />
                         <ReviewSection />
                         <FieldGlossary />
@@ -144,7 +148,7 @@ export function HelpGuide({mode, onClose, totalCount = 0, reviewedCount = 0}: Pr
 
 /* ---------- Intro (empty-state only) ---------- */
 
-function EmptyIntro({mode, totalCount, reviewedCount}: {mode: GuideMode; totalCount: number; reviewedCount: number}) {
+function EmptyIntro({mode, totalCount, reviewedCount, accessControlled}: {mode: GuideMode; totalCount: number; reviewedCount: number; accessControlled: boolean}) {
     const awaiting = mode === 'awaiting-review';
     return (
         <div
@@ -170,10 +174,15 @@ function EmptyIntro({mode, totalCount, reviewedCount}: {mode: GuideMode; totalCo
                         still Pending stays hidden until you validate it. The <strong style={{color: '#fff'}}>Data</strong> chapter
                         below walks through the review step.
                     </>
-                ) : (
+                ) : accessControlled ? (
                     <>
                         This means one of two things: you have not yet been given access to any records, or no data has been
                         uploaded and reviewed. The guide below walks through getting your data in and making it visible.
+                    </>
+                ) : (
+                    <>
+                        No data has been uploaded and reviewed yet. The guide below walks through importing your data and
+                        marking it Reviewed so it appears here.
                     </>
                 )}
             </p>

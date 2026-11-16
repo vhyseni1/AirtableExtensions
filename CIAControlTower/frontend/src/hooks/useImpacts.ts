@@ -1,11 +1,13 @@
 import {useBase, useRecords} from '@airtable/blocks/interface/ui';
 import {useMemo} from 'react';
 import {
+    ACCESSIBLE_FIELD_CANDIDATES,
     BUSINESS_ARCHETYPES,
     CHANGE_CATEGORIES,
     CHANGE_IMPACTS,
     AFFILIATES,
     CONFIDENCES,
+    CREATED_FIELD_CANDIDATES,
     ECL_STREAMS,
     FIELDS,
     REQUIRED_FIELD_LIST,
@@ -77,6 +79,37 @@ function safeRaw(rec: AirtableRecord, field: string, present: ReadonlySet<string
     }
 }
 
+/** Resolve the first candidate field name that actually exists in the table. */
+function resolveField(present: ReadonlySet<string>, candidates: ReadonlyArray<string>): string | null {
+    const lower = new Map<string, string>();
+    for (const name of present) lower.set(name.toLowerCase(), name);
+    for (const c of candidates) {
+        const hit = lower.get(c.toLowerCase());
+        if (hit) return hit;
+    }
+    return null;
+}
+
+/** Extract lower-cased id + email keys from a collaborator cell (single or many). */
+function collaboratorKeys(value: unknown): string[] {
+    const out: string[] = [];
+    const push = (c: unknown) => {
+        if (c && typeof c === 'object') {
+            const o = c as {id?: unknown; email?: unknown};
+            if (typeof o.id === 'string') out.push(o.id.toLowerCase());
+            if (typeof o.email === 'string') out.push(o.email.toLowerCase());
+        }
+    };
+    if (Array.isArray(value)) value.forEach(push);
+    else push(value);
+    return out;
+}
+
+interface AccessFields {
+    created: string | null;
+    accessible: string | null;
+}
+
 function recordNumberOf(rec: AirtableRecord, present: ReadonlySet<string>): number | null {
     const v = safeRaw(rec, FIELDS.id, present);
     if (typeof v === 'number') return v;
@@ -85,7 +118,10 @@ function recordNumberOf(rec: AirtableRecord, present: ReadonlySet<string>): numb
     return Number.isFinite(n) ? n : null;
 }
 
-function buildImpact(rec: AirtableRecord, present: ReadonlySet<string>): Impact {
+function buildImpact(rec: AirtableRecord, present: ReadonlySet<string>, access: AccessFields): Impact {
+    const accessKeys: string[] = [];
+    if (access.created) accessKeys.push(...collaboratorKeys(safeRaw(rec, access.created, present)));
+    if (access.accessible) accessKeys.push(...collaboratorKeys(safeRaw(rec, access.accessible, present)));
     return {
         id: rec.id,
         recordNumber: recordNumberOf(rec, present),
@@ -114,6 +150,7 @@ function buildImpact(rec: AirtableRecord, present: ReadonlySet<string>): Impact 
         timeline: safeStr(rec, FIELDS.timeline, present),
         dependencies: safeStr(rec, FIELDS.dependencies, present),
         notes: safeStr(rec, FIELDS.notes, present),
+        accessKeys,
     };
 }
 
@@ -124,6 +161,8 @@ export interface UseImpactsResult {
     fieldsByName: ReadonlyMap<string, AirtableField>;
     missingFields: string[];
     isReady: boolean;
+    /** True when the table has a Created and/or Accessible-by field, so per-user access applies. */
+    accessControlled: boolean;
 }
 
 export function useImpacts(tableName: string = TABLE_NAME): UseImpactsResult {
@@ -147,14 +186,23 @@ export function useImpacts(tableName: string = TABLE_NAME): UseImpactsResult {
         [table, presentFieldNames],
     );
 
+    const accessFields = useMemo<AccessFields>(
+        () => ({
+            created: resolveField(presentFieldNames, CREATED_FIELD_CANDIDATES),
+            accessible: resolveField(presentFieldNames, ACCESSIBLE_FIELD_CANDIDATES),
+        }),
+        [presentFieldNames],
+    );
+    const accessControlled = !!(accessFields.created || accessFields.accessible);
+
     const records = useRecords(
         table as unknown as Parameters<typeof useRecords>[0],
     ) as unknown as AirtableRecord[] | null;
 
     const impacts = useMemo<Impact[]>(() => {
         if (!table || !records) return [];
-        return records.map(rec => buildImpact(rec, presentFieldNames));
-    }, [table, records, presentFieldNames]);
+        return records.map(rec => buildImpact(rec, presentFieldNames, accessFields));
+    }, [table, records, presentFieldNames, accessFields]);
 
     const recordsById = useMemo(() => {
         const m = new Map<string, AirtableRecord>();
@@ -170,5 +218,6 @@ export function useImpacts(tableName: string = TABLE_NAME): UseImpactsResult {
         fieldsByName,
         missingFields,
         isReady: !!table && !!records,
+        accessControlled,
     };
 }

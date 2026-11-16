@@ -1,5 +1,16 @@
 import {expandRecord, useBase} from '@airtable/blocks/interface/ui';
+import * as AirtableUI from '@airtable/blocks/interface/ui';
 import {useCallback, useMemo, useState} from 'react';
+
+/**
+ * `useSession` is exported by the runtime SDK (and resolved by the block
+ * bundler like useBase), but this experimental build's type declarations don't
+ * surface it cleanly. Bind it through a typed shim.
+ */
+interface SessionLike {
+    currentUser: {id?: string; email?: string; name?: string} | null;
+}
+const useSession = (AirtableUI as unknown as {useSession: () => SessionLike}).useSession;
 import {useAggregations} from '../hooks/useAggregations';
 import {DEFAULT_FILTER, type FilterState, useFilteredImpacts} from '../hooks/useFilteredImpacts';
 import {useImpacts} from '../hooks/useImpacts';
@@ -85,7 +96,8 @@ export function Dashboard() {
 }
 
 function DashboardBody({tableName}: {tableName: string}) {
-    const {recordsById, fieldsByName, impacts, isReady} = useImpacts(tableName);
+    const {recordsById, fieldsByName, impacts, isReady, accessControlled} = useImpacts(tableName);
+    const session = useSession();
     const [filter, setFilter] = useState<FilterState>(DEFAULT_FILTER);
     const [activeDrill, setActiveDrill] = useState<ActiveDrill | null>(null);
     const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -93,12 +105,29 @@ function DashboardBody({tableName}: {tableName: string}) {
     const [help, setHelp] = useState(false);
     const [tab, setTab] = useState<TabKey>('overview');
 
-    const filtered = useFilteredImpacts(impacts, filter);
-    const aggregations = useAggregations(filtered, impacts);
+    // Per-user access: only enforced when the table carries Created / Accessible-by
+    // fields AND we can identify the viewer. Otherwise the whole data set is shown.
+    const myKeys = useMemo(() => {
+        const me = session.currentUser;
+        const keys = new Set<string>();
+        if (me?.id) keys.add(String(me.id).toLowerCase());
+        if (me?.email) keys.add(me.email.toLowerCase());
+        return keys;
+    }, [session]);
+
+    const visibleImpacts = useMemo(() => {
+        if (!accessControlled || myKeys.size === 0) return impacts;
+        // A record with no resolvable owner/grant keys is treated as ungated
+        // (shown) so a misconfigured field can't hide the whole data set.
+        return impacts.filter(r => r.accessKeys.length === 0 || r.accessKeys.some(k => myKeys.has(k)));
+    }, [impacts, accessControlled, myKeys]);
+
+    const filtered = useFilteredImpacts(visibleImpacts, filter);
+    const aggregations = useAggregations(filtered, visibleImpacts);
 
     const reviewedCount = useMemo(
-        () => impacts.filter(r => r.validationStatus === 'Reviewed').length,
-        [impacts],
+        () => visibleImpacts.filter(r => r.validationStatus === 'Reviewed').length,
+        [visibleImpacts],
     );
     const hasReviewedData = reviewedCount > 0;
 
@@ -126,11 +155,11 @@ function DashboardBody({tableName}: {tableName: string}) {
 
     const selectedImpact = useMemo<Impact | null>(() => {
         if (selectedId) {
-            const found = impacts.find(r => r.id === selectedId);
+            const found = visibleImpacts.find(r => r.id === selectedId);
             if (found) return found;
         }
         return filtered.find(r => r.changeImpact === 'High') ?? filtered[0] ?? null;
-    }, [selectedId, impacts, filtered]);
+    }, [selectedId, visibleImpacts, filtered]);
 
     const freshness = useMemo(() => {
         const latest = aggregations.runs[0];
@@ -198,10 +227,10 @@ function DashboardBody({tableName}: {tableName: string}) {
 
             {tab === 'adddata' ? (
                 <AddDataView />
-            ) : impacts.length === 0 ? (
-                <HelpGuide mode="no-data" />
+            ) : visibleImpacts.length === 0 ? (
+                <HelpGuide mode="no-data" accessControlled={accessControlled} />
             ) : !hasReviewedData ? (
-                <HelpGuide mode="awaiting-review" totalCount={impacts.length} reviewedCount={reviewedCount} />
+                <HelpGuide mode="awaiting-review" accessControlled={accessControlled} totalCount={visibleImpacts.length} reviewedCount={reviewedCount} />
             ) : filtered.length === 0 ? (
                 <div style={{padding: tokens.space.xxl, background: tokens.colors.bgPanel, border: `1px solid ${tokens.colors.rule}`, borderRadius: tokens.radius.md}}>
                     <EmptyState line="No reviewed impacts match the current filter. Try widening the lens." />
@@ -265,7 +294,7 @@ function DashboardBody({tableName}: {tableName: string}) {
                 <NarrativeMode aggregations={aggregations} onClose={() => setNarrative(false)} />
             ) : null}
 
-            {help ? <HelpGuide mode="modal" onClose={() => setHelp(false)} /> : null}
+            {help ? <HelpGuide mode="modal" accessControlled={accessControlled} onClose={() => setHelp(false)} /> : null}
         </div>
     );
 }
