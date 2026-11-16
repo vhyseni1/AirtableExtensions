@@ -205,17 +205,22 @@ function DashboardBody({tableName}: {tableName: string}) {
                     boxShadow: '0 6px 12px -8px rgba(2,35,102,0.14)',
                 }}
             >
-                <Masthead
+                <TopNav
                     section={section}
                     onSection={setSection}
                     reviewUrl={REVIEW_GRID_URL}
-                    onNarrative={() => setNarrative(true)}
                     onHelp={() => setHelp(true)}
+                />
+                <Ribbon
+                    showTabs={section === 'dashboards' && hasReviewedData}
+                    showNarrative={section === 'dashboards'}
+                    tab={tab}
+                    onTabChange={setTab}
+                    onNarrative={() => setNarrative(true)}
                     runCount={aggregations.runs.length}
                 />
                 {section === 'dashboards' && hasReviewedData ? (
                     <>
-                        <Tabs active={tab} onChange={setTab} />
                         <HeadlineBar
                             filtered={filtered}
                             aggregations={aggregations}
@@ -316,30 +321,63 @@ function navItem(on: boolean): React.CSSProperties {
         fontSize: 12.5,
         fontWeight: 600,
         letterSpacing: '0.01em',
-        border: on ? '1px solid rgba(255,255,255,0.5)' : '1px solid transparent',
+        border: `1px solid ${on ? '#0A0D14' : tokens.colors.rule}`,
         borderRadius: 10,
-        background: on ? '#0A0D14' : 'rgba(10,13,20,0.55)',
-        color: '#FFFFFF',
+        background: on ? '#0A0D14' : '#FFFFFF',
+        color: on ? '#FFFFFF' : tokens.colors.text,
         cursor: 'pointer',
         textDecoration: 'none',
         whiteSpace: 'nowrap',
-        transition: 'background 140ms ease, border-color 140ms ease',
+        transition: 'background 140ms ease, color 140ms ease, border-color 140ms ease',
     };
 }
 
-function Masthead({
+/** Top navigation — section pills + Guide — on the white page, above the blue ribbon. */
+function TopNav({
     section,
     onSection,
     reviewUrl,
-    onNarrative,
     onHelp,
-    runCount,
 }: {
     section: Section;
     onSection: (s: Section) => void;
     reviewUrl: string;
-    onNarrative: () => void;
     onHelp: () => void;
+}) {
+    return (
+        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: tokens.space.md, flexWrap: 'wrap'}}>
+            <nav style={{display: 'flex', gap: tokens.space.sm, flexWrap: 'wrap'}}>
+                <button type="button" onClick={() => onSection('import')} style={navItem(section === 'import')}>
+                    Import Data <span aria-hidden style={{opacity: 0.55}}>›</span>
+                </button>
+                <a href={reviewUrl} target="_top" rel="noopener" style={navItem(false)}>
+                    Review Data <span aria-hidden style={{opacity: 0.55}}>›</span>
+                </a>
+                <button type="button" onClick={() => onSection('dashboards')} style={navItem(section === 'dashboards')}>
+                    Dashboards <span aria-hidden style={{opacity: 0.55}}>›</span>
+                </button>
+            </nav>
+            <button type="button" onClick={onHelp} title="How the Control Tower works" style={navItem(false)}>
+                Guide
+            </button>
+        </div>
+    );
+}
+
+/** Blue ribbon — brand + dashboard sub-tabs + Narrative. */
+function Ribbon({
+    showTabs,
+    showNarrative,
+    tab,
+    onTabChange,
+    onNarrative,
+    runCount,
+}: {
+    showTabs: boolean;
+    showNarrative: boolean;
+    tab: TabKey;
+    onTabChange: (t: TabKey) => void;
+    onNarrative: () => void;
     runCount: number;
 }) {
     return (
@@ -390,44 +428,14 @@ function Masthead({
                     >
                         Change Impact · Control Tower
                     </h1>
-                    <span
-                        className="cia-eyebrow"
-                        style={{letterSpacing: '0.18em', color: tokens.colors.accentTint, fontSize: 9}}
-                    >
+                    <span className="cia-eyebrow" style={{letterSpacing: '0.18em', color: tokens.colors.accentTint, fontSize: 9}}>
                         ELEVATE-CIA
                     </span>
                 </div>
             </div>
-            <div
-                style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: tokens.space.md,
-                    flexShrink: 0,
-                    flexWrap: 'wrap',
-                }}
-            >
-                <nav style={{display: 'flex', gap: tokens.space.sm}}>
-                    <button type="button" onClick={() => onSection('import')} style={navItem(section === 'import')}>
-                        Import Data <span aria-hidden style={{opacity: 0.7}}>›</span>
-                    </button>
-                    <a href={reviewUrl} target="_top" rel="noopener" style={navItem(false)}>
-                        Review Data <span aria-hidden style={{opacity: 0.7}}>›</span>
-                    </a>
-                    <button type="button" onClick={() => onSection('dashboards')} style={navItem(section === 'dashboards')}>
-                        Dashboards <span aria-hidden style={{opacity: 0.7}}>›</span>
-                    </button>
-                </nav>
-                <span aria-hidden style={{width: 1, height: 22, background: 'rgba(255,255,255,0.25)'}} />
-                <button
-                    type="button"
-                    onClick={onHelp}
-                    title="How the Control Tower works"
-                    style={ctrlBtn}
-                >
-                    Guide
-                </button>
-                {section === 'dashboards' ? (
+            <div style={{display: 'flex', alignItems: 'center', gap: tokens.space.md, flexShrink: 0, flexWrap: 'wrap'}}>
+                {showTabs ? <Tabs active={tab} onChange={onTabChange} dark /> : null}
+                {showNarrative ? (
                     <button
                         type="button"
                         onClick={onNarrative}

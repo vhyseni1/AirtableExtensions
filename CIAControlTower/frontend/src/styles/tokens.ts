@@ -1,8 +1,8 @@
 export const tokens = {
     colors: {
-        // Surfaces — extra-light-blue page tint with crisp white panels
-        bg: '#F2F6FF',
-        bgAlt: '#E6F1FF',
+        // Surfaces — white page with crisp panels and light-blue accents
+        bg: '#FFFFFF',
+        bgAlt: '#EEF4FF',
         bgPanel: '#FFFFFF',
         bgDark: '#022366',
 
