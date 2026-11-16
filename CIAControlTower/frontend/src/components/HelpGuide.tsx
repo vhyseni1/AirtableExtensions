@@ -468,6 +468,11 @@ function UploadSection() {
             title="From sources to Airtable"
             intro="Five steps turn raw session files into rows in the Upload & review tab. Steps 2 and 3 are prompts you run in Google Notebook."
         >
+            <Callout tone="warn" label="Use the same file names throughout">
+                The file names you put in the generation prompt, the name you point the critique prompt at, and the actual sources
+                in Google Notebook must be <strong>identical — character for character</strong>. If the names don&apos;t match, the
+                prompts read the wrong source (or none) and impacts go missing.
+            </Callout>
             <Steps
                 items={[
                     <>
@@ -482,8 +487,8 @@ function UploadSection() {
                         <PromptBlock label="Generation prompt" text={GENERATION_PROMPT} />
                     </>,
                     <>
-                        <strong>Run the critique prompt</strong> to clean, split and consolidate. Point it at your exact source file
-                        name.
+                        <strong>Run the critique prompt</strong> to clean, split and consolidate. Point it at the
+                        <strong> same file names</strong> you used in the generation prompt — exactly as they appear in Notebook.
                         <PromptBlock label="Critique prompt" text={CRITIQUE_PROMPT} />
                     </>,
                     <>
