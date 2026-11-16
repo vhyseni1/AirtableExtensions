@@ -308,18 +308,23 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
     }, [parsed, mapping]);
 
     // Ensure every linked value exists as a record in its linked table,
-    // creating the missing ones, and return the combined name->id maps.
-    const resolveLinks = async (): Promise<Record<string, Map<string, string>>> => {
+    // creating the missing ones. Returns the maps plus a diagnostic string so
+    // link problems are visible instead of silent.
+    const resolveLinks = async (): Promise<{maps: Record<string, Map<string, string>>; diag: string}> => {
         const combined: Record<string, Map<string, string>> = {};
         for (const [tid, m] of Object.entries(linkMapsRef.current)) combined[tid] = new Map(m);
-        if (!parsed || !mapping) return combined;
+        if (!parsed || !mapping) return {maps: combined, diag: ''};
         const headerIndex = new Map<string, number>();
         parsed.headers.forEach((h, i) => headerIndex.set(h, i));
+        const notes: string[] = [];
         for (const {header, field} of mapping.matched) {
             if (field.type !== LINK_TYPE) continue;
             const tid = field.options?.linkedTableId;
             const linkedTable = tid ? linkedTables.get(tid) : null;
-            if (!tid || !linkedTable) continue;
+            if (!tid || !linkedTable) {
+                notes.push(`${field.name}: linked table not readable from the extension`);
+                continue;
+            }
             const map = combined[tid] ?? (combined[tid] = new Map());
             const idx = headerIndex.get(header);
             if (idx === undefined) continue;
@@ -332,17 +337,22 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
             }
             const toCreate = [...needed.values()];
             const primary = linkedTable.primaryField.name;
+            let createdHere = 0;
+            let err = '';
             for (let i = 0; i < toCreate.length; i += BATCH) {
                 const chunk = toCreate.slice(i, i + BATCH);
                 try {
                     const ids = await linkedTable.createRecordsAsync(chunk.map(n => ({fields: {[primary]: n}})));
                     ids.forEach((id, j) => map.set(chunk[j]!.toLowerCase(), id));
-                } catch {
-                    /* can't create in linked table — those links stay unresolved (blank) */
+                    createdHere += chunk.length;
+                } catch (e) {
+                    if (!err) err = e instanceof Error ? e.message : String(e);
                 }
             }
+            if (err) notes.push(`${linkedTable.name}: couldn't create ${toCreate.length - createdHere} role(s) — ${err}`);
+            else if (createdHere) notes.push(`${linkedTable.name}: created ${createdHere} new`);
         }
-        return combined;
+        return {maps: combined, diag: notes.join(' · ')};
     };
 
     const buildRecords = (links: Record<string, Map<string, string>>): ReadonlyArray<{fields: Record<string, unknown>}> => {
@@ -377,7 +387,7 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
         if (!table) return;
         setPhase('importing');
         setProgress(0);
-        const links = await resolveLinks();
+        const {maps: links, diag: linkDiag} = await resolveLinks();
         const records = buildRecords(links);
         if (records.length === 0) {
             setPhase('edit');
@@ -408,11 +418,12 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
         const warnMsg = selectWarnings.length
             ? `Some single-select fields couldn't take all values (the extension can't add options): ${selectWarnings.map(w => `${w.field} (${w.values.length})`).join(', ')}. Make these fields single-line text in the base to keep every value.`
             : '';
+        const parts = [linkDiag, warnMsg].filter(Boolean);
         if (failed > 0) {
-            setResult({created, message: `${failed} row${failed === 1 ? '' : 's'} failed. ${firstError}${warnMsg ? ' · ' + warnMsg : ''}`});
+            setResult({created, message: [`${failed} row${failed === 1 ? '' : 's'} failed. ${firstError}`, ...parts].join(' · ')});
             setPhase(created > 0 ? 'done' : 'error');
         } else {
-            setResult({created, message: warnMsg || undefined});
+            setResult({created, message: parts.length ? parts.join(' · ') : undefined});
             setPhase('done');
         }
         if (created > 0) onImported?.();
