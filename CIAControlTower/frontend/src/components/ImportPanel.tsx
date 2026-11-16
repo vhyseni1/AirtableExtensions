@@ -5,7 +5,7 @@ import {FIELDS} from '../utils/schema';
 
 const RADIUS = {card: 16, inner: 12, pill: 980};
 const SHADOW = {
-    modal: '0 30px 80px -20px rgba(2,35,102,0.4)',
+    card: '0 1px 2px rgba(2,35,102,0.04), 0 8px 24px -12px rgba(2,35,102,0.16)',
     raised: '0 1px 2px rgba(2,35,102,0.06), 0 1px 1px rgba(2,35,102,0.04)',
 };
 
@@ -111,7 +111,7 @@ function coerce(type: string, raw: string): unknown | undefined {
     }
 }
 
-export function ImportDialog({tableName, onClose, onImported}: {tableName: string; onClose: () => void; onImported?: () => void}) {
+export function ImportPanel({tableName, onImported, onReview}: {tableName: string; onImported?: () => void; onReview?: () => void}) {
     const base = useBase() as unknown as {getTableByNameIfExists(name: string): LiveTable | null};
     const table = base.getTableByNameIfExists(tableName);
 
@@ -209,19 +209,16 @@ export function ImportDialog({tableName, onClose, onImported}: {tableName: strin
     };
 
     return (
-        <div onClick={onClose} style={backdrop}>
-            <div onClick={e => e.stopPropagation()} className="cia-scroll" style={sheet}>
-                <header style={header}>
-                    <div style={{display: 'flex', flexDirection: 'column', gap: 2}}>
-                        <span style={eyebrow}>Import</span>
-                        <h2 style={{margin: 0, fontFamily: tokens.fonts.serif, fontSize: 20, fontWeight: 600, letterSpacing: '-0.015em', color: tokens.colors.text}}>
-                            Add data
-                        </h2>
-                    </div>
-                    <button type="button" onClick={onClose} style={ghostBtn}>Done</button>
-                </header>
+        <div style={card}>
+            <div style={{padding: tokens.space.xxl, display: 'flex', flexDirection: 'column', gap: tokens.space.lg}}>
+                <div style={{display: 'flex', flexDirection: 'column', gap: 2}}>
+                    <span style={eyebrow}>Import</span>
+                    <h2 style={{margin: 0, fontFamily: tokens.fonts.serif, fontSize: 20, fontWeight: 600, letterSpacing: '-0.015em', color: tokens.colors.text}}>
+                        Add data
+                    </h2>
+                </div>
 
-                <div style={{padding: `${tokens.space.sm} ${tokens.space.xxl} ${tokens.space.xxl}`, display: 'flex', flexDirection: 'column', gap: tokens.space.lg}}>
+                <div style={{display: 'flex', flexDirection: 'column', gap: tokens.space.lg}}>
                     {!table ? (
                         <Banner tone="warn">The Impacts table could not be found, so importing is unavailable.</Banner>
                     ) : !canCreate ? (
@@ -230,12 +227,12 @@ export function ImportDialog({tableName, onClose, onImported}: {tableName: strin
                         <>
                             <Banner tone="good">
                                 Imported <strong>{result?.created ?? 0}</strong> record{(result?.created ?? 0) === 1 ? '' : 's'} as
-                                Pending. Switch to the Impacts table, review each one and set its Validation Status to Reviewed to see
-                                it on the dashboard.
+                                Pending. Go to <strong>Review Data</strong> to validate each one and set its Validation Status to
+                                Reviewed — that publishes it to the dashboard.
                             </Banner>
                             <div style={{display: 'flex', gap: tokens.space.sm}}>
                                 <button type="button" onClick={reset} style={secondaryBtn}>Import more</button>
-                                <button type="button" onClick={onClose} style={primaryBtn}>Done</button>
+                                {onReview ? <button type="button" onClick={onReview} style={primaryBtn}>Go to Review Data</button> : null}
                             </div>
                         </>
                     ) : (
@@ -370,40 +367,13 @@ function Banner({tone, children}: {tone: 'info' | 'warn' | 'good'; children: Rea
     );
 }
 
-const backdrop: React.CSSProperties = {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(2,35,102,0.32)',
-    backdropFilter: 'blur(8px) saturate(1.1)',
-    WebkitBackdropFilter: 'blur(8px) saturate(1.1)',
-    zIndex: 240,
-    display: 'flex',
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    padding: tokens.space.xl,
-};
-const sheet: React.CSSProperties = {
+const card: React.CSSProperties = {
     background: tokens.colors.bgPanel,
     borderRadius: RADIUS.card,
-    boxShadow: SHADOW.modal,
-    width: 'min(94vw, 720px)',
-    maxHeight: '92vh',
-    overflow: 'auto',
-    display: 'flex',
-    flexDirection: 'column',
-};
-const header: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: tokens.space.md,
-    padding: `${tokens.space.lg} ${tokens.space.xxl}`,
-    position: 'sticky',
-    top: 0,
-    background: 'rgba(255,255,255,0.8)',
-    backdropFilter: 'blur(12px)',
-    WebkitBackdropFilter: 'blur(12px)',
-    zIndex: 1,
+    boxShadow: SHADOW.card,
+    maxWidth: 820,
+    margin: '0 auto',
+    width: '100%',
 };
 const eyebrow: React.CSSProperties = {
     fontSize: 10,
@@ -462,16 +432,6 @@ const secondaryBtn: React.CSSProperties = {
     border: 'none',
     background: tokens.colors.bgAlt,
     color: tokens.colors.text,
-    fontSize: 12,
-    fontWeight: 600,
-    cursor: 'pointer',
-};
-const ghostBtn: React.CSSProperties = {
-    padding: '7px 16px',
-    border: 'none',
-    borderRadius: RADIUS.pill,
-    background: tokens.colors.bgAlt,
-    color: tokens.colors.accent,
     fontSize: 12,
     fontWeight: 600,
     cursor: 'pointer',

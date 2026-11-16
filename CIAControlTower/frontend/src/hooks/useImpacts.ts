@@ -9,8 +9,8 @@ import {
     CONFIDENCES,
     CREATED_FIELD_CANDIDATES,
     ECL_STREAMS,
-    FIELDS,
-    REQUIRED_FIELD_LIST,
+    missingCoreFields,
+    resolveFields,
     RESPONSIBLES,
     TABLE_NAME,
     TAGS,
@@ -21,6 +21,7 @@ import {
     type ChangeImpact,
     type Confidence,
     type EclStream,
+    type FieldKey,
     type Impact,
     type Responsible,
     type Tag,
@@ -110,46 +111,53 @@ interface AccessFields {
     accessible: string | null;
 }
 
-function recordNumberOf(rec: AirtableRecord, present: ReadonlySet<string>): number | null {
-    const v = safeRaw(rec, FIELDS.id, present);
+function recordNumberOf(rec: AirtableRecord, idField: string | null, present: ReadonlySet<string>): number | null {
+    if (!idField) return null;
+    const v = safeRaw(rec, idField, present);
     if (typeof v === 'number') return v;
-    const s = safeStr(rec, FIELDS.id, present);
+    const s = safeStr(rec, idField, present);
     const n = Number(s);
     return Number.isFinite(n) ? n : null;
 }
 
-function buildImpact(rec: AirtableRecord, present: ReadonlySet<string>, access: AccessFields): Impact {
+function buildImpact(
+    rec: AirtableRecord,
+    present: ReadonlySet<string>,
+    access: AccessFields,
+    resolved: Record<FieldKey, string | null>,
+): Impact {
     const accessKeys: string[] = [];
     if (access.created) accessKeys.push(...collaboratorKeys(safeRaw(rec, access.created, present)));
     if (access.accessible) accessKeys.push(...collaboratorKeys(safeRaw(rec, access.accessible, present)));
+    const str = (k: FieldKey): string => (resolved[k] ? safeStr(rec, resolved[k]!, present) : '');
     return {
         id: rec.id,
-        recordNumber: recordNumberOf(rec, present),
-        validationStatus: normalizeOne<ValidationStatus>(safeStr(rec, FIELDS.validationStatus, present), VALIDATION_STATUSES),
-        sourceRun: safeStr(rec, FIELDS.sourceRun, present).trim(),
-        businessArchetypes: normalizeMany<BusinessArchetype>(safeStr(rec, FIELDS.businessArchetypes, present), BUSINESS_ARCHETYPES),
-        affiliate: normalizeOne<Affiliate>(safeStr(rec, FIELDS.affiliate, present), AFFILIATES),
-        role: safeStr(rec, FIELDS.role, present).trim(),
+        recordNumber: recordNumberOf(rec, resolved.id, present),
+        validationStatus: normalizeOne<ValidationStatus>(str('validationStatus'), VALIDATION_STATUSES),
+        sourceRun: str('sourceRun').trim(),
+        businessArchetypes: normalizeMany<BusinessArchetype>(str('businessArchetypes'), BUSINESS_ARCHETYPES),
+        affiliate: normalizeOne<Affiliate>(str('affiliate'), AFFILIATES),
+        role: str('role').trim(),
         persona: (() => {
-            const v = safeStr(rec, FIELDS.persona, present).trim();
+            const v = str('persona').trim();
             return v ? v : null;
         })(),
-        changeCategory: normalizeOne<ChangeCategory>(safeStr(rec, FIELDS.changeCategory, present), CHANGE_CATEGORIES),
-        changeComponent: safeStr(rec, FIELDS.changeComponent, present).trim(),
-        descriptionAsIs: safeStr(rec, FIELDS.descriptionAsIs, present),
-        descriptionToBe: safeStr(rec, FIELDS.descriptionToBe, present),
-        changeImpact: normalizeOne<ChangeImpact>(safeStr(rec, FIELDS.changeImpact, present), CHANGE_IMPACTS),
-        confidence: normalizeOne<Confidence>(safeStr(rec, FIELDS.confidence, present), CONFIDENCES),
-        tags: normalizeMany<Tag>(safeStr(rec, FIELDS.tags, present), TAGS),
-        sourceQuote: safeStr(rec, FIELDS.sourceQuote, present),
-        sourceDoc: safeStr(rec, FIELDS.sourceDoc, present),
-        actionRequired: safeStr(rec, FIELDS.actionRequired, present),
-        responsible: normalizeOne<Responsible>(safeStr(rec, FIELDS.responsible, present), RESPONSIBLES),
-        eclStream: normalizeOne<EclStream>(safeStr(rec, FIELDS.eclStream, present), ECL_STREAMS),
-        actionOwner: safeStr(rec, FIELDS.actionOwner, present),
-        timeline: safeStr(rec, FIELDS.timeline, present),
-        dependencies: safeStr(rec, FIELDS.dependencies, present),
-        notes: safeStr(rec, FIELDS.notes, present),
+        changeCategory: normalizeOne<ChangeCategory>(str('changeCategory'), CHANGE_CATEGORIES),
+        changeComponent: str('changeComponent').trim(),
+        descriptionAsIs: str('descriptionAsIs'),
+        descriptionToBe: str('descriptionToBe'),
+        changeImpact: normalizeOne<ChangeImpact>(str('changeImpact'), CHANGE_IMPACTS),
+        confidence: normalizeOne<Confidence>(str('confidence'), CONFIDENCES),
+        tags: normalizeMany<Tag>(str('tags'), TAGS),
+        sourceQuote: str('sourceQuote'),
+        sourceDoc: str('sourceDoc'),
+        actionRequired: str('actionRequired'),
+        responsible: normalizeOne<Responsible>(str('responsible'), RESPONSIBLES),
+        eclStream: normalizeOne<EclStream>(str('eclStream'), ECL_STREAMS),
+        actionOwner: str('actionOwner'),
+        timeline: str('timeline'),
+        dependencies: str('dependencies'),
+        notes: str('notes'),
         accessKeys,
     };
 }
@@ -182,8 +190,13 @@ export function useImpacts(tableName: string = TABLE_NAME): UseImpactsResult {
     }, [table]);
 
     const missingFields = useMemo(
-        () => (table ? REQUIRED_FIELD_LIST.filter(n => !presentFieldNames.has(n)) : [...REQUIRED_FIELD_LIST]),
+        () => (table ? missingCoreFields(presentFieldNames) : []),
         [table, presentFieldNames],
+    );
+
+    const resolved = useMemo<Record<FieldKey, string | null>>(
+        () => resolveFields(presentFieldNames),
+        [presentFieldNames],
     );
 
     const accessFields = useMemo<AccessFields>(
@@ -201,8 +214,8 @@ export function useImpacts(tableName: string = TABLE_NAME): UseImpactsResult {
 
     const impacts = useMemo<Impact[]>(() => {
         if (!table || !records) return [];
-        return records.map(rec => buildImpact(rec, presentFieldNames, accessFields));
-    }, [table, records, presentFieldNames, accessFields]);
+        return records.map(rec => buildImpact(rec, presentFieldNames, accessFields, resolved));
+    }, [table, records, presentFieldNames, accessFields, resolved]);
 
     const recordsById = useMemo(() => {
         const m = new Map<string, AirtableRecord>();

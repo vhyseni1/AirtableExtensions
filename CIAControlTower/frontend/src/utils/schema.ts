@@ -28,6 +28,78 @@ export const FIELDS = {
 
 export const REQUIRED_FIELD_LIST: ReadonlyArray<string> = Object.values(FIELDS);
 
+export type FieldKey = keyof typeof FIELDS;
+
+/**
+ * Accepted column names per logical field, newest canonical first. Lets the
+ * extension read both the current framework output and older bases:
+ *  - Workstream (new) / ECL_Stream (old)
+ *  - Role is plain text now; Persona is optional (older bases had the lookup)
+ */
+export const FIELD_CANDIDATES: Record<FieldKey, ReadonlyArray<string>> = {
+    id: ['ID'],
+    validationStatus: ['Validation_Status'],
+    sourceRun: ['Source_Run'],
+    businessArchetypes: ['Business_Archetypes'],
+    affiliate: ['Affiliate'],
+    role: ['Role'],
+    persona: ['Persona (from Role)', 'Persona'],
+    changeCategory: ['Change_Category'],
+    changeComponent: ['Change_Component'],
+    descriptionAsIs: ['Description_As-Is'],
+    descriptionToBe: ['Description_To-Be'],
+    changeImpact: ['Change_Impact'],
+    confidence: ['Confidence'],
+    tags: ['Tags'],
+    sourceQuote: ['Source_Quote'],
+    sourceDoc: ['Source_Doc'],
+    actionRequired: ['Action_Required'],
+    responsible: ['Responsible'],
+    eclStream: ['Workstream', 'ECL_Stream'],
+    actionOwner: ['Action_Owner'],
+    timeline: ['Timeline'],
+    dependencies: ['Dependencies'],
+    notes: ['Notes'],
+};
+
+/** Minimal set the dashboard genuinely needs. Everything else is optional. */
+export const CORE_FIELD_KEYS: ReadonlyArray<FieldKey> = [
+    'validationStatus',
+    'affiliate',
+    'role',
+    'changeCategory',
+    'changeComponent',
+    'changeImpact',
+    'confidence',
+    'tags',
+    'businessArchetypes',
+];
+
+/** First present candidate name for a field, or null if none exists. */
+export function resolveFieldName(present: ReadonlySet<string>, candidates: ReadonlyArray<string>): string | null {
+    const lower = new Map<string, string>();
+    for (const n of present) lower.set(n.toLowerCase(), n);
+    for (const c of candidates) {
+        const hit = lower.get(c.toLowerCase());
+        if (hit) return hit;
+    }
+    return null;
+}
+
+/** Resolve every logical field to the actual column name in this table. */
+export function resolveFields(present: ReadonlySet<string>): Record<FieldKey, string | null> {
+    const out = {} as Record<FieldKey, string | null>;
+    (Object.keys(FIELD_CANDIDATES) as FieldKey[]).forEach(k => {
+        out[k] = resolveFieldName(present, FIELD_CANDIDATES[k]);
+    });
+    return out;
+}
+
+/** Canonical names of the core fields missing from this table. */
+export function missingCoreFields(present: ReadonlySet<string>): string[] {
+    return CORE_FIELD_KEYS.filter(k => !resolveFieldName(present, FIELD_CANDIDATES[k])).map(k => FIELD_CANDIDATES[k][0]!);
+}
+
 /**
  * Optional access-control fields. When present in the table the dashboard
  * enforces per-user access: a viewer sees a record only if they created it

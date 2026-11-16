@@ -15,13 +15,13 @@ import {useAggregations} from '../hooks/useAggregations';
 import {DEFAULT_FILTER, type FilterState, useFilteredImpacts} from '../hooks/useFilteredImpacts';
 import {useImpacts} from '../hooks/useImpacts';
 import {tokens} from '../styles/tokens';
-import {REQUIRED_FIELD_LIST, TABLE_NAME, type Impact} from '../utils/schema';
+import {missingCoreFields, TABLE_NAME, type Impact} from '../utils/schema';
 import {DiagnosticGrid} from './DiagnosticGrid';
 import {FilterBar} from './FilterBar';
 import {HeadlineBar, type DrillSpec} from './HeadlineBar';
 import {HeatMap} from './HeatMap';
 import {HelpGuide} from './HelpGuide';
-import {ImportDialog} from './ImportDialog';
+import {ImportPanel} from './ImportPanel';
 import {NarrativeMode} from './NarrativeMode';
 import {DrillSheet} from './primitives/DrillSheet';
 import {EmptyState} from './primitives/EmptyState';
@@ -30,7 +30,10 @@ import {Tabs, type TabKey} from './Tabs';
 import {FlowsView} from './views/FlowsView';
 import {HeatmapsView} from './views/HeatmapsView';
 import {RadarsView} from './views/RadarsView';
+import {ReviewView} from './views/ReviewView';
 import {WaterfallsView} from './views/WaterfallsView';
+
+type Section = 'import' | 'review' | 'dashboards';
 
 interface ActiveDrill {
     title: string;
@@ -82,7 +85,7 @@ export function Dashboard() {
     }
 
     const present = new Set(table.fields.map(f => f.name));
-    const missing = REQUIRED_FIELD_LIST.filter(n => !present.has(n));
+    const missing = missingCoreFields(present);
     if (missing.length) {
         return (
             <ErrorScreen
@@ -103,7 +106,7 @@ function DashboardBody({tableName}: {tableName: string}) {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [narrative, setNarrative] = useState(false);
     const [help, setHelp] = useState(false);
-    const [importing, setImporting] = useState(false);
+    const [section, setSection] = useState<Section>('dashboards');
     const [tab, setTab] = useState<TabKey>('overview');
 
     // Per-user access: only enforced when the table carries Created / Accessible-by
@@ -201,15 +204,15 @@ function DashboardBody({tableName}: {tableName: string}) {
                 }}
             >
                 <Masthead
+                    section={section}
+                    onSection={setSection}
                     onNarrative={() => setNarrative(true)}
                     onHelp={() => setHelp(true)}
-                    onImport={() => setImporting(true)}
                     runCount={aggregations.runs.length}
-                    tab={tab}
-                    onTabChange={setTab}
                 />
-                {hasReviewedData ? (
+                {section === 'dashboards' && hasReviewedData ? (
                     <>
+                        <Tabs active={tab} onChange={setTab} />
                         <HeadlineBar
                             filtered={filtered}
                             aggregations={aggregations}
@@ -227,10 +230,14 @@ function DashboardBody({tableName}: {tableName: string}) {
                 ) : null}
             </div>
 
-            {visibleImpacts.length === 0 ? (
-                <HelpGuide mode="no-data" accessControlled={accessControlled} onImport={() => setImporting(true)} />
+            {section === 'import' ? (
+                <ImportPanel tableName={tableName} onReview={() => setSection('review')} />
+            ) : section === 'review' ? (
+                <ReviewView records={visibleImpacts} onOpen={openRecord} onImport={() => setSection('import')} />
+            ) : visibleImpacts.length === 0 ? (
+                <HelpGuide mode="no-data" accessControlled={accessControlled} onImport={() => setSection('import')} />
             ) : !hasReviewedData ? (
-                <HelpGuide mode="awaiting-review" accessControlled={accessControlled} totalCount={visibleImpacts.length} reviewedCount={reviewedCount} onImport={() => setImporting(true)} />
+                <HelpGuide mode="awaiting-review" accessControlled={accessControlled} totalCount={visibleImpacts.length} reviewedCount={reviewedCount} onImport={() => setSection('import')} />
             ) : filtered.length === 0 ? (
                 <div style={{padding: tokens.space.xxl, background: tokens.colors.bgPanel, border: `1px solid ${tokens.colors.rule}`, borderRadius: tokens.radius.md}}>
                     <EmptyState line="No reviewed impacts match the current filter. Try widening the lens." />
@@ -295,26 +302,28 @@ function DashboardBody({tableName}: {tableName: string}) {
             ) : null}
 
             {help ? <HelpGuide mode="modal" accessControlled={accessControlled} onClose={() => setHelp(false)} /> : null}
-
-            {importing ? <ImportDialog tableName={tableName} onClose={() => setImporting(false)} /> : null}
         </div>
     );
 }
 
+const SECTIONS: ReadonlyArray<{key: Section; label: string}> = [
+    {key: 'import', label: 'Import Data'},
+    {key: 'review', label: 'Review Data'},
+    {key: 'dashboards', label: 'Dashboards'},
+];
+
 function Masthead({
+    section,
+    onSection,
     onNarrative,
     onHelp,
-    onImport,
     runCount,
-    tab,
-    onTabChange,
 }: {
+    section: Section;
+    onSection: (s: Section) => void;
     onNarrative: () => void;
     onHelp: () => void;
-    onImport: () => void;
     runCount: number;
-    tab: TabKey;
-    onTabChange: (t: TabKey) => void;
 }) {
     return (
         <header
@@ -381,70 +390,69 @@ function Masthead({
                     flexWrap: 'wrap',
                 }}
             >
-                <Tabs active={tab} onChange={onTabChange} dark />
+                <nav style={{display: 'flex', gap: 4, padding: 4, background: 'rgba(255,255,255,0.14)', borderRadius: tokens.radius.md}}>
+                    {SECTIONS.map(s => {
+                        const on = s.key === section;
+                        return (
+                            <button
+                                key={s.key}
+                                type="button"
+                                onClick={() => onSection(s.key)}
+                                style={{
+                                    padding: '7px 16px',
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    letterSpacing: '0.06em',
+                                    textTransform: 'uppercase',
+                                    border: 'none',
+                                    borderRadius: tokens.radius.sm,
+                                    background: on ? '#FFFFFF' : 'transparent',
+                                    color: on ? tokens.colors.accentDeep : 'rgba(255,255,255,0.9)',
+                                    cursor: 'pointer',
+                                    transition: 'background 140ms ease, color 140ms ease',
+                                }}
+                            >
+                                {s.label}
+                            </button>
+                        );
+                    })}
+                </nav>
                 <span aria-hidden style={{width: 1, height: 22, background: 'rgba(255,255,255,0.25)'}} />
-                <button
-                    type="button"
-                    onClick={onImport}
-                    title="Import data"
-                    style={{
-                        padding: '6px 14px',
-                        fontSize: 11,
-                        fontWeight: 700,
-                        letterSpacing: '0.08em',
-                        textTransform: 'uppercase',
-                        border: '1px solid rgba(255,255,255,0.4)',
-                        borderRadius: tokens.radius.sm,
-                        background: '#FFFFFF',
-                        color: tokens.colors.accentDeep,
-                        cursor: 'pointer',
-                    }}
-                >
-                    Import data
-                </button>
                 <button
                     type="button"
                     onClick={onHelp}
                     title="How the Control Tower works"
-                    style={{
-                        padding: '6px 14px',
-                        fontSize: 11,
-                        fontWeight: 700,
-                        letterSpacing: '0.08em',
-                        textTransform: 'uppercase',
-                        border: '1px solid rgba(255,255,255,0.4)',
-                        borderRadius: tokens.radius.sm,
-                        background: 'rgba(255,255,255,0.16)',
-                        color: '#FFFFFF',
-                        cursor: 'pointer',
-                    }}
+                    style={ctrlBtn}
                 >
                     Guide
                 </button>
-                <button
-                    type="button"
-                    onClick={onNarrative}
-                    disabled={runCount === 0}
-                    style={{
-                        padding: '6px 14px',
-                        fontSize: 11,
-                        fontWeight: 700,
-                        letterSpacing: '0.08em',
-                        textTransform: 'uppercase',
-                        border: '1px solid rgba(255,255,255,0.4)',
-                        borderRadius: tokens.radius.sm,
-                        background: 'rgba(255,255,255,0.16)',
-                        color: '#FFFFFF',
-                        opacity: runCount === 0 ? 0.4 : 1,
-                        cursor: runCount === 0 ? 'default' : 'pointer',
-                    }}
-                >
-                    Narrative ▶
-                </button>
+                {section === 'dashboards' ? (
+                    <button
+                        type="button"
+                        onClick={onNarrative}
+                        disabled={runCount === 0}
+                        style={{...ctrlBtn, opacity: runCount === 0 ? 0.4 : 1, cursor: runCount === 0 ? 'default' : 'pointer'}}
+                    >
+                        Narrative ▶
+                    </button>
+                ) : null}
             </div>
         </header>
     );
 }
+
+const ctrlBtn: React.CSSProperties = {
+    padding: '6px 14px',
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase',
+    border: '1px solid rgba(255,255,255,0.4)',
+    borderRadius: tokens.radius.sm,
+    background: 'rgba(255,255,255,0.16)',
+    color: '#FFFFFF',
+    cursor: 'pointer',
+};
 
 function SkeletonScreen() {
     return (
