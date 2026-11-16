@@ -1,6 +1,15 @@
 import {useState, type ReactNode} from 'react';
 import {tokens} from '../styles/tokens';
 
+// Apple-leaning surface language: large soft radii, soft shadows instead of
+// hard 1px borders, generous whitespace, a single calm accent.
+const RADIUS = {card: 16, inner: 12, pill: 980};
+const SHADOW = {
+    card: '0 1px 2px rgba(2,35,102,0.04), 0 8px 24px -12px rgba(2,35,102,0.16)',
+    raised: '0 1px 2px rgba(2,35,102,0.06), 0 1px 1px rgba(2,35,102,0.04)',
+    modal: '0 30px 80px -20px rgba(2,35,102,0.4)',
+};
+
 export type GuideMode = 'no-data' | 'awaiting-review' | 'modal';
 
 interface Props {
@@ -75,8 +84,9 @@ export function HelpGuide({mode, onClose, totalCount = 0, reviewedCount = 0, acc
                 style={{
                     position: 'fixed',
                     inset: 0,
-                    background: 'rgba(2,35,102,0.4)',
-                    backdropFilter: 'blur(3px)',
+                    background: 'rgba(2,35,102,0.32)',
+                    backdropFilter: 'blur(8px) saturate(1.1)',
+                    WebkitBackdropFilter: 'blur(8px) saturate(1.1)',
                     zIndex: 220,
                     display: 'flex',
                     alignItems: 'flex-start',
@@ -89,9 +99,9 @@ export function HelpGuide({mode, onClose, totalCount = 0, reviewedCount = 0, acc
                     className="cia-scroll"
                     style={{
                         background: tokens.colors.bgPanel,
-                        borderRadius: tokens.radius.md,
-                        boxShadow: '0 24px 60px rgba(2,35,102,0.3)',
-                        width: 'min(94vw, 980px)',
+                        borderRadius: RADIUS.card,
+                        boxShadow: SHADOW.modal,
+                        width: 'min(94vw, 960px)',
                         maxHeight: '92vh',
                         overflow: 'auto',
                         display: 'flex',
@@ -104,25 +114,26 @@ export function HelpGuide({mode, onClose, totalCount = 0, reviewedCount = 0, acc
                             alignItems: 'center',
                             justifyContent: 'space-between',
                             gap: tokens.space.md,
-                            padding: `${tokens.space.md} ${tokens.space.xl}`,
-                            borderBottom: `1px solid ${tokens.colors.rule}`,
+                            padding: `${tokens.space.lg} ${tokens.space.xxl}`,
                             position: 'sticky',
                             top: 0,
-                            background: tokens.colors.bgPanel,
+                            background: 'rgba(255,255,255,0.8)',
+                            backdropFilter: 'blur(12px)',
+                            WebkitBackdropFilter: 'blur(12px)',
                             zIndex: 1,
                         }}
                     >
                         <div style={{display: 'flex', flexDirection: 'column', gap: 2}}>
                             <span style={eyebrowStyle}>User guide</span>
-                            <h2 style={{margin: 0, fontFamily: tokens.fonts.serif, fontSize: 19, fontWeight: 600, color: tokens.colors.text}}>
+                            <h2 style={{margin: 0, fontFamily: tokens.fonts.serif, fontSize: 20, fontWeight: 600, letterSpacing: '-0.015em', color: tokens.colors.text}}>
                                 How the Control Tower works
                             </h2>
                         </div>
                         <button type="button" onClick={onClose} style={ghostBtn}>
-                            Close
+                            Done
                         </button>
                     </header>
-                    <div style={{padding: `${tokens.space.xl} ${tokens.space.xxl} ${tokens.space.xxl}`}}>{body}</div>
+                    <div style={{padding: `${tokens.space.sm} ${tokens.space.xxl} ${tokens.space.xxl}`}}>{body}</div>
                 </div>
             </div>
         );
@@ -132,11 +143,10 @@ export function HelpGuide({mode, onClose, totalCount = 0, reviewedCount = 0, acc
         <div
             style={{
                 background: tokens.colors.bgPanel,
-                border: `1px solid ${tokens.colors.rule}`,
-                borderRadius: tokens.radius.md,
-                boxShadow: tokens.shadow.panel,
+                borderRadius: RADIUS.card,
+                boxShadow: SHADOW.card,
                 padding: tokens.space.xxl,
-                maxWidth: 980,
+                maxWidth: 960,
                 margin: '0 auto',
                 width: '100%',
             }}
@@ -153,9 +163,10 @@ function EmptyIntro({mode, totalCount, reviewedCount, accessControlled}: {mode: 
     return (
         <div
             style={{
-                padding: `${tokens.space.xl} ${tokens.space.xl}`,
-                borderRadius: tokens.radius.md,
-                background: `linear-gradient(105deg, ${tokens.colors.accentDeep} 0%, ${tokens.colors.accent} 100%)`,
+                padding: `${tokens.space.xl} ${tokens.space.xxl}`,
+                borderRadius: RADIUS.card,
+                background: `linear-gradient(135deg, ${tokens.colors.accentDeep} 0%, ${tokens.colors.accent} 100%)`,
+                boxShadow: SHADOW.card,
                 color: '#FFFFFF',
             }}
         >
@@ -194,7 +205,15 @@ function EmptyIntro({mode, totalCount, reviewedCount, accessControlled}: {mode: 
 
 function ChapterNav({chapters, active, onPick}: {chapters: ReadonlyArray<Chapter>; active: ChapterKey; onPick: (k: ChapterKey) => void}) {
     return (
-        <nav style={{display: 'flex', gap: tokens.space.xl, borderBottom: `1px solid ${tokens.colors.rule}`}}>
+        <nav
+            style={{
+                display: 'flex',
+                gap: 4,
+                padding: 4,
+                background: tokens.colors.bgAlt,
+                borderRadius: RADIUS.inner,
+            }}
+        >
             {chapters.map(c => {
                 const on = c.key === active;
                 return (
@@ -203,23 +222,25 @@ function ChapterNav({chapters, active, onPick}: {chapters: ReadonlyArray<Chapter
                         type="button"
                         onClick={() => onPick(c.key)}
                         style={{
+                            flex: 1,
                             display: 'inline-flex',
-                            alignItems: 'baseline',
-                            gap: 8,
-                            padding: `0 2px ${tokens.space.sm}`,
-                            marginBottom: -1,
-                            background: 'none',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 7,
+                            padding: '8px 12px',
+                            borderRadius: RADIUS.inner - 4,
+                            background: on ? tokens.colors.bgPanel : 'transparent',
+                            boxShadow: on ? SHADOW.raised : 'none',
                             border: 'none',
-                            borderBottom: `2px solid ${on ? tokens.colors.accent : 'transparent'}`,
                             color: on ? tokens.colors.text : tokens.colors.textMuted,
                             cursor: 'pointer',
-                            transition: 'color 120ms ease, border-color 120ms ease',
+                            transition: 'background 160ms ease, color 160ms ease, box-shadow 160ms ease',
                         }}
                     >
-                        <span style={{fontFamily: tokens.fonts.mono, fontSize: 11, fontWeight: 500, color: on ? tokens.colors.accent : tokens.colors.textFaint}}>
+                        <span style={{fontFamily: tokens.fonts.mono, fontSize: 11, fontWeight: 600, color: on ? tokens.colors.accent : tokens.colors.textFaint}}>
                             {c.n}
                         </span>
-                        <span style={{fontSize: 13, fontWeight: on ? 700 : 600, letterSpacing: '0.02em'}}>
+                        <span style={{fontSize: 13, fontWeight: 600, letterSpacing: '0.01em'}}>
                             {c.label}
                         </span>
                     </button>
@@ -306,31 +327,89 @@ function PagerLink({dir, chapter, onClick}: {dir: 'prev' | 'next'; chapter: Chap
 
 /* ---------- Sections ---------- */
 
+interface Stage {
+    n: string;
+    title: string;
+    body: string;
+    actor: 'auto' | 'you';
+}
+
+const STAGES: ReadonlyArray<Stage> = [
+    {n: '01', title: 'Capture', actor: 'auto', body: 'Workshops and sessions produce raw material — transcripts, notes, flip charts, KDI, Lucid boards.'},
+    {n: '02', title: 'Extract', actor: 'auto', body: 'An LLM turns that raw material into structured impact rows.'},
+    {n: '03', title: 'Upload', actor: 'you', body: 'You paste those rows into the Upload & review tab.'},
+    {n: '04', title: 'Review', actor: 'you', body: 'You validate each row and mark it Reviewed.'},
+    {n: '05', title: 'Visualise', actor: 'auto', body: 'Reviewed rows flow into the dashboard, ready to act on.'},
+];
+
 function ProcessOverview() {
-    const steps: {n: string; title: string; body: string}[] = [
-        {n: '01', title: 'Capture', body: 'Workshops, interviews and sessions produce raw material — transcripts, notes, flip charts, KDI, Lucid boards.'},
-        {n: '02', title: 'Extract', body: 'An LLM (Google Notebook, or the model designated by your change lead) turns that raw material into structured impact rows.'},
-        {n: '03', title: 'Upload', body: 'You paste those rows into the “Upload & review source data” tab in Airtable.'},
-        {n: '04', title: 'Review', body: 'You check each row and set its Validation Status to Reviewed. Only reviewed rows become visible.'},
-        {n: '05', title: 'Visualise', body: 'Reviewed rows flow into this dashboard — heat maps, flows, radars and funnels — ready to act on.'},
-    ];
     return (
-        <Section eyebrow="The big picture" title="From raw notes to a live view">
-            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(165px, 1fr))', gap: tokens.space.lg}}>
-                {steps.map(s => (
-                    <div key={s.n} style={{display: 'flex', flexDirection: 'column', gap: 8}}>
-                        <span style={{fontFamily: tokens.fonts.mono, fontSize: 12, fontWeight: 600, color: tokens.colors.accent, letterSpacing: '0.06em'}}>
-                            {s.n}
-                        </span>
-                        <span style={{height: 1, background: tokens.colors.rule}} />
-                        <span style={{fontFamily: tokens.fonts.serif, fontWeight: 600, fontSize: 15, color: tokens.colors.text}}>
-                            {s.title}
-                        </span>
-                        <span style={{fontSize: 12.5, color: tokens.colors.textMuted, lineHeight: 1.55}}>{s.body}</span>
-                    </div>
-                ))}
-            </div>
+        <Section eyebrow="The big picture" title="From raw notes to a live view" intro="Five stages, left to right. Two of them are yours.">
+            <DiagramFrame>
+                <div style={{display: 'flex', minWidth: 680}}>
+                    {STAGES.map((s, i) => (
+                        <div key={s.n} style={{flex: 1, minWidth: 130, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 10}}>
+                            <div style={{display: 'flex', alignItems: 'center', width: '100%', height: 44}}>
+                                <span style={{flex: 1, height: 2, background: i === 0 ? 'transparent' : tokens.colors.rule}} />
+                                <StageNode n={s.n} you={s.actor === 'you'} />
+                                <span style={{flex: 1, height: 2, background: i === STAGES.length - 1 ? 'transparent' : tokens.colors.rule, position: 'relative'}}>
+                                    {i !== STAGES.length - 1 ? (
+                                        <span
+                                            aria-hidden
+                                            style={{
+                                                position: 'absolute',
+                                                right: -1,
+                                                top: '50%',
+                                                transform: 'translateY(-50%)',
+                                                width: 0,
+                                                height: 0,
+                                                borderTop: '4px solid transparent',
+                                                borderBottom: '4px solid transparent',
+                                                borderLeft: `6px solid ${tokens.colors.rule}`,
+                                            }}
+                                        />
+                                    ) : null}
+                                </span>
+                            </div>
+                            <div style={{display: 'flex', flexDirection: 'column', gap: 4, padding: '0 6px'}}>
+                                <span style={{...eyebrowStyle, color: s.actor === 'you' ? tokens.colors.accent : tokens.colors.textFaint}}>
+                                    {s.actor === 'you' ? 'Your step' : 'Automated'}
+                                </span>
+                                <span style={{fontFamily: tokens.fonts.serif, fontWeight: 600, fontSize: 15, color: tokens.colors.text}}>
+                                    {s.title}
+                                </span>
+                                <span style={{fontSize: 12, color: tokens.colors.textMuted, lineHeight: 1.5}}>{s.body}</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </DiagramFrame>
         </Section>
+    );
+}
+
+function StageNode({n, you}: {n: string; you: boolean}) {
+    return (
+        <span
+            style={{
+                flexShrink: 0,
+                width: 44,
+                height: 44,
+                borderRadius: '50%',
+                border: you ? 'none' : `1.5px solid ${tokens.colors.accentTint}`,
+                background: you ? tokens.colors.accent : tokens.colors.bgPanel,
+                color: you ? '#FFFFFF' : tokens.colors.accent,
+                boxShadow: you ? '0 4px 12px -2px rgba(11,65,205,0.45)' : SHADOW.raised,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontFamily: tokens.fonts.mono,
+                fontSize: 13,
+                fontWeight: 700,
+            }}
+        >
+            {n}
+        </span>
     );
 }
 
@@ -339,8 +418,9 @@ function AccessSection() {
         <Section
             eyebrow="Access & ownership"
             title="Seeing your data"
-            intro="Records are private by default. Two columns decide what you can see."
+            intro="Records are private by default. Either condition below makes a record visible to you."
         >
+            <AccessDiagram />
             <KeyValue
                 rows={[
                     ['Created', 'Automatically stamps the user who created each record. If you created it, you own it — and you can see it.'],
@@ -384,6 +464,7 @@ function ReviewSection() {
             title="Pending becomes Reviewed"
             intro="This is the step that makes data appear. The dashboard shows only records whose Validation Status is Reviewed."
         >
+            <ValidationGate />
             <Steps
                 items={[
                     <>Work through the records one by one, starting with the <strong>lowest-confidence</strong> ones — those are the most likely to need a correction.</>,
@@ -550,22 +631,159 @@ function Section({eyebrow, title, intro, children}: {eyebrow: string; title: str
 
 function Steps({items}: {items: ReactNode[]}) {
     return (
-        <ol style={{margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: tokens.space.sm}}>
-            {items.map((it, i) => (
-                <li key={i} style={{display: 'flex', gap: tokens.space.md, alignItems: 'baseline'}}>
-                    <span style={{fontFamily: tokens.fonts.mono, fontSize: 12, fontWeight: 600, color: tokens.colors.accent, flexShrink: 0, minWidth: 18}}>
-                        {String(i + 1).padStart(2, '0')}
-                    </span>
-                    <span style={{fontSize: 13.5, color: tokens.colors.textMuted, lineHeight: 1.6}}>{it}</span>
-                </li>
-            ))}
+        <ol style={{margin: 0, padding: 0, listStyle: 'none'}}>
+            {items.map((it, i) => {
+                const last = i === items.length - 1;
+                return (
+                    <li key={i} style={{display: 'grid', gridTemplateColumns: '28px 1fr', columnGap: tokens.space.md}}>
+                        <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
+                            <span
+                                style={{
+                                    width: 26,
+                                    height: 26,
+                                    flexShrink: 0,
+                                    borderRadius: '50%',
+                                    border: `1.5px solid ${tokens.colors.accent}`,
+                                    color: tokens.colors.accent,
+                                    background: tokens.colors.bgPanel,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontFamily: tokens.fonts.mono,
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                }}
+                            >
+                                {i + 1}
+                            </span>
+                            {!last ? <span style={{flex: 1, width: 2, background: tokens.colors.rule, minHeight: 10}} /> : null}
+                        </div>
+                        <span style={{fontSize: 13.5, color: tokens.colors.textMuted, lineHeight: 1.6, padding: `3px 0 ${last ? 0 : tokens.space.md}`}}>
+                            {it}
+                        </span>
+                    </li>
+                );
+            })}
         </ol>
+    );
+}
+
+/* ---------- Diagrams ---------- */
+
+function Node({children, tone = 'plain'}: {children: ReactNode; tone?: 'plain' | 'muted' | 'accent' | 'good' | 'drop'}) {
+    const map = {
+        plain: {bg: tokens.colors.bgPanel, border: tokens.colors.rule, color: tokens.colors.text},
+        muted: {bg: tokens.colors.bgAlt, border: tokens.colors.rule, color: tokens.colors.textMuted},
+        accent: {bg: tokens.colors.accentTint, border: tokens.colors.accent, color: tokens.colors.accentDeep},
+        good: {bg: '#E7F8EF', border: tokens.colors.sevLow, color: '#046B38'},
+        drop: {bg: tokens.colors.bgPanel, border: tokens.colors.rule, color: tokens.colors.textFaint},
+    }[tone];
+    return (
+        <span
+            style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                textAlign: 'center',
+                padding: '10px 14px',
+                borderRadius: RADIUS.inner,
+                background: map.bg,
+                color: map.color,
+                boxShadow: tone === 'drop' ? 'none' : SHADOW.raised,
+                opacity: tone === 'drop' ? 0.6 : 1,
+                fontSize: 12,
+                fontWeight: 600,
+                lineHeight: 1.3,
+                whiteSpace: 'nowrap',
+            }}
+        >
+            {children}
+        </span>
+    );
+}
+
+function Arrow({label, dir = 'right'}: {label?: string; dir?: 'right' | 'down'}) {
+    if (dir === 'down') {
+        return (
+            <span aria-hidden style={{display: 'flex', flexDirection: 'column', alignItems: 'center', color: tokens.colors.textFaint}}>
+                <span style={{width: 2, height: 14, background: tokens.colors.rule}} />
+                <span style={{width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: `6px solid ${tokens.colors.rule}`}} />
+            </span>
+        );
+    }
+    return (
+        <span style={{display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: 54}}>
+            {label ? <span style={{fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: tokens.colors.textFaint, fontWeight: 700}}>{label}</span> : null}
+            <span aria-hidden style={{display: 'flex', alignItems: 'center', width: '100%'}}>
+                <span style={{flex: 1, height: 2, background: tokens.colors.rule}} />
+                <span style={{width: 0, height: 0, borderTop: '4px solid transparent', borderBottom: '4px solid transparent', borderLeft: `6px solid ${tokens.colors.rule}`}} />
+            </span>
+        </span>
+    );
+}
+
+function DiagramFrame({children}: {children: ReactNode}) {
+    return (
+        <div
+            className="cia-scroll"
+            style={{
+                overflowX: 'auto',
+                padding: `${tokens.space.xl} ${tokens.space.lg}`,
+                background: tokens.colors.bgAlt,
+                borderRadius: RADIUS.card,
+            }}
+        >
+            {children}
+        </div>
+    );
+}
+
+function AccessDiagram() {
+    return (
+        <DiagramFrame>
+            <div style={{display: 'flex', alignItems: 'center', gap: tokens.space.md, minWidth: 440}}>
+                <div style={{display: 'flex', flexDirection: 'column', gap: tokens.space.sm}}>
+                    <Node tone="plain">You created it&nbsp;·&nbsp;<span style={{fontFamily: tokens.fonts.mono, fontWeight: 700}}>Created</span></Node>
+                    <div style={{textAlign: 'center', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: tokens.colors.textFaint, fontWeight: 700}}>or</div>
+                    <Node tone="plain">You&apos;re listed in&nbsp;<span style={{fontFamily: tokens.fonts.mono, fontWeight: 700}}>Accessible&nbsp;by</span></Node>
+                </div>
+                <Arrow />
+                <Node tone="accent">You can see the record</Node>
+            </div>
+        </DiagramFrame>
+    );
+}
+
+function ValidationGate() {
+    return (
+        <DiagramFrame>
+            <div style={{display: 'flex', alignItems: 'center', gap: tokens.space.sm, minWidth: 560}}>
+                <Node tone="muted">Pending</Node>
+                <Arrow label="You review" />
+                <Node tone="good">Reviewed</Node>
+                <Arrow />
+                <Node tone="accent">Visible on the dashboard</Node>
+                <span style={{width: 1, height: 44, background: tokens.colors.rule, margin: `0 ${tokens.space.xs}`}} />
+                <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4}}>
+                    <Node tone="drop">Discarded</Node>
+                    <span style={{fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: tokens.colors.textFaint, fontWeight: 700}}>Dropped</span>
+                </div>
+            </div>
+        </DiagramFrame>
     );
 }
 
 function KeyValue({rows, mono}: {rows: [string, string][]; mono?: boolean}) {
     return (
-        <div style={{display: 'flex', flexDirection: 'column'}}>
+        <div
+            style={{
+                display: 'flex',
+                flexDirection: 'column',
+                background: tokens.colors.bgAlt,
+                borderRadius: RADIUS.card,
+                padding: `4px ${tokens.space.lg}`,
+            }}
+        >
             {rows.map(([k, v], i) => (
                 <div
                     key={k}
@@ -573,9 +791,8 @@ function KeyValue({rows, mono}: {rows: [string, string][]; mono?: boolean}) {
                         display: 'grid',
                         gridTemplateColumns: '210px 1fr',
                         gap: tokens.space.lg,
-                        padding: `${tokens.space.sm} 0`,
-                        borderTop: `1px solid ${tokens.colors.ruleSoft}`,
-                        borderBottom: i === rows.length - 1 ? `1px solid ${tokens.colors.ruleSoft}` : 'none',
+                        padding: `${tokens.space.md} 0`,
+                        borderTop: i === 0 ? 'none' : `1px solid ${tokens.colors.rule}`,
                     }}
                 >
                     <span
@@ -598,17 +815,18 @@ function KeyValue({rows, mono}: {rows: [string, string][]; mono?: boolean}) {
 
 function Callout({tone, label, children}: {tone: 'info' | 'warn'; label: string; children: ReactNode}) {
     const warn = tone === 'warn';
+    const dot = warn ? '#E8A317' : tokens.colors.accent;
     return (
         <div
             style={{
                 padding: `${tokens.space.md} ${tokens.space.lg}`,
-                borderLeft: `2px solid ${warn ? '#C98A00' : tokens.colors.accent}`,
                 background: warn ? '#FFFBF2' : tokens.colors.ruleSoft,
-                borderRadius: `0 ${tokens.radius.sm} ${tokens.radius.sm} 0`,
+                borderRadius: RADIUS.inner,
             }}
         >
-            <span style={{...eyebrowStyle, color: warn ? '#9A6B00' : tokens.colors.accent, display: 'block', marginBottom: 4}}>
-                {label}
+            <span style={{display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5}}>
+                <span aria-hidden style={{width: 7, height: 7, borderRadius: '50%', background: dot, flexShrink: 0}} />
+                <span style={{...eyebrowStyle, color: warn ? '#9A6B00' : tokens.colors.accent}}>{label}</span>
             </span>
             <span style={{fontSize: 13, color: tokens.colors.text, lineHeight: 1.6}}>{children}</span>
         </div>
@@ -617,21 +835,20 @@ function Callout({tone, label, children}: {tone: 'info' | 'warn'; label: string;
 
 const eyebrowStyle: React.CSSProperties = {
     fontSize: 10,
-    letterSpacing: '0.16em',
+    letterSpacing: '0.14em',
     textTransform: 'uppercase',
     color: tokens.colors.textFaint,
     fontWeight: 700,
 };
 
 const ghostBtn: React.CSSProperties = {
-    padding: '6px 14px',
-    border: `1px solid ${tokens.colors.rule}`,
-    borderRadius: tokens.radius.sm,
-    background: tokens.colors.bgPanel,
-    color: tokens.colors.textMuted,
-    fontSize: 11,
-    fontWeight: 700,
-    letterSpacing: '0.06em',
-    textTransform: 'uppercase',
+    padding: '7px 16px',
+    border: 'none',
+    borderRadius: RADIUS.pill,
+    background: tokens.colors.bgAlt,
+    color: tokens.colors.accent,
+    fontSize: 12,
+    fontWeight: 600,
+    letterSpacing: '0.01em',
     cursor: 'pointer',
 };
