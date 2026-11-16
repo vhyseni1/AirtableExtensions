@@ -370,9 +370,9 @@ const STAGES: ReadonlyArray<Stage> = [
         detail: 'Upload the sources to Google Notebook, then run the two prompts below — one to enumerate every impact, one to clean, split and consolidate. Use the exact same file names in both.',
     },
     {
-        n: '03', title: 'Upload', actor: 'you', where: 'Google Sheet → Airtable',
-        body: 'Paste the rows via a Google Sheet into the Upload & review tab.',
-        detail: 'Paste the final table into a Google Sheet first to lock the structure, then copy it into the Upload & review source data tab. Rows arrive as Pending.',
+        n: '03', title: 'Upload', actor: 'you', where: 'Import Data tab',
+        body: 'Paste the generated table straight into Import Data.',
+        detail: 'Copy the consolidated table the critique prompt produced and paste it straight into the Import Data tab — the Markdown table works as-is, no Google Sheet or reformatting. Rows arrive as Pending.',
     },
     {
         n: '04', title: 'Review', actor: 'you', where: 'Airtable · Upload & review tab',
@@ -517,9 +517,10 @@ function ProcessDetail() {
 
                             {s.title === 'Upload' ? (
                                 <div style={{marginTop: tokens.space.sm}}>
-                                    <Callout tone="info" label="Why the Google Sheet">
-                                        It is an intermediary on purpose. Notebook output is not always cleanly tabular; the Sheet locks
-                                        every row and column into place before it reaches Airtable.
+                                    <Callout tone="info" label="Paste it straight in">
+                                        No Google Sheet needed. Copy the whole table — pipes and all — and paste it into Import Data. The
+                                        importer reads the Markdown table directly, matches the 22 columns by name, ignores the
+                                        &ldquo;Total rows generated&rdquo; footer line, and adds every row as Pending.
                                     </Callout>
                                 </div>
                             ) : null}

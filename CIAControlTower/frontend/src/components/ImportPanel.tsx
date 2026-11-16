@@ -41,11 +41,16 @@ interface Parsed {
 }
 
 /** Robust CSV/TSV parser. Auto-detects tab vs comma from the first line and
- *  handles quoted fields with embedded delimiters and newlines. */
+ *  handles quoted fields with embedded delimiters and newlines, and also
+ *  markdown pipe tables (what the critique prompt outputs). */
 function parseDelimited(text: string): Parsed {
+    const firstLine = (text.split(/\r?\n/).find(l => l.trim() !== '') ?? '').trim();
+    const looksMarkdown = firstLine.startsWith('|') || /\|\s*:?-{3,}/.test(text);
+    if (looksMarkdown) return parseMarkdownTable(text);
+
     const nl = text.indexOf('\n');
-    const firstLine = nl === -1 ? text : text.slice(0, nl);
-    const delim = firstLine.includes('\t') ? '\t' : ',';
+    const headLine = nl === -1 ? text : text.slice(0, nl);
+    const delim = headLine.includes('\t') ? '\t' : ',';
     const rows: string[][] = [];
     let field = '';
     let row: string[] = [];
@@ -83,6 +88,26 @@ function parseDelimited(text: string): Parsed {
     }
     const headers = (rows.shift() ?? []).map(h => h.trim());
     const data = rows.filter(r => r.some(c => c.trim() !== ''));
+    return {headers, rows: data};
+}
+
+/** Parse a markdown pipe table: strips outer pipes, skips the `---` separator
+ *  row and any non-table footer lines (e.g. "Total rows generated: 41"). */
+function parseMarkdownTable(text: string): Parsed {
+    const rows: string[][] = [];
+    for (const rawLine of text.split(/\r?\n/)) {
+        const line = rawLine.trim();
+        if (!line.includes('|')) continue; // footer / prose lines
+        let cells = line.split('|');
+        if (cells.length && cells[0]!.trim() === '') cells = cells.slice(1);
+        if (cells.length && cells[cells.length - 1]!.trim() === '') cells = cells.slice(0, -1);
+        const trimmed = cells.map(c => c.trim().replace(/\\(["|])/g, '$1'));
+        // Skip the header/body separator row (all cells are --- / :--: / empty).
+        if (trimmed.every(c => c === '' || /^:?-{2,}:?$/.test(c))) continue;
+        rows.push(trimmed);
+    }
+    const headers = rows.shift() ?? [];
+    const data = rows.filter(r => r.some(c => c !== ''));
     return {headers, rows: data};
 }
 
@@ -242,9 +267,10 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
                     ) : (
                         <>
                             <p style={{margin: 0, fontSize: 13, color: tokens.colors.textMuted, lineHeight: 1.6}}>
-                                Paste rows copied from your Google Sheet (or upload a CSV). The first row must be the column headers —
-                                they are matched to the table fields by name. Every row is added with its Validation Status set to
-                                <strong> Pending</strong>.
+                                Paste the table produced by the critique prompt straight in — the Markdown table (with pipes) works
+                                as-is, no Google Sheet needed. CSV and tab-separated paste also work, as does a CSV file. The first row
+                                must be the column headers; they are matched to the table fields by name, the “Total rows generated”
+                                footer line is ignored, and every row is added with its Validation Status set to <strong>Pending</strong>.
                             </p>
 
                             <Segmented mode={mode} onChange={setMode} />
