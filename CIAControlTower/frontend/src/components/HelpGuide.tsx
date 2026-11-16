@@ -1,4 +1,4 @@
-import {type ReactNode} from 'react';
+import {useState, type ReactNode} from 'react';
 import {tokens} from '../styles/tokens';
 
 export type GuideMode = 'no-data' | 'awaiting-review' | 'modal';
@@ -12,21 +12,56 @@ interface Props {
     reviewedCount?: number;
 }
 
+type ChapterKey = 'process' | 'data' | 'dashboards';
+
+interface Chapter {
+    key: ChapterKey;
+    n: string;
+    label: string;
+    icon: string;
+    blurb: string;
+}
+
+const CHAPTERS: ReadonlyArray<Chapter> = [
+    {key: 'process', n: '01', label: 'Overall process', icon: '🔄', blurb: 'The five stages that take raw notes to a live, decision-ready view — and where you fit in.'},
+    {key: 'data', n: '02', label: 'Data', icon: '🗂️', blurb: 'How to see your data, import it, review it so it becomes visible, and what every field stores.'},
+    {key: 'dashboards', n: '03', label: 'Dashboards', icon: '📊', blurb: 'Every tab and every visual, what it shows and how to read it.'},
+];
+
+function defaultChapter(mode: GuideMode): ChapterKey {
+    return mode === 'modal' ? 'process' : 'data';
+}
+
 /**
- * Onboarding + reference guide. Rendered full-width as the empty state when a
- * user has no visible data, and as a modal (Help button) when they do.
+ * Onboarding + reference guide, organised into chapters. Rendered full-width as
+ * the empty state when a user has no visible data, and as a modal (Help button)
+ * when they do.
  */
 export function HelpGuide({mode, onClose, totalCount = 0, reviewedCount = 0}: Props) {
+    const [chapter, setChapter] = useState<ChapterKey>(defaultChapter(mode));
+    const active = CHAPTERS.find(c => c.key === chapter) ?? CHAPTERS[0]!;
+
     const body = (
-        <div style={{display: 'flex', flexDirection: 'column', gap: tokens.space.xl}}>
+        <div style={{display: 'flex', flexDirection: 'column', gap: tokens.space.lg}}>
             {mode !== 'modal' ? <EmptyIntro mode={mode} totalCount={totalCount} reviewedCount={reviewedCount} /> : null}
 
-            <ProcessOverview />
-            <AccessSection />
-            <UploadSection />
-            <ReviewSection />
-            <ReadingSection />
-            <FieldGlossary />
+            <ChapterNav chapters={CHAPTERS} active={chapter} onPick={setChapter} />
+            <ChapterHeader chapter={active} />
+
+            <div style={{display: 'flex', flexDirection: 'column', gap: tokens.space.xl}}>
+                {chapter === 'process' ? <ProcessOverview /> : null}
+                {chapter === 'data' ? (
+                    <>
+                        <AccessSection />
+                        <UploadSection />
+                        <ReviewSection />
+                        <FieldGlossary />
+                    </>
+                ) : null}
+                {chapter === 'dashboards' ? <ReadingSection /> : null}
+            </div>
+
+            <ChapterPager chapters={CHAPTERS} active={chapter} onPick={setChapter} />
         </div>
     );
 
@@ -148,6 +183,102 @@ function EmptyIntro({mode, totalCount, reviewedCount}: {mode: GuideMode; totalCo
                     )}
                 </p>
             </div>
+        </div>
+    );
+}
+
+/* ---------- Chapter navigation ---------- */
+
+function ChapterNav({chapters, active, onPick}: {chapters: ReadonlyArray<Chapter>; active: ChapterKey; onPick: (k: ChapterKey) => void}) {
+    return (
+        <nav style={{display: 'flex', gap: tokens.space.sm, flexWrap: 'wrap'}}>
+            {chapters.map(c => {
+                const on = c.key === active;
+                return (
+                    <button
+                        key={c.key}
+                        type="button"
+                        onClick={() => onPick(c.key)}
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            padding: '8px 14px',
+                            borderRadius: tokens.radius.sm,
+                            border: `1px solid ${on ? tokens.colors.accent : tokens.colors.rule}`,
+                            background: on ? tokens.colors.accent : tokens.colors.bgPanel,
+                            color: on ? '#FFFFFF' : tokens.colors.text,
+                            cursor: 'pointer',
+                            transition: 'background 120ms ease, color 120ms ease, border-color 120ms ease',
+                        }}
+                    >
+                        <span aria-hidden style={{fontFamily: tokens.fonts.mono, fontSize: 11, fontWeight: 700, opacity: on ? 0.85 : 0.5}}>
+                            {c.n}
+                        </span>
+                        <span style={{fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase'}}>
+                            {c.label}
+                        </span>
+                    </button>
+                );
+            })}
+        </nav>
+    );
+}
+
+function ChapterHeader({chapter}: {chapter: Chapter}) {
+    return (
+        <div
+            style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: tokens.space.md,
+                padding: `${tokens.space.md} ${tokens.space.lg}`,
+                borderRadius: tokens.radius.md,
+                background: tokens.colors.bgAlt,
+                borderLeft: `4px solid ${tokens.colors.accent}`,
+            }}
+        >
+            <span aria-hidden style={{fontSize: 26, lineHeight: 1}}>{chapter.icon}</span>
+            <div style={{display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0}}>
+                <span className="cia-eyebrow" style={{color: tokens.colors.accent}}>Chapter {chapter.n}</span>
+                <h2 style={{margin: 0, fontFamily: tokens.fonts.serif, fontSize: 20, fontWeight: 600, color: tokens.colors.text}}>
+                    {chapter.label}
+                </h2>
+                <span style={{fontSize: 12.5, color: tokens.colors.textMuted, lineHeight: 1.5}}>{chapter.blurb}</span>
+            </div>
+        </div>
+    );
+}
+
+function ChapterPager({chapters, active, onPick}: {chapters: ReadonlyArray<Chapter>; active: ChapterKey; onPick: (k: ChapterKey) => void}) {
+    const idx = chapters.findIndex(c => c.key === active);
+    const prev = idx > 0 ? chapters[idx - 1] : null;
+    const next = idx < chapters.length - 1 ? chapters[idx + 1] : null;
+    if (!prev && !next) return null;
+    return (
+        <div
+            style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: tokens.space.md,
+                paddingTop: tokens.space.md,
+                borderTop: `1px solid ${tokens.colors.rule}`,
+            }}
+        >
+            {prev ? (
+                <button type="button" onClick={() => onPick(prev.key)} style={pagerBtn}>
+                    ← {prev.label}
+                </button>
+            ) : (
+                <span />
+            )}
+            {next ? (
+                <button type="button" onClick={() => onPick(next.key)} style={{...pagerBtn, borderColor: tokens.colors.accent, color: tokens.colors.accent}}>
+                    {next.label} →
+                </button>
+            ) : (
+                <span />
+            )}
         </div>
     );
 }
@@ -345,7 +476,7 @@ function ReadingSection() {
         },
     ];
     return (
-        <Section eyebrow="Step 4" title="Read the dashboard — every visual explained" intro="The dashboard is organised into tabs. Here is what each one shows and how to use it.">
+        <Section eyebrow="Every visual" title="Read the dashboard — every visual explained" intro="The dashboard is organised into tabs. Here is what each one shows and how to use it.">
             <div style={{display: 'flex', flexDirection: 'column', gap: tokens.space.md}}>
                 {tabs.map(t => (
                     <div key={t.tab} style={{borderLeft: `3px solid ${tokens.colors.accent}`, paddingLeft: tokens.space.md}}>
@@ -461,6 +592,19 @@ const listStyle: React.CSSProperties = {
     fontSize: 13,
     color: tokens.colors.textMuted,
     lineHeight: 1.55,
+};
+
+const pagerBtn: React.CSSProperties = {
+    padding: '8px 14px',
+    border: `1px solid ${tokens.colors.rule}`,
+    borderRadius: tokens.radius.sm,
+    background: tokens.colors.bgPanel,
+    color: tokens.colors.text,
+    fontSize: 12,
+    fontWeight: 700,
+    letterSpacing: '0.04em',
+    textTransform: 'uppercase',
+    cursor: 'pointer',
 };
 
 function Callout({tone, children}: {tone: 'info' | 'warn'; children: ReactNode}) {
