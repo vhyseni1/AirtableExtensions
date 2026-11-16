@@ -21,6 +21,7 @@ import {FilterBar} from './FilterBar';
 import {HeadlineBar, type DrillSpec} from './HeadlineBar';
 import {HeatMap} from './HeatMap';
 import {HelpGuide} from './HelpGuide';
+import {ImportDialog} from './ImportDialog';
 import {NarrativeMode} from './NarrativeMode';
 import {DrillSheet} from './primitives/DrillSheet';
 import {EmptyState} from './primitives/EmptyState';
@@ -102,6 +103,7 @@ function DashboardBody({tableName}: {tableName: string}) {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [narrative, setNarrative] = useState(false);
     const [help, setHelp] = useState(false);
+    const [importing, setImporting] = useState(false);
     const [tab, setTab] = useState<TabKey>('overview');
 
     // Per-user access: only enforced when the table carries Created / Accessible-by
@@ -201,6 +203,7 @@ function DashboardBody({tableName}: {tableName: string}) {
                 <Masthead
                     onNarrative={() => setNarrative(true)}
                     onHelp={() => setHelp(true)}
+                    onImport={() => setImporting(true)}
                     runCount={aggregations.runs.length}
                     tab={tab}
                     onTabChange={setTab}
@@ -225,9 +228,9 @@ function DashboardBody({tableName}: {tableName: string}) {
             </div>
 
             {visibleImpacts.length === 0 ? (
-                <HelpGuide mode="no-data" accessControlled={accessControlled} />
+                <HelpGuide mode="no-data" accessControlled={accessControlled} onImport={() => setImporting(true)} />
             ) : !hasReviewedData ? (
-                <HelpGuide mode="awaiting-review" accessControlled={accessControlled} totalCount={visibleImpacts.length} reviewedCount={reviewedCount} />
+                <HelpGuide mode="awaiting-review" accessControlled={accessControlled} totalCount={visibleImpacts.length} reviewedCount={reviewedCount} onImport={() => setImporting(true)} />
             ) : filtered.length === 0 ? (
                 <div style={{padding: tokens.space.xxl, background: tokens.colors.bgPanel, border: `1px solid ${tokens.colors.rule}`, borderRadius: tokens.radius.md}}>
                     <EmptyState line="No reviewed impacts match the current filter. Try widening the lens." />
@@ -292,6 +295,8 @@ function DashboardBody({tableName}: {tableName: string}) {
             ) : null}
 
             {help ? <HelpGuide mode="modal" accessControlled={accessControlled} onClose={() => setHelp(false)} /> : null}
+
+            {importing ? <ImportDialog tableName={tableName} onClose={() => setImporting(false)} /> : null}
         </div>
     );
 }
@@ -299,12 +304,14 @@ function DashboardBody({tableName}: {tableName: string}) {
 function Masthead({
     onNarrative,
     onHelp,
+    onImport,
     runCount,
     tab,
     onTabChange,
 }: {
     onNarrative: () => void;
     onHelp: () => void;
+    onImport: () => void;
     runCount: number;
     tab: TabKey;
     onTabChange: (t: TabKey) => void;
@@ -376,6 +383,25 @@ function Masthead({
             >
                 <Tabs active={tab} onChange={onTabChange} dark />
                 <span aria-hidden style={{width: 1, height: 22, background: 'rgba(255,255,255,0.25)'}} />
+                <button
+                    type="button"
+                    onClick={onImport}
+                    title="Import data"
+                    style={{
+                        padding: '6px 14px',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        letterSpacing: '0.08em',
+                        textTransform: 'uppercase',
+                        border: '1px solid rgba(255,255,255,0.4)',
+                        borderRadius: tokens.radius.sm,
+                        background: '#FFFFFF',
+                        color: tokens.colors.accentDeep,
+                        cursor: 'pointer',
+                    }}
+                >
+                    Import data
+                </button>
                 <button
                     type="button"
                     onClick={onHelp}

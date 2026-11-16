@@ -21,6 +21,8 @@ interface Props {
     reviewedCount?: number;
     /** True when the table gates records by Created / Accessible-by. */
     accessControlled?: boolean;
+    /** Opens the import dialog — shown as a CTA on the empty-state screens. */
+    onImport?: () => void;
 }
 
 type ChapterKey = 'process' | 'data' | 'dashboards';
@@ -47,14 +49,14 @@ function defaultChapter(mode: GuideMode): ChapterKey {
  * as the empty state when a user has no visible data, and as a modal (Help
  * button) when they do.
  */
-export function HelpGuide({mode, onClose, totalCount = 0, reviewedCount = 0, accessControlled = true}: Props) {
+export function HelpGuide({mode, onClose, totalCount = 0, reviewedCount = 0, accessControlled = true, onImport}: Props) {
     const [chapter, setChapter] = useState<ChapterKey>(defaultChapter(mode));
     const active = CHAPTERS.find(c => c.key === chapter) ?? CHAPTERS[0]!;
 
     const body = (
         <div style={{display: 'flex', flexDirection: 'column', gap: tokens.space.xl}}>
             {mode !== 'modal' ? (
-                <EmptyIntro mode={mode} totalCount={totalCount} reviewedCount={reviewedCount} accessControlled={accessControlled} />
+                <EmptyIntro mode={mode} totalCount={totalCount} reviewedCount={reviewedCount} accessControlled={accessControlled} onImport={onImport} />
             ) : null}
 
             <ChapterNav chapters={CHAPTERS} active={chapter} onPick={setChapter} />
@@ -157,7 +159,7 @@ export function HelpGuide({mode, onClose, totalCount = 0, reviewedCount = 0, acc
 
 /* ---------- Intro (empty-state only) ---------- */
 
-function EmptyIntro({mode, totalCount, reviewedCount, accessControlled}: {mode: GuideMode; totalCount: number; reviewedCount: number; accessControlled: boolean}) {
+function EmptyIntro({mode, totalCount, reviewedCount, accessControlled, onImport}: {mode: GuideMode; totalCount: number; reviewedCount: number; accessControlled: boolean; onImport?: () => void}) {
     const awaiting = mode === 'awaiting-review';
     return (
         <div
@@ -196,6 +198,27 @@ function EmptyIntro({mode, totalCount, reviewedCount, accessControlled}: {mode: 
                     </>
                 )}
             </p>
+            {onImport ? (
+                <button
+                    type="button"
+                    onClick={onImport}
+                    style={{
+                        marginTop: tokens.space.lg,
+                        padding: '10px 20px',
+                        borderRadius: RADIUS.pill,
+                        border: 'none',
+                        background: '#FFFFFF',
+                        color: tokens.colors.accentDeep,
+                        fontSize: 13,
+                        fontWeight: 700,
+                        letterSpacing: '0.02em',
+                        cursor: 'pointer',
+                        boxShadow: '0 6px 18px -6px rgba(0,0,0,0.3)',
+                    }}
+                >
+                    Import data
+                </button>
+            ) : null}
         </div>
     );
 }
