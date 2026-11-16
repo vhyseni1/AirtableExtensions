@@ -26,7 +26,6 @@ import {DrillSheet} from './primitives/DrillSheet';
 import {EmptyState} from './primitives/EmptyState';
 import {SourceTrace} from './SourceTrace';
 import {Tabs, type TabKey} from './Tabs';
-import {AddDataView} from './views/AddDataView';
 import {FlowsView} from './views/FlowsView';
 import {HeatmapsView} from './views/HeatmapsView';
 import {RadarsView} from './views/RadarsView';
@@ -206,7 +205,7 @@ function DashboardBody({tableName}: {tableName: string}) {
                     tab={tab}
                     onTabChange={setTab}
                 />
-                {hasReviewedData && tab !== 'adddata' ? (
+                {hasReviewedData ? (
                     <>
                         <HeadlineBar
                             filtered={filtered}
@@ -225,9 +224,7 @@ function DashboardBody({tableName}: {tableName: string}) {
                 ) : null}
             </div>
 
-            {tab === 'adddata' ? (
-                <AddDataView />
-            ) : visibleImpacts.length === 0 ? (
+            {visibleImpacts.length === 0 ? (
                 <HelpGuide mode="no-data" accessControlled={accessControlled} />
             ) : !hasReviewedData ? (
                 <HelpGuide mode="awaiting-review" accessControlled={accessControlled} totalCount={visibleImpacts.length} reviewedCount={reviewedCount} />

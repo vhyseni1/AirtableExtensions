@@ -34,7 +34,7 @@ interface Chapter {
 
 const CHAPTERS: ReadonlyArray<Chapter> = [
     {key: 'process', n: '01', label: 'Overall process', blurb: 'The five stages that take raw notes to a live, decision-ready view — and where you fit in.'},
-    {key: 'data', n: '02', label: 'Data', blurb: 'How to see your data, import it, review it so it becomes visible, and what every field holds.'},
+    {key: 'data', n: '02', label: 'Data', blurb: 'How to see your data, review it so it becomes visible, and what every field holds. (Importing lives in the Overall process chapter.)'},
     {key: 'dashboards', n: '03', label: 'Dashboards', blurb: 'Every tab and every visual — what it shows and how to read it.'},
 ];
 
@@ -65,7 +65,6 @@ export function HelpGuide({mode, onClose, totalCount = 0, reviewedCount = 0, acc
                 {chapter === 'data' ? (
                     <>
                         {accessControlled ? <AccessSection /> : null}
-                        <UploadSection />
                         <ReviewSection />
                         <FieldGlossary />
                     </>
@@ -492,6 +491,15 @@ function ProcessDetail() {
                                     <PromptBlock label="Critique prompt" text={CRITIQUE_PROMPT} />
                                 </div>
                             ) : null}
+
+                            {s.title === 'Upload' ? (
+                                <div style={{marginTop: tokens.space.sm}}>
+                                    <Callout tone="info" label="Why the Google Sheet">
+                                        It is an intermediary on purpose. Notebook output is not always cleanly tabular; the Sheet locks
+                                        every row and column into place before it reaches Airtable.
+                                    </Callout>
+                                </div>
+                            ) : null}
                         </div>
                     </div>
                 );
@@ -573,54 +581,6 @@ Identify and resolve in-place:
 
 Output: ONE final consolidated table with ALL rows — corrected originals plus net-new — in the exact 22-column format. Renumber IDs sequentially from 1 (GAP-001, GAP-002...). Include uncorrected rows verbatim. Do NOT output a separate supplemental table.`;
 
-function UploadSection() {
-    return (
-        <Section
-            eyebrow="Importing"
-            title="From sources to Airtable"
-            intro="Five steps turn raw session files into rows in the Upload & review tab. Steps 2 and 3 are prompts you run in Google Notebook."
-        >
-            <Callout tone="warn" label="Use the same file names throughout">
-                The file names you put in the generation prompt, the name you point the critique prompt at, and the actual sources
-                in Google Notebook must be <strong>identical — character for character</strong>. If the names don&apos;t match, the
-                prompts read the wrong source (or none) and impacts go missing.
-            </Callout>
-            <Steps
-                items={[
-                    <>
-                        <strong>Upload your sources to Google Notebook</strong> (formerly NotebookLM) — transcripts, decks, boards,
-                        notes. <NotebookLink />
-                        <br />
-                        <span style={{color: tokens.colors.textFaint}}>Access is managed by your admin — request it if the notebook will not open.</span>
-                    </>,
-                    <>
-                        <strong>Run the generation prompt.</strong> Replace <Mono>FILE NAMES</Mono> with the exact names of your
-                        source files, then run it.
-                        <PromptBlock label="Generation prompt" text={GENERATION_PROMPT} />
-                    </>,
-                    <>
-                        <strong>Run the critique prompt</strong> to clean, split and consolidate. Point it at the
-                        <strong> same file names</strong> you used in the generation prompt — exactly as they appear in Notebook.
-                        <PromptBlock label="Critique prompt" text={CRITIQUE_PROMPT} />
-                    </>,
-                    <>
-                        <strong>Paste the final table into a Google Sheet first.</strong> This guarantees the structure survives —
-                        Notebook sometimes returns output that is not cleanly tabular, and the Sheet locks it into rows and columns.
-                    </>,
-                    <>
-                        <strong>Copy from the Sheet and paste into the</strong> <Mono>Upload &amp; review source data</Mono> tab in
-                        Airtable. Each row arrives with its Validation Status set to <em>Pending</em>.
-                    </>,
-                ]}
-            />
-            <Callout tone="info" label="Why the Google Sheet">
-                It is an intermediary on purpose. Pasting Notebook output straight into Airtable can break the column structure; the
-                Sheet keeps every row and column intact before it reaches the base.
-            </Callout>
-        </Section>
-    );
-}
-
 function NotebookLink() {
     return (
         <a
@@ -644,24 +604,6 @@ function NotebookLink() {
         >
             Open Google Notebook ↗
         </a>
-    );
-}
-
-function Mono({children}: {children: ReactNode}) {
-    return (
-        <span
-            style={{
-                fontFamily: tokens.fonts.mono,
-                fontSize: 12,
-                fontWeight: 600,
-                color: tokens.colors.accentDeep,
-                background: tokens.colors.ruleSoft,
-                padding: '1px 6px',
-                borderRadius: 5,
-            }}
-        >
-            {children}
-        </span>
     );
 }
 
@@ -826,13 +768,6 @@ function ReadingSection() {
                 {name: 'Role profile', desc: 'Compares how selected roles are exposed across categories, tags or top components. Choose roles at the top right.'},
                 {name: 'Affiliate risk profile', desc: 'A composite risk shape per market across five risk densities.'},
                 {name: 'Category profiles', desc: 'Which pillars carry high, medium and low impact, and where pressure, gap and friction concentrate.'},
-            ],
-        },
-        {
-            tab: 'Add data',
-            what: 'A staging surface for captured session artefacts.',
-            visuals: [
-                {name: 'Source library', desc: 'Select transcripts, flip charts, notes, KDI and Lucid boards by session date, then process them into structured impacts.'},
             ],
         },
     ];
