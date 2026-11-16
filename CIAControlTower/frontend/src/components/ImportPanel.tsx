@@ -114,17 +114,24 @@ function parseMarkdownTable(text: string): Parsed {
 
 const normalize = (s: string): string => s.toLowerCase().replace(/[\s_\-()]+/g, '');
 
-/** Map an incoming select value to an EXISTING option name (case-insensitive).
- *  Returns null when the option doesn't exist — writing a non-existent option
- *  would make Airtable reject the whole batch, so we drop it instead. */
+/** Map an incoming select value to an EXISTING option name (case-insensitive),
+ *  or null if it doesn't exist. Used by the strict retry that can't create
+ *  options. */
 function matchOption(field: LiveField, value: string): string | null {
     const choices = field.options?.choices ?? null;
-    if (!choices) return value; // field allows free options (or none declared) — pass through
+    if (!choices) return value;
     const hit = choices.find(c => c.name.toLowerCase() === value.toLowerCase());
     return hit ? hit.name : null;
 }
 
-function coerce(field: LiveField, raw: string): unknown | undefined {
+/**
+ * Coerce a cell to a writable value.
+ *  - strict=false (first attempt): select values are written as-is, so Airtable
+ *    creates any missing option (when the field + permissions allow it).
+ *  - strict=true (retry): only values that already exist as options are written,
+ *    so a record still imports even if new options can't be created.
+ */
+function coerce(field: LiveField, raw: string, strict: boolean): unknown | undefined {
     const v = raw.trim();
     if (v === '') return undefined;
     switch (field.type) {
@@ -137,7 +144,7 @@ function coerce(field: LiveField, raw: string): unknown | undefined {
             return Number.isFinite(n) ? n : undefined;
         }
         case 'singleSelect': {
-            const name = matchOption(field, v);
+            const name = strict ? matchOption(field, v) : v;
             return name ? {name} : undefined;
         }
         case 'multipleSelects': {
@@ -145,7 +152,7 @@ function coerce(field: LiveField, raw: string): unknown | undefined {
                 .split(/[,;]/)
                 .map(s => s.trim())
                 .filter(Boolean)
-                .map(s => matchOption(field, s))
+                .map(s => (strict ? matchOption(field, s) : s))
                 .filter((s): s is string => !!s)
                 .map(name => ({name}));
             return names.length ? names : undefined;
@@ -219,7 +226,7 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
     const rowCount = parsed?.rows.length ?? 0;
     const matchedCount = mapping?.matched.length ?? 0;
 
-    const buildRecords = (): ReadonlyArray<{fields: Record<string, unknown>}> => {
+    const buildRecords = (strict: boolean): ReadonlyArray<{fields: Record<string, unknown>}> => {
         if (!parsed || !mapping) return [];
         const headerIndex = new Map<string, number>();
         parsed.headers.forEach((h, i) => headerIndex.set(h, i));
@@ -228,13 +235,13 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
             for (const {header, field} of mapping.matched) {
                 const idx = headerIndex.get(header);
                 if (idx === undefined) continue;
-                const val = coerce(field, cells[idx] ?? '');
+                const val = coerce(field, cells[idx] ?? '', strict);
                 if (val !== undefined) fields[field.name] = val;
             }
             // Default Validation Status to Pending when not supplied.
             if (validationField && fields[validationField.name] === undefined) {
-                const pending = matchOption(validationField, 'Pending');
-                if (pending) fields[validationField.name] = {name: pending};
+                const pending = matchOption(validationField, 'Pending') ?? 'Pending';
+                fields[validationField.name] = {name: pending};
             }
             return {fields};
         });
@@ -242,7 +249,10 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
 
     const runImport = async () => {
         if (!table) return;
-        const records = buildRecords();
+        // Permissive first (creates missing options); strict is the per-row
+        // fallback that only uses existing options.
+        const records = buildRecords(false);
+        const strictRecords = buildRecords(true);
         if (records.length === 0) return;
         setPhase('importing');
         setProgress(0);
@@ -255,14 +265,20 @@ export function ImportPanel({tableName, onImported, reviewUrl}: {tableName: stri
                 await table.createRecordsAsync(chunk);
                 created += chunk.length;
             } catch (batchErr) {
-                // A batch fails all-or-nothing; retry row by row so good rows still land.
-                for (const rec of chunk) {
+                // Batch is all-or-nothing; retry each row, then retry strict.
+                for (let j = 0; j < chunk.length; j++) {
+                    const rec = chunk[j]!;
                     try {
                         await table.createRecordsAsync([rec]);
                         created += 1;
-                    } catch (rowErr) {
-                        failed += 1;
-                        if (!firstError) firstError = rowErr instanceof Error ? rowErr.message : String(rowErr);
+                    } catch {
+                        try {
+                            await table.createRecordsAsync([strictRecords[i + j]!]);
+                            created += 1;
+                        } catch (rowErr) {
+                            failed += 1;
+                            if (!firstError) firstError = rowErr instanceof Error ? rowErr.message : String(rowErr);
+                        }
                     }
                 }
                 void batchErr;
